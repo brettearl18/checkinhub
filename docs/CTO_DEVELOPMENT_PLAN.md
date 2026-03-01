@@ -165,11 +165,13 @@ Phased build plan so the app is delivered in order, stays aligned with the rebui
 
 **Exit criteria:**
 
-- [ ] Coach can open response, add feedback; client can see feedback.
-- [ ] Coach and client can message each other; notifications visible.
-- [ ] Coach can create/edit forms and questions; reorder; copy from standard; form builder matches FORM_BUILDER_SCHEMA.md.
+- [x] Coach can open response, add feedback; client can see feedback.
+- [x] Coach and client can message each other; notifications visible.
+- [x] Coach can create/edit forms and questions; reorder; copy from standard; form builder matches FORM_BUILDER_SCHEMA.md.
 
 **Dependency:** Phase 3.
+
+**Verification:** See `docs/PHASE4_VERIFICATION.md`. Voice feedback is API-ready but UI is text-only; optional to add voice input later.
 
 ---
 

@@ -6,6 +6,17 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
 
+const NAV_LINKS = [
+  { href: "/client", label: "Dashboard" },
+  { href: "/client/check-in/new", label: "New check-in" },
+  { href: "/client/history", label: "History" },
+  { href: "/client/messages", label: "Messages" },
+  { href: "/client/measurements", label: "Measurements" },
+  { href: "/client/goals", label: "Goals" },
+  { href: "/client/progress-photos", label: "Photos" },
+  { href: "/client/profile", label: "Profile" },
+] as const;
+
 export default function ClientLayout({
   children,
 }: { children: React.ReactNode }) {
@@ -35,65 +46,47 @@ export default function ClientLayout({
   if (!user) return null;
 
   return (
-    <div className="min-h-screen">
-      <nav className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-6 py-3">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/client"
-              className={`text-sm font-medium ${pathname === "/client" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/client/check-in/new"
-              className={`text-sm font-medium ${pathname?.startsWith("/client/check-in") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              New check-in
-            </Link>
-            <Link
-              href="/client/history"
-              className={`text-sm font-medium ${pathname === "/client/history" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              History
-            </Link>
-            <Link
-              href="/client/messages"
-              className={`text-sm font-medium ${pathname === "/client/messages" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Messages
-            </Link>
-            <Link
-              href="/client/measurements"
-              className={`text-sm font-medium ${pathname === "/client/measurements" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Measurements
-            </Link>
-            <Link
-              href="/client/goals"
-              className={`text-sm font-medium ${pathname === "/client/goals" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Goals
-            </Link>
-            <Link
-              href="/client/progress-photos"
-              className={`text-sm font-medium ${pathname === "/client/progress-photos" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Photos
-            </Link>
-            <Link
-              href="/client/profile"
-              className={`text-sm font-medium ${pathname === "/client/profile" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Profile
-            </Link>
-          </div>
-          <Button variant="ghost" onClick={() => signOut()}>
+    <div className="flex min-h-screen">
+      {/* Side menu */}
+      <aside className="flex w-56 flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-elevated)] md:w-60">
+        <div className="p-4 border-b border-[var(--color-border)]">
+          <Link href="/client" className="font-semibold text-[var(--color-text)] hover:text-[var(--color-primary)]">
+            CheckinHUB
+          </Link>
+        </div>
+        <nav className="flex-1 space-y-0.5 p-3">
+          {NAV_LINKS.map(({ href, label }) => {
+            const active =
+              href === "/client"
+                ? pathname === "/client"
+                : pathname?.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`block rounded-lg px-3 py-2 text-sm font-medium ${
+                  active
+                    ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
+                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="border-t border-[var(--color-border)] p-3">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+            onClick={() => signOut()}
+          >
             Sign out
           </Button>
         </div>
-      </nav>
-      <main className="mx-auto max-w-4xl p-6">{children}</main>
+      </aside>
+      {/* Main content */}
+      <main className="min-w-0 flex-1 overflow-auto p-6">{children}</main>
     </div>
   );
 }

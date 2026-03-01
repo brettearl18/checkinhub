@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { PREDEFINED_MEAL_PLANS } from "@/lib/meal-plan-predefined-urls";
 
 interface ClientSettings {
   firstName: string;
@@ -26,6 +27,7 @@ interface ClientSettings {
   stripeCustomerId: string | null;
   paymentStatus: string | null;
   firstPaymentAt: string | null;
+  mealPlanLinks: { label: string; url: string }[];
 }
 
 const DEFAULT_SETTINGS: ClientSettings = {
@@ -45,6 +47,7 @@ const DEFAULT_SETTINGS: ClientSettings = {
   stripeCustomerId: null,
   paymentStatus: null,
   firstPaymentAt: null,
+  mealPlanLinks: [],
 };
 
 function formatTimeWithVana(firstPaymentAt: string | null): string {
@@ -82,6 +85,9 @@ export default function CoachClientSettingsPage() {
   const [prices, setPrices] = useState<{ id: string; label: string }[]>([]);
   const [changePriceId, setChangePriceId] = useState<string>("");
   const [updatePriceLoading, setUpdatePriceLoading] = useState(false);
+  const [newMealPlanLabel, setNewMealPlanLabel] = useState("");
+  const [newMealPlanUrl, setNewMealPlanUrl] = useState("");
+  const [selectedPredefinedMealPlan, setSelectedPredefinedMealPlan] = useState<string>("");
 
   useEffect(() => {
     if (!clientId) return;
@@ -119,6 +125,9 @@ export default function CoachClientSettingsPage() {
             stripeCustomerId: data.stripeCustomerId ?? null,
             paymentStatus: data.paymentStatus ?? null,
             firstPaymentAt: data.firstPaymentAt ?? null,
+            mealPlanLinks: Array.isArray(data.mealPlanLinks)
+              ? data.mealPlanLinks.map((l) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
+              : [],
           });
         }
       } finally {
@@ -184,6 +193,7 @@ export default function CoachClientSettingsPage() {
           communicationPreference: form.communicationPreference,
           coachNotes: form.coachNotes,
           stripeCustomerId: form.stripeCustomerId || undefined,
+          mealPlanLinks: form.mealPlanLinks,
         }),
       });
       if (res.status === 401) {
@@ -356,6 +366,117 @@ export default function CoachClientSettingsPage() {
                 />
               </div>
             </div>
+          </Card>
+
+          {/* Meal plan links */}
+          <Card className="p-6">
+            <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Meal plan</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
+              Assign and manage meal plan links for this client. Choose from Hub Vana plans below or add custom links.
+            </p>
+            <div className="mb-4">
+              <label htmlFor="predefined-meal-plan" className="mb-1 block text-sm font-medium text-[var(--color-text)]">
+                Select meal plan
+              </label>
+              <div className="flex flex-wrap items-end gap-3">
+                <select
+                  id="predefined-meal-plan"
+                  value={selectedPredefinedMealPlan}
+                  onChange={(e) => setSelectedPredefinedMealPlan(e.target.value)}
+                  className="min-w-[220px] rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                >
+                  <option value="">— Select a meal plan —</option>
+                  {PREDEFINED_MEAL_PLANS.map((plan, idx) => (
+                    <option key={plan.url} value={String(idx)}>
+                      {plan.name}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={selectedPredefinedMealPlan === ""}
+                  onClick={() => {
+                    const idx = parseInt(selectedPredefinedMealPlan, 10);
+                    if (Number.isNaN(idx) || idx < 0 || idx >= PREDEFINED_MEAL_PLANS.length) return;
+                    const plan = PREDEFINED_MEAL_PLANS[idx];
+                    setForm((p) => ({
+                      ...p,
+                      mealPlanLinks: [...p.mealPlanLinks, { label: plan.name, url: plan.url }],
+                    }));
+                    setSelectedPredefinedMealPlan("");
+                  }}
+                >
+                  Assign meal plan to client
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm text-[var(--color-text-muted)] mb-3">Or add a custom link (PDF, Notion, etc.):</p>
+            {form.mealPlanLinks.length > 0 && (
+              <ul className="mb-4 space-y-2">
+                {form.mealPlanLinks.map((link, idx) => (
+                  <li key={idx} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium text-[var(--color-text)]">{link.label || "Meal plan"}</span>
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-sm text-[var(--color-primary)] hover:underline truncate block"
+                      >
+                        {link.url}
+                      </a>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          mealPlanLinks: p.mealPlanLinks.filter((_, i) => i !== idx),
+                        }))
+                      }
+                      className="text-sm text-[var(--color-error)] hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-end gap-3 mt-2">
+              <input
+                type="text"
+                placeholder="Label (e.g. Week 1–4 Plan)"
+                value={newMealPlanLabel}
+                onChange={(e) => setNewMealPlanLabel(e.target.value)}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] w-48"
+              />
+              <input
+                type="url"
+                placeholder="https://..."
+                value={newMealPlanUrl}
+                onChange={(e) => setNewMealPlanUrl(e.target.value)}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] flex-1 min-w-[200px]"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const url = newMealPlanUrl.trim();
+                  if (!url) return;
+                  setForm((p) => ({ ...p, mealPlanLinks: [...p.mealPlanLinks, { label: newMealPlanLabel.trim() || "Meal plan", url }] }));
+                  setNewMealPlanLabel("");
+                  setNewMealPlanUrl("");
+                }}
+              >
+                Add link
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              Add from the dropdown or custom link above, then click &quot;Save settings&quot; below to save.
+            </p>
           </Card>
 
           {/* Communication settings */}

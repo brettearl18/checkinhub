@@ -41,6 +41,7 @@ export async function GET(
       lastPaymentAt: null,
       nextBillingAt: null,
       firstPaymentAt: null,
+      mealPlanLinks: [],
     });
   }
 
@@ -69,6 +70,7 @@ export async function GET(
     lastPaymentAt?: unknown;
     nextBillingAt?: unknown;
     firstPaymentAt?: unknown;
+    mealPlanLinks?: { label?: string; url?: string }[];
   };
   if (data.coachId !== coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -127,6 +129,9 @@ export async function GET(
     lastPaymentAt: toIso(data.lastPaymentAt) ?? null,
     nextBillingAt: toIso(data.nextBillingAt) ?? null,
     firstPaymentAt,
+    mealPlanLinks: Array.isArray(data.mealPlanLinks)
+      ? data.mealPlanLinks.map((l) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
+      : [],
   });
 }
 
@@ -143,6 +148,7 @@ const CLIENT_ALLOWED = [
   "communicationPreference",
   "coachNotes",
   "stripeCustomerId",
+  "mealPlanLinks",
 ] as const;
 
 // PATCH: update client profile and settings (coach only).
@@ -188,6 +194,17 @@ export async function PATCH(
   if (body.programDurationWeeks !== undefined) clientUpdate.programDurationWeeks = body.programDurationWeeks;
   if (body.coachNotes !== undefined) clientUpdate.coachNotes = body.coachNotes;
   if (body.stripeCustomerId !== undefined) clientUpdate.stripeCustomerId = body.stripeCustomerId === "" || body.stripeCustomerId == null ? null : body.stripeCustomerId;
+  if (body.mealPlanLinks !== undefined) {
+    const raw = body.mealPlanLinks;
+    clientUpdate.mealPlanLinks = Array.isArray(raw)
+      ? raw
+          .filter((l) => l && typeof l === "object" && (l as { url?: string }).url)
+          .map((l) => ({
+            label: typeof (l as { label?: string }).label === "string" ? (l as { label: string }).label : "",
+            url: String((l as { url?: string }).url ?? ""),
+          }))
+      : [];
+  }
 
   if (body.checkInFrequency !== undefined || body.communicationPreference !== undefined) {
     const data = snap.data() as { profile?: Record<string, unknown> };
