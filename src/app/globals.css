@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/* CheckinHUB design tokens – primary #daa450 */
+@theme {
+  /* Primary */
+  --color-primary: #daa450;
+  --color-primary-hover: #c8933d;
+  --color-primary-active: #b68235;
+  --color-primary-subtle: #faf4eb;
+  --color-primary-muted: #e8d4b8;
+
+  /* Neutrals (warm) */
+  --color-text: #1a1a1a;
+  --color-text-secondary: #5c5c5c;
+  --color-text-muted: #8c8c8c;
+  --color-border: #e8e4df;
+  --color-bg: #f8f7f5;
+  --color-bg-elevated: #ffffff;
+
+  /* Semantic */
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+
+  /* Spacing (8px base) */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+
+  /* Radius */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-[var(--color-bg)] text-[var(--color-text)];
+  }
+}

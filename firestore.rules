@@ -1,0 +1,21 @@
+// CheckinHUB – Firestore security rules
+// Confirmed for use with the same Firebase project as the legacy app (checkinv5).
+//
+// This app accesses Firestore only via Next.js API routes (Firebase Admin SDK).
+// Admin SDK bypasses these rules. These rules apply to any client-side Firestore
+// access (e.g. from the legacy app or future client SDK usage).
+//
+// If your live app has stricter per-collection rules, replace this file with
+// that version. Deploy only when ready (firebase deploy --only firestore:rules).
+// Holding off deploy by default so the old site (same project) is unaffected.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Authenticated users (client or coach) may read/write.
+    // Tighten per collection if you add client-side Firestore in the future.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
