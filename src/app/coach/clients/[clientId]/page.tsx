@@ -195,7 +195,15 @@ export default function CoachClientCheckInsPage() {
             {clientName ?? "Client"} – Check-ins
           </h1>
         </div>
-        <Button onClick={() => setAssignOpen(true)}>Assign check-in</Button>
+        <div className="flex gap-2">
+          <Button asChild variant="secondary">
+            <Link href={`/coach/clients/${clientId}/progress`}>Progress</Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href={`/coach/clients/${clientId}/settings`}>Settings</Link>
+          </Button>
+          <Button onClick={() => setAssignOpen(true)}>Assign check-in</Button>
+        </div>
       </div>
 
       {assignOpen && (

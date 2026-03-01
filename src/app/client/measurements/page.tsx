@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { MeasurementLineChart } from "@/components/ui/MeasurementLineChart";
 import { useApiClient } from "@/lib/api-client";
 
 interface Measurement {
@@ -15,6 +17,26 @@ interface Measurement {
   measurements: Record<string, number>;
   isBaseline: boolean;
 }
+
+const MEASUREMENT_KEYS = [
+  "waist",
+  "hips",
+  "chest",
+  "leftThigh",
+  "rightThigh",
+  "leftArm",
+  "rightArm",
+] as const;
+
+const measurementLabels: Record<string, string> = {
+  waist: "Waist",
+  hips: "Hips",
+  chest: "Chest",
+  leftThigh: "L thigh",
+  rightThigh: "R thigh",
+  leftArm: "L arm",
+  rightArm: "R arm",
+};
 
 export default function ClientMeasurementsPage() {
   const { fetchWithAuth } = useApiClient();
@@ -28,16 +50,20 @@ export default function ClientMeasurementsPage() {
   const [measurements, setMeasurements] = useState<Record<string, string>>({
     waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "",
   });
+  const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number]>("bodyWeight");
 
-  const measurementLabels: Record<string, string> = {
-    waist: "Waist (cm)",
-    hips: "Hips (cm)",
-    chest: "Chest (cm)",
-    leftThigh: "Left thigh (cm)",
-    rightThigh: "Right thigh (cm)",
-    leftArm: "Left arm (cm)",
-    rightArm: "Right arm (cm)",
-  };
+  const chartData = useMemo(() => {
+    const chronological = [...list].filter((m) => m.date).reverse();
+    return chronological
+      .map((m) => {
+        let value: number | null = null;
+        if (chartMetric === "bodyWeight") value = m.bodyWeight ?? null;
+        else value = m.measurements?.[chartMetric] ?? null;
+        if (value == null) return null;
+        return { date: m.date!, value };
+      })
+      .filter((p): p is { date: string; value: number } => p != null);
+  }, [list, chartMetric]);
 
   const load = async () => {
     setLoading(true);
@@ -99,27 +125,48 @@ export default function ClientMeasurementsPage() {
     return <AuthErrorRetry onRetry={load} />;
   }
 
+  const formLabels: Record<string, string> = {
+    waist: "Waist (cm)",
+    hips: "Hips (cm)",
+    chest: "Chest (cm)",
+    leftThigh: "Left thigh (cm)",
+    rightThigh: "Right thigh (cm)",
+    leftArm: "Left arm (cm)",
+    rightArm: "Right arm (cm)",
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-[var(--color-text)]">Measurements</h1>
-        <Button variant="primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "Add measurement"}
-        </Button>
+      <div>
+        <Link href="/client" className="text-sm text-[var(--color-primary)] hover:underline">
+          ← Dashboard
+        </Link>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-[var(--color-text)]">Measurements</h1>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Track your weight and body measurements over time.
+            </p>
+          </div>
+          <Button variant="primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "Add measurement"}
+          </Button>
+        </div>
       </div>
 
       {showForm && (
         <Card className="p-6">
-          <form onSubmit={handleAdd} className="space-y-4">
+          <h2 className="text-lg font-medium text-[var(--color-text)]">New entry</h2>
+          <form onSubmit={handleAdd} className="mt-4 space-y-4">
             <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             <Input label="Body weight (kg)" type="number" step="0.1" value={bodyWeight} onChange={(e) => setBodyWeight(e.target.value)} placeholder="e.g. 72.5" />
             <div>
-              <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Measurements (cm) – optional</p>
+              <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Body measurements (cm) – optional</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                {(Object.keys(measurementLabels) as Array<keyof typeof measurementLabels>).map((key) => (
+                {MEASUREMENT_KEYS.map((key) => (
                   <Input
                     key={key}
-                    label={measurementLabels[key]}
+                    label={formLabels[key]}
                     type="number"
                     step="0.1"
                     value={measurements[key] ?? ""}
@@ -144,32 +191,83 @@ export default function ClientMeasurementsPage() {
         />
       )}
       {!loading && list.length > 0 && (
-        <Card className="overflow-hidden">
-          <ul className="divide-y divide-[var(--color-border)]">
-            {list.map((m) => {
-              const hasMeasurements = m.measurements && Object.keys(m.measurements).length > 0;
-              return (
-                <li key={m.id} className="px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-[var(--color-text)]">{m.date}</span>
-                    <span className="text-sm text-[var(--color-text)]">
-                      {m.bodyWeight != null ? `${m.bodyWeight} kg` : ""}
-                    </span>
-                  </div>
-                  {hasMeasurements && (
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--color-text-secondary)]">
-                      {(Object.entries(m.measurements) as [string, number][]).map(([key, value]) => (
-                        <span key={key}>
-                          {measurementLabels[key] ?? key}: {value} cm
+        <>
+          <Card className="p-4">
+            <h2 className="text-lg font-medium text-[var(--color-text)]">Trends</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              View progress over time
+            </p>
+            <div className="mt-3">
+              <label className="sr-only" htmlFor="chart-metric">Metric</label>
+              <select
+                id="chart-metric"
+                value={chartMetric}
+                onChange={(e) => setChartMetric(e.target.value as typeof chartMetric)}
+                className="mb-4 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+              >
+                <option value="bodyWeight">Body weight (kg)</option>
+                {MEASUREMENT_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {measurementLabels[key]} (cm)
+                  </option>
+                ))}
+              </select>
+            </div>
+            {chartData.length > 0 ? (
+              <MeasurementLineChart
+                data={chartData}
+                unit={chartMetric === "bodyWeight" ? "kg" : "cm"}
+              />
+            ) : (
+              <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                No data for this metric yet.
+              </p>
+            )}
+          </Card>
+
+          <Card className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px] text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Date</th>
+                  <th className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">Weight</th>
+                  {MEASUREMENT_KEYS.map((key) => (
+                    <th key={key} className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">
+                      {measurementLabels[key]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((m) => (
+                  <tr key={m.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-primary-subtle)]/20">
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-[var(--color-text)]">{m.date ?? "—"}</span>
+                      {m.isBaseline && (
+                        <span className="ml-2 inline rounded bg-[var(--color-primary-subtle)] px-1.5 py-0.5 text-xs text-[var(--color-primary)]">
+                          Baseline
                         </span>
-                      ))}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-[var(--color-text)]">
+                      {m.bodyWeight != null ? `${m.bodyWeight} kg` : "—"}
+                    </td>
+                    {MEASUREMENT_KEYS.map((key) => (
+                      <td key={key} className="px-4 py-3 text-right text-[var(--color-text)]">
+                        {m.measurements?.[key] != null ? `${m.measurements[key]} cm` : "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-4 py-2 text-xs text-[var(--color-text-muted)]">
+            Scroll horizontally on small screens to see all columns.
+          </p>
         </Card>
+        </>
       )}
     </div>
   );

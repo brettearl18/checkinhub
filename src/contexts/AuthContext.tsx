@@ -10,6 +10,9 @@ export interface AuthIdentity {
   role: Role;
   clientId: string | null;
   coachId: string | null;
+  firstName?: string;
+  lastName?: string;
+  coachCode?: string;
 }
 
 export interface AuthState {

@@ -17,6 +17,7 @@ interface QuestionRow {
 interface ResponseRow {
   questionId: string;
   answer: string | number | string[];
+  notes?: string;
   score?: number;
 }
 
@@ -166,6 +167,9 @@ export default function CoachViewResponsePage() {
                 <div key={r.questionId} className="border-b border-[var(--color-border)] pb-4 last:border-0">
                   <dt className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">{label}</dt>
                   <dd className="text-[var(--color-text)]">{answer}</dd>
+                  {r.notes?.trim() && (
+                    <dd className="mt-1 text-sm text-[var(--color-text-muted)] italic">Client notes: {r.notes.trim()}</dd>
+                  )}
                   {typeof r.score === "number" && (
                     <dd className="text-xs text-[var(--color-text-muted)] mt-1">Score: {r.score}</dd>
                   )}

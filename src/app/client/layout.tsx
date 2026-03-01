@@ -76,6 +76,12 @@ export default function ClientLayout({
               Goals
             </Link>
             <Link
+              href="/client/progress-photos"
+              className={`text-sm font-medium ${pathname === "/client/progress-photos" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
+            >
+              Photos
+            </Link>
+            <Link
               href="/client/profile"
               className={`text-sm font-medium ${pathname === "/client/profile" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
             >

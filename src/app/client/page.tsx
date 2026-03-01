@@ -27,6 +27,7 @@ const QUICK_LINKS = [
   { href: "/client/history", label: "Check-in history", description: "Past check-ins & feedback" },
   { href: "/client/goals", label: "Goals", description: "Track your progress" },
   { href: "/client/measurements", label: "Measurements", description: "Weight & measurements" },
+  { href: "/client/progress-photos", label: "Before & after photos", description: "Progress photos" },
   { href: "/client/messages", label: "Messages", description: "Chat with your coach" },
   { href: "/client/profile", label: "Profile", description: "Your details & settings" },
 ] as const;

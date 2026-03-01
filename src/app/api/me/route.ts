@@ -49,11 +49,20 @@ export async function GET(request: Request) {
       coachId = uid;
     }
 
-    return NextResponse.json({
+    const out: Record<string, unknown> = {
       role: role ?? null,
       clientId,
       coachId,
-    });
+    };
+    const userDataTyped = userData as { firstName?: string; lastName?: string } | undefined;
+    if (userDataTyped?.firstName != null) out.firstName = userDataTyped.firstName;
+    if (userDataTyped?.lastName != null) out.lastName = userDataTyped.lastName;
+    if (role === "coach") {
+      const coachSnap = await db.collection("coaches").doc(uid).get();
+      const coachData = coachSnap.data() as { shortUID?: string } | undefined;
+      if (coachData?.shortUID) out.coachCode = coachData.shortUID;
+    }
+    return NextResponse.json(out);
   } catch {
     return NextResponse.json(
       { error: "Invalid or expired token" },

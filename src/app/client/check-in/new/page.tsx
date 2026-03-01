@@ -9,6 +9,7 @@ import { useApiClient } from "@/lib/api-client";
 
 const WEEK_RANGE = { past: 2, future: 0 };
 
+// Week is always Monday (inclusive) to Sunday (inclusive). reflectionWeekStart = Monday YYYY-MM-DD.
 function getWeekOptions(): { label: string; reflectionWeekStart: string }[] {
   const options: { label: string; reflectionWeekStart: string }[] = [];
   const now = new Date();
@@ -17,15 +18,15 @@ function getWeekOptions(): { label: string; reflectionWeekStart: string }[] {
     const d = new Date(today);
     d.setDate(d.getDate() + i * 7);
     const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + diff);
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diffToMonday);
     const monday = d.toISOString().slice(0, 10);
-    const end = new Date(d);
-    end.setDate(end.getDate() + 6);
+    const sunday = new Date(d);
+    sunday.setDate(sunday.getDate() + 6);
     const label =
       i === 0
-        ? `This week (${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-AU", { day: "numeric", month: "short" })})`
-        : `${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`;
+        ? `This week (${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sunday.toLocaleDateString("en-AU", { day: "numeric", month: "short" })})`
+        : `${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sunday.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`;
     options.push({ label, reflectionWeekStart: monday });
   }
   return options;

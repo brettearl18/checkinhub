@@ -20,7 +20,7 @@ export default function ClientViewResponsePage() {
   const { fetchWithAuth } = useApiClient();
   const [response, setResponse] = useState<{
     formTitle: string;
-    responses: Array<{ questionId: string; answer: string | number | string[] }>;
+    responses: Array<{ questionId: string; answer: string | number | string[]; notes?: string }>;
     submittedAt: string | null;
   } | null>(null);
   const [questions, setQuestions] = useState<Array<{ id: string; text: string }>>([]);
@@ -96,10 +96,14 @@ export default function ClientViewResponsePage() {
               const label = q?.text ?? r.questionId;
               const answer = Array.isArray(r.answer) ? r.answer.join(", ") : String(r.answer ?? "—");
               const qFeedback = feedbackByQuestion(r.questionId);
+              const note = r.notes?.trim();
               return (
                 <div key={r.questionId} className="border-b border-[var(--color-border)] pb-3 last:border-0">
                   <dt className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">{label}</dt>
                   <dd className="text-[var(--color-text)]">{answer}</dd>
+                  {note && (
+                    <dd className="mt-1 text-sm text-[var(--color-text-muted)] italic">Notes: {note}</dd>
+                  )}
                   {qFeedback.length > 0 && (
                     <div className="mt-3 rounded bg-[var(--color-primary-subtle)] border border-[var(--color-primary)]/20 p-3 text-sm">
                       <span className="font-medium text-[var(--color-text-secondary)]">Coach feedback: </span>

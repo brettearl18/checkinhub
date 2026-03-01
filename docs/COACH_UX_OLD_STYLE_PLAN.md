@@ -104,13 +104,50 @@ This doc maps the old CheckinV5 coach interface (checkinv5.web.app) to CheckinHU
 
 ---
 
-## 5. Summary
+## 5. Scoring Configuration (traffic light thresholds)
+
+**Old style:** Dedicated “Scoring Configuration” screen with **Scoring Profile**, **Overall Thresholds**, and **Scoring Preview**. Coach can pick a preset profile or set custom red/orange max values; green is always “above orange max” (e.g. 81–100%).
+
+### 5.1 Scoring profiles (presets)
+
+| Profile | Description | Red | Orange | Green |
+|--------|-------------|-----|--------|-------|
+| **High Performance** | Elite athletes, competitive clients – stricter standards | 0–75% | 76–89% | 90–100% |
+| **Moderate** | Active clients, good adherence expected | 0–60% | 61–85% | 86–100% |
+| **Lifestyle** | General wellness, flexible approach – more lenient | 0–33% | 34–80% | 81–100% |
+| **Custom** | Customized thresholds; user edits Red/Orange max | (editable) | (editable) | (auto: orange max+1 – 100%) |
+
+- **Data:** `clientScoring.scoringProfile` = `'highPerformance' | 'moderate' | 'lifestyle' | 'custom'`. When a preset is selected, thresholds are derived from the table (and saved to `clientScoring.thresholds`). For Custom, only the numeric thresholds are stored; profile stays `'custom'`.
+- **UI:** Selectable cards or radio group for the four profiles; selecting a preset fills “Overall Thresholds” and updates the preview. Selecting “Custom” keeps current numbers and allows editing.
+
+### 5.2 Overall thresholds
+
+- **Red Zone Max (Needs attention):** Single number, 0–100. Meaning: Red = 0 to this value (e.g. 33 → Red 0–33%). Maps to `trafficLightRedMax` / `thresholds.red[1]`.
+- **Orange Zone Max (On track):** Single number, 0–100. Orange = (Red max + 1) to this value (e.g. 80 → Orange 34–80%). Maps to `trafficLightOrangeMax` / `thresholds.orange[1]`.
+- **Green Zone (Excellent):** Read-only display: “(Orange max + 1)–100%” (e.g. 81–100%). Not stored; derived.
+
+### 5.3 Scoring preview
+
+- Show the three bands with labels (e.g. Red 0–33%, Orange 34–80%, Green 81–100%) and optional example scores (e.g. 95% Excellent, 75% On track) so the coach sees how the current settings will look.
+- Labels: “Needs attention” (red), “On track” (orange), “Excellent” (green) to match the old UI.
+
+### 5.4 Where it lives
+
+- **Option A:** Expand the existing **Client settings** page (`/coach/clients/[clientId]/settings`) so the “Traffic light thresholds” section becomes this full block (Scoring Profile + Overall Thresholds + Preview). One “Save settings” at the bottom saves profile + thresholds.
+- **Option B:** Separate **Scoring configuration** page (`/coach/clients/[clientId]/scoring`) with “Back to Client” and “Save Configuration”; link to it from Client settings and from Progress.
+
+**Backend:** Already in place: GET/PATCH `/api/coach/clients/[clientId]/profile` read/write `trafficLightRedMax` and `trafficLightOrangeMax` and persist to `clientScoring.thresholds`. Extend to also read/write `scoringProfile` on `clientScoring` so the UI can show and save the selected profile.
+
+---
+
+## 6. Summary
 
 | Area | Plan |
 |------|------|
 | **Layout** | Sidebar nav (Dashboard, My Clients, Messages, Check-ins, Responses, Analytics, Forms, Questions, Gallery, Payments) + Quick actions. |
 | **Clients page** | Stats (6 cards), search, filters (All/Active/Needs Attention/Archived), Client Inventory table with Name, Status, Progress, Trend, Weeks, Avg Score, Engagement, Last check-in, Actions; Export/Sort. |
-| **APIs** | Stats endpoint; clients list extended or inventory endpoint with aggregates. |
+| **Scoring configuration** | Scoring Profile (High Performance, Moderate, Lifestyle, Custom), Overall Thresholds (Red max, Orange max), Scoring Preview; profile + thresholds in `clientScoring`; Option A (inside Settings) or Option B (dedicated page). |
+| **APIs** | Stats endpoint; clients list extended or inventory endpoint with aggregates; profile API already supports thresholds; add `scoringProfile` to GET/PATCH. |
 | **Rest of nav** | Filled in as Phase 4 (messages, forms, questions) and Phase 6 (analytics, gallery, payments) are implemented. |
 
 This document is the single reference for "getting it like the old website style" for the coach UX. Update it as we implement or change scope.

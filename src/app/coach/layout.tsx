@@ -46,6 +46,12 @@ export default function CoachLayout({
               Dashboard
             </Link>
             <Link
+              href="/coach/clients"
+              className={`text-sm font-medium ${pathname?.startsWith("/coach/clients") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
+            >
+              Clients
+            </Link>
+            <Link
               href="/coach/messages"
               className={`text-sm font-medium ${pathname?.startsWith("/coach/messages") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
             >
@@ -56,6 +62,18 @@ export default function CoachLayout({
               className={`text-sm font-medium ${pathname === "/coach/notifications" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
             >
               Notifications
+            </Link>
+            <Link
+              href="/coach/payments"
+              className={`text-sm font-medium ${pathname?.startsWith("/coach/payments") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
+            >
+              Payment
+            </Link>
+            <Link
+              href="/coach/gallery"
+              className={`text-sm font-medium ${pathname === "/coach/gallery" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
+            >
+              Gallery
             </Link>
             <Link
               href="/coach/forms"
@@ -77,7 +95,7 @@ export default function CoachLayout({
           </Button>
         </div>
       </nav>
-      <main className="mx-auto max-w-4xl p-6">{children}</main>
+      <main className="mx-auto w-full max-w-[75vw] p-6">{children}</main>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
@@ -9,7 +10,10 @@ export async function POST(request: Request) {
   const { identity } = authResult;
   const clientId = identity.clientId!;
 
-  let body: { assignmentId: string; responses: Array<{ questionId: string; answer: string | number | string[] }> };
+  let body: {
+    assignmentId: string;
+    responses: Array<{ questionId: string; answer: string | number | string[]; notes?: string }>;
+  };
   try {
     body = await request.json();
   } catch {
@@ -64,6 +68,8 @@ export async function POST(request: Request) {
     status: "completed",
     completedAt: now,
     updatedAt: now,
+    draftResponses: FieldValue.delete(),
+    draftUpdatedAt: FieldValue.delete(),
   });
 
   return NextResponse.json({ responseId: responseRef.id, success: true });
