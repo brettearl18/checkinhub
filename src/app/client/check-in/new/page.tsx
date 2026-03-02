@@ -235,7 +235,7 @@ export default function NewCheckInPage() {
               Choose week
             </h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-              Select the week you’re checking in for. Past weeks are always available; this week and next week open Friday 9am Perth so you review the week that's just passed.
+              Select the week you&apos;re checking in for. Past weeks are always available; this week and next week open Friday 9am Perth so you review the week that&apos;s just passed.
             </p>
             {loadingWeeks && (
               <p className="mt-4 text-sm text-[var(--color-text-muted)]">
