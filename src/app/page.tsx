@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -31,6 +32,14 @@ export default function HomePage() {
 
       <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-12 sm:py-16">
         <header className="text-center mb-10 sm:mb-12">
+          <Image
+            src="/Vana Logo-1-Black-RGB.png"
+            alt="Vana"
+            width={160}
+            height={64}
+            className="mx-auto mb-6 object-contain"
+            priority
+          />
           <h1 className="text-4xl sm:text-5xl font-bold text-[var(--color-text)] tracking-tight">
             CheckinHUB
           </h1>
