@@ -866,7 +866,6 @@ export default function CoachClientSettingsPage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    size="sm"
                     disabled={syncBillingLoading}
                     onClick={async () => {
                       setBillingError(null);

@@ -69,8 +69,9 @@ export async function POST(
       } else if (activeSub.status === "paused") {
         paymentStatus = "canceled";
       }
-      if (activeSub.current_period_end) {
-        nextBillingAt = new Date(activeSub.current_period_end * 1000);
+      const periodEnd = (activeSub as { current_period_end?: number }).current_period_end;
+      if (periodEnd != null) {
+        nextBillingAt = new Date(periodEnd * 1000);
       }
     } else if (subs.data?.length) {
       const last = subs.data[0];
@@ -90,7 +91,7 @@ export async function POST(
     const lastPaid = invoices.data?.[0];
     if (lastPaid?.status_transitions?.paid_at) {
       const paidAt = new Date(lastPaid.status_transitions.paid_at * 1000);
-      if (!lastPaymentAt || paidAt > lastPaymentAt) lastPaymentAt = paidAt;
+      lastPaymentAt = paidAt;
     }
 
     const failed = await stripe.invoices.list({

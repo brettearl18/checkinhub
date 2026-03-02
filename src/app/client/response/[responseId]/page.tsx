@@ -86,7 +86,7 @@ export default function ClientViewResponsePage() {
   useEffect(() => {
     if (!response || loading) return;
     fetchWithAuth(`/api/client/responses/${responseId}/read`, { method: "POST" }).catch(() => {});
-  }, [response?.id, responseId, fetchWithAuth, loading]);
+  }, [response, responseId, fetchWithAuth, loading]);
 
   const hasCoachContent = feedback.length > 0 || reviewDetails != null;
 
