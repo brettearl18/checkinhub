@@ -6,7 +6,7 @@ Clients are notified in-app when their check-in opens and when it is closing.
 
 | Time        | Trigger   | Notification |
 |------------|-----------|--------------|
-| **Friday 9am**  | Check-in open  | "Your check-in is open" – weekly check-in for the week starting next Monday is now available. |
+| **Friday 10am** | Check-in open  | "Check In is now Open" – weekly check-in for the week starting next Monday is now available. |
 | **Monday 5pm**  | Check-in closing | "Your check-in is closing today at 5pm" – complete your check-in for this week before 5pm. |
 
 Notifications are created in the `notifications` collection with `userId` = the client’s auth UID. Clients can see them under **Notifications** in the client app (and mark as read).
@@ -32,7 +32,7 @@ or
 { "type": "closing" }
 ```
 
-- **`open`** – Run on **Friday 9am Perth**. Finds assignments with `reflectionWeekStart` = next Monday (Perth) and status in `pending` / `active` / `overdue` / `started`; creates one notification per client.
+- **`open`** – Run on **Friday 10am Perth**. Finds assignments with `reflectionWeekStart` = next Monday (Perth) and status in `pending` / `active` / `overdue` / `started`; creates one notification per client (title: "Check In is now Open").
 - **`closing`** – Run on **Monday 5pm Perth**. Finds assignments with `reflectionWeekStart` = this Monday (Perth) and status not completed; creates one notification per client.
 
 **Response:** `{ "ok": true, "type": "open" | "closing", "weekStart": "YYYY-MM-DD", "sent": number }`

@@ -36,8 +36,8 @@ async function getClientAuthUid(
  * Body: { "type": "open" | "closing" }
  * Headers: Authorization: Bearer <CRON_SECRET> or x-cron-secret: <CRON_SECRET>
  *
- * - open: Friday 9am Perth – notify clients with an assignment for next week (reflectionWeekStart = next Monday).
- * - closing: Monday 5pm Perth – notify clients with an open assignment for this week (reflectionWeekStart = this Monday).
+ * - open: Friday 10am Perth – "Check In is now Open" for clients with an assignment (reflectionWeekStart = next Monday).
+ * - closing: Monday 5pm Perth – closing reminder (optional).
  */
 export async function POST(request: Request) {
   if (!requireCronSecret(request)) {
@@ -79,11 +79,11 @@ export async function POST(request: Request) {
   const now = new Date();
   const title =
     type === "open"
-      ? "Your check-in is open"
+      ? "Check In is now Open"
       : "Your check-in is closing today at 5pm";
   const message =
     type === "open"
-      ? "Your weekly check-in for this week is now open. Take a few minutes to reflect and stay on track."
+      ? "Your check-in for this week is now open. Log in to complete it."
       : "Your weekly check-in closes today at 5pm Perth time. Complete it now if you haven’t already.";
   const actionUrl = "/client/check-in/new";
 

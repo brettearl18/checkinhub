@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { sendPushToUser } from "@/lib/push-server";
 
 function toDate(v: unknown): string | null {
   if (!v) return null;
@@ -142,7 +143,7 @@ export async function POST(
         });
       }
     }
-    // In-app notification for client: coach feedback available.
+    // In-app + push: "Coach [Name] has responded to your check in"
     const clientSnap = await db.collection("clients").doc(clientId).get();
     const clientData = clientSnap.exists ? (clientSnap.data() as { authUid?: string; email?: string }) : null;
     let userId: string | null = clientData?.authUid ?? null;
@@ -151,16 +152,34 @@ export async function POST(
       if (!usersSnap.empty) userId = usersSnap.docs[0].id;
     }
     if (!userId) userId = clientId;
+    const coachSnap = await db.collection("users").doc(coachId).get();
+    const coachData = coachSnap.exists ? (coachSnap.data() as { firstName?: string; lastName?: string }) : null;
+    const coachName = coachData
+      ? [coachData.firstName, coachData.lastName].filter(Boolean).join(" ").trim() || "Your coach"
+      : "Your coach";
+    const title = `Coach ${coachName} has responded to your check in`;
+    const actionUrl = `/client/response/${responseId}`;
     await db.collection("notifications").add({
       userId,
       type: "coach_feedback",
-      title: "Coach feedback available",
-      message: "Your coach has added feedback to your check-in. Tap to view.",
-      actionUrl: `/client/response/${responseId}`,
+      title,
+      message: "Tap to view their feedback.",
+      actionUrl,
       metadata: { responseId, clientId },
       isRead: false,
       createdAt: now,
     });
+    try {
+      await sendPushToUser({
+        userId,
+        title,
+        body: "Tap to view their feedback.",
+        actionPath: actionUrl,
+        tag: "coach_feedback",
+      });
+    } catch {
+      // in-app notification already saved
+    }
   }
 
   return NextResponse.json({ id: ref.id });
