@@ -81,6 +81,7 @@ export async function GET(
     return {
       id: d.id,
       questionId: data.questionId ?? null,
+      feedbackType: data.feedbackType ?? "text",
       content: data.content ?? "",
       createdAt: toDate(data.createdAt),
     };

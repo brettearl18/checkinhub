@@ -123,8 +123,9 @@ export default function ClientPortalPage() {
       if (historyRes.ok) {
         const history = await historyRes.json();
         const list = Array.isArray(history) ? history : [];
+        const unread = list.filter((item: { readByClient?: boolean }) => item.readByClient !== true);
         setRecentResponses(
-          list.slice(0, 2).map((item: { id: string; formTitle?: string; completedAt?: string | null; responseId?: string | null; score?: number | null; readByClient?: boolean }) => ({
+          unread.slice(0, 2).map((item: { id: string; formTitle?: string; completedAt?: string | null; responseId?: string | null; score?: number | null; readByClient?: boolean }) => ({
             id: item.id,
             formTitle: item.formTitle ?? "Check-in",
             completedAt: item.completedAt ?? null,

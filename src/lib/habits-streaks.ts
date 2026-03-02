@@ -113,3 +113,36 @@ export async function fetchClientHabitEntries(
     .get();
   return snap.docs as unknown as HabitEntryDoc[];
 }
+
+const FIRESTORE_IN_QUERY_LIMIT = 30;
+
+/**
+ * Fetch habit entries for multiple clients in batched queries (fewer round-trips).
+ * Returns a Map of clientId -> docs. Use for coach overview to avoid N+1.
+ */
+export async function fetchClientHabitEntriesBatch(
+  db: Firestore,
+  clientIds: string[]
+): Promise<Map<string, HabitEntryDoc[]>> {
+  const result = new Map<string, HabitEntryDoc[]>();
+  clientIds.forEach((id) => result.set(id, []));
+
+  for (let i = 0; i < clientIds.length; i += FIRESTORE_IN_QUERY_LIMIT) {
+    const chunk = clientIds.slice(i, i + FIRESTORE_IN_QUERY_LIMIT);
+    const snap = await db
+      .collection(COLLECTION)
+      .where("clientId", "in", chunk)
+      .limit(500 * chunk.length)
+      .get();
+
+    snap.docs.forEach((doc) => {
+      const data = doc.data() as { clientId?: string };
+      const cid = data.clientId;
+      if (cid && result.has(cid)) {
+        result.get(cid)!.push(doc as unknown as HabitEntryDoc);
+      }
+    });
+  }
+
+  return result;
+}

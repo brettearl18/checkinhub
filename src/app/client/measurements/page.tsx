@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
-import { MeasurementLineChart } from "@/components/ui/MeasurementLineChart";
+import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
 
@@ -215,7 +215,7 @@ export default function ClientMeasurementsPage() {
               </select>
             </div>
             {chartData.length > 0 ? (
-              <MeasurementLineChart
+              <MeasurementLineChartLazy
                 data={chartData}
                 unit={chartMetric === "bodyWeight" ? "kg" : "cm"}
               />

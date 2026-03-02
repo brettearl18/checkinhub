@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatDateTimeDisplay } from "@/lib/format-date";
 
 interface QuestionRow {
@@ -49,6 +50,7 @@ export default function CoachViewResponsePage() {
   const clientId = params.clientId as string;
   const responseId = params.responseId as string;
   const { fetchWithAuth } = useApiClient();
+  const { getToken } = useAuth();
   const [response, setResponse] = useState<ResponseData | null>(null);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -65,6 +67,13 @@ export default function CoachViewResponsePage() {
     notes: string;
     progressRating: number;
   }>({ whereResponded: [], notes: "", progressRating: 5 });
+  const [finalAudioUrl, setFinalAudioUrl] = useState<string | null>(null);
+  const [finalAudioBlob, setFinalAudioBlob] = useState<Blob | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploadingVoice, setIsUploadingVoice] = useState(false);
+  const [finalAudioError, setFinalAudioError] = useState<string | null>(null);
+  const [mediaRecorderRef, setMediaRecorderRef] = useState<MediaRecorder | null>(null);
+  const finalAudioBlobUrlRef = useRef<string | null>(null);
 
   const loadResponse = useCallback(async () => {
     const res = await fetchWithAuth(`/api/coach/clients/${clientId}/responses/${responseId}`);
@@ -138,13 +147,6 @@ export default function CoachViewResponsePage() {
     }
   };
 
-  const openReviewModal = () => setShowReviewModal(true);
-  const closeReviewModal = () => {
-    setShowReviewModal(false);
-    setReviewError(null);
-    setReviewForm({ whereResponded: [], notes: "", progressRating: 5 });
-  };
-
   const toggleWhereResponded = (value: string) => {
     setReviewForm((prev) => ({
       ...prev,
@@ -154,10 +156,117 @@ export default function CoachViewResponsePage() {
     }));
   };
 
+  const openReviewModal = () => {
+    setShowReviewModal(true);
+    setReviewError(null);
+    setFinalAudioError(null);
+  };
+  const closeReviewModal = () => {
+    setShowReviewModal(false);
+    setReviewError(null);
+    setReviewForm({ whereResponded: [], notes: "", progressRating: 5 });
+    setFinalAudioUrl(null);
+    setFinalAudioBlob(null);
+    if (finalAudioBlobUrlRef.current) {
+      URL.revokeObjectURL(finalAudioBlobUrlRef.current);
+      finalAudioBlobUrlRef.current = null;
+    }
+    if (mediaRecorderRef && mediaRecorderRef.state !== "inactive") {
+      try {
+        mediaRecorderRef.stop();
+      } catch {}
+      setMediaRecorderRef(null);
+    }
+    setIsRecording(false);
+  };
+
+  const startRecording = async () => {
+    setFinalAudioError(null);
+    setFinalAudioBlob(null);
+    setFinalAudioUrl(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size) chunks.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (chunks.length) setFinalAudioBlob(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+      };
+      recorder.start();
+      setMediaRecorderRef(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      setFinalAudioError("Microphone access is needed to record.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef && mediaRecorderRef.state !== "inactive") {
+      mediaRecorderRef.stop();
+      setMediaRecorderRef(null);
+    }
+    setIsRecording(false);
+  };
+
+  const uploadFinalAudio = async (): Promise<string | null> => {
+    if (!finalAudioBlob) return null;
+    setIsUploadingVoice(true);
+    setFinalAudioError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", finalAudioBlob, "audio.webm");
+      const authToken = await getToken();
+      const res = await fetch(`/api/coach/clients/${clientId}/responses/${responseId}/upload-voice`, {
+        method: "POST",
+        headers: { Authorization: authToken ? `Bearer ${authToken}` : "" },
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setFinalAudioError((data as { error?: string }).error ?? "Upload failed.");
+        return null;
+      }
+      const data = await res.json();
+      const url = (data as { url?: string }).url;
+      if (url) {
+        setFinalAudioUrl(url);
+        setFinalAudioBlob(null);
+        return url;
+      }
+      return null;
+    } catch {
+      setFinalAudioError("Upload failed.");
+      return null;
+    } finally {
+      setIsUploadingVoice(false);
+    }
+  };
+
   const handleMarkReviewedSubmit = async () => {
     setReviewError(null);
     setMarkingReviewed(true);
     try {
+      let voiceUrl: string | null = finalAudioUrl;
+      if (finalAudioBlob && !voiceUrl) {
+        voiceUrl = await uploadFinalAudio();
+      }
+      if (voiceUrl) {
+        const feedbackRes = await fetchWithAuth(`/api/coach/clients/${clientId}/responses/${responseId}/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionId: null, feedbackType: "voice", content: voiceUrl }),
+        });
+        if (!feedbackRes.ok) {
+          const data = await feedbackRes.json().catch(() => ({}));
+          setReviewError((data as { error?: string }).error ?? "Failed to save voice feedback.");
+          setMarkingReviewed(false);
+          return;
+        }
+        await loadFeedback();
+      }
       const res = await fetchWithAuth(`/api/coach/clients/${clientId}/responses/${responseId}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -313,9 +422,15 @@ export default function CoachViewResponsePage() {
                   {qFeedback.length > 0 && (
                     <div className="mt-3 rounded bg-[var(--color-bg-elevated)] p-3 text-sm">
                       <span className="font-medium text-[var(--color-text-secondary)]">Your feedback: </span>
-                      {qFeedback.map((f) => (
-                        <p key={f.id} className="mt-1 text-[var(--color-text)]">{f.content}</p>
-                      ))}
+                      {qFeedback.map((f) =>
+                        f.feedbackType === "voice" ? (
+                          <div key={f.id} className="mt-1">
+                            <audio src={f.content} controls className="w-full max-w-sm" />
+                          </div>
+                        ) : (
+                          <p key={f.id} className="mt-1 text-[var(--color-text)]">{f.content}</p>
+                        )
+                      )}
                     </div>
                   )}
                   <div className="mt-2 flex gap-2">
@@ -342,10 +457,16 @@ export default function CoachViewResponsePage() {
           <div className="border-t border-[var(--color-border)] pt-4">
             <h3 className="text-sm font-medium text-[var(--color-text)] mb-2">Overall feedback</h3>
             {feedbackByQuestion(null).length > 0 && (
-              <div className="mb-3 rounded bg-[var(--color-bg-elevated)] p-3 text-sm">
-                {feedbackByQuestion(null).map((f) => (
-                  <p key={f.id} className="text-[var(--color-text)]">{f.content}</p>
-                ))}
+              <div className="mb-3 rounded bg-[var(--color-bg-elevated)] p-3 text-sm space-y-2">
+                {feedbackByQuestion(null).map((f) =>
+                  f.feedbackType === "voice" ? (
+                    <div key={f.id}>
+                      <audio src={f.content} controls className="w-full max-w-sm" />
+                    </div>
+                  ) : (
+                    <p key={f.id} className="text-[var(--color-text)]">{f.content}</p>
+                  )
+                )}
               </div>
             )}
             <div className="flex gap-2">
@@ -419,6 +540,48 @@ export default function CoachViewResponsePage() {
               ))}
             </div>
             <div className="mb-4">
+              <label className="block text-sm font-medium text-[var(--color-text)] mb-2">
+                Optional: record a final audio message
+              </label>
+              {finalAudioError && (
+                <p className="text-sm text-[var(--color-error)] mb-2" role="alert">{finalAudioError}</p>
+              )}
+              {!finalAudioUrl && !finalAudioBlob && !isRecording && (
+                <Button variant="secondary" onClick={startRecording} disabled={isUploadingVoice}>
+                  Record
+                </Button>
+              )}
+              {isRecording && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-[var(--color-text-muted)]">Recording…</span>
+                  <Button variant="secondary" onClick={stopRecording}>Stop</Button>
+                </div>
+              )}
+              {(finalAudioBlob || finalAudioUrl) && !isRecording && (
+                <div className="space-y-2">
+                  <audio
+                    src={
+                      finalAudioUrl ??
+                      (finalAudioBlob
+                        ? (() => {
+                            if (finalAudioBlobUrlRef.current) URL.revokeObjectURL(finalAudioBlobUrlRef.current);
+                            finalAudioBlobUrlRef.current = URL.createObjectURL(finalAudioBlob);
+                            return finalAudioBlobUrlRef.current;
+                          })()
+                        : "")
+                    }
+                    controls
+                    className="w-full max-w-sm"
+                  />
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => { setFinalAudioUrl(null); setFinalAudioBlob(null); setFinalAudioError(null); startRecording(); }}>
+                      Record again
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mb-4">
               <label className="block text-sm font-medium text-[var(--color-text)] mb-1">
                 Notes (optional)
               </label>
@@ -457,8 +620,8 @@ export default function CoachViewResponsePage() {
               <Button variant="secondary" onClick={closeReviewModal} disabled={markingReviewed}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleMarkReviewedSubmit} disabled={markingReviewed}>
-                {markingReviewed ? "…" : "Mark as Reviewed"}
+              <Button variant="primary" onClick={handleMarkReviewedSubmit} disabled={markingReviewed || isUploadingVoice}>
+                {markingReviewed ? "…" : isUploadingVoice ? "Uploading…" : "Mark as Reviewed"}
               </Button>
             </div>
           </Card>

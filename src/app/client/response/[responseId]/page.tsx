@@ -12,6 +12,7 @@ import { formatDateTimeDisplay } from "@/lib/format-date";
 interface FeedbackItem {
   id: string;
   questionId: string | null;
+  feedbackType?: string;
   content: string;
   createdAt: string | null;
 }
@@ -80,6 +81,12 @@ export default function ClientViewResponsePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Mark as read when they view the response so it drops off the dashboard "recent" list
+  useEffect(() => {
+    if (!response || loading) return;
+    fetchWithAuth(`/api/client/responses/${responseId}/read`, { method: "POST" }).catch(() => {});
+  }, [response?.id, responseId, fetchWithAuth, loading]);
 
   const hasCoachContent = feedback.length > 0 || reviewDetails != null;
 
@@ -222,9 +229,15 @@ export default function ClientViewResponsePage() {
                   {qFeedback.length > 0 && (
                     <div className="mt-3 rounded bg-[var(--color-primary-subtle)] border border-[var(--color-primary)]/20 p-3 text-sm">
                       <span className="font-medium text-[var(--color-text-secondary)]">Coach feedback: </span>
-                      {qFeedback.map((f) => (
-                        <p key={f.id} className="mt-1 text-[var(--color-text)]">{f.content}</p>
-                      ))}
+                      {qFeedback.map((f) =>
+                        f.feedbackType === "voice" ? (
+                          <div key={f.id} className="mt-1">
+                            <audio src={f.content} controls className="w-full max-w-sm" />
+                          </div>
+                        ) : (
+                          <p key={f.id} className="mt-1 text-[var(--color-text)]">{f.content}</p>
+                        )
+                      )}
                     </div>
                   )}
                 </div>
@@ -233,11 +246,17 @@ export default function ClientViewResponsePage() {
           </dl>
 
           {feedbackByQuestion(null).length > 0 && (
-            <div className="rounded bg-[var(--color-primary-subtle)] border border-[var(--color-primary)]/20 p-4">
+            <div className="rounded bg-[var(--color-primary-subtle)] border border-[var(--color-primary)]/20 p-4 space-y-2">
               <h3 className="text-sm font-medium text-[var(--color-text-secondary)] mb-2">Overall feedback from coach</h3>
-              {feedbackByQuestion(null).map((f) => (
-                <p key={f.id} className="text-[var(--color-text)]">{f.content}</p>
-              ))}
+              {feedbackByQuestion(null).map((f) =>
+                f.feedbackType === "voice" ? (
+                  <div key={f.id}>
+                    <audio src={f.content} controls className="w-full max-w-sm" />
+                  </div>
+                ) : (
+                  <p key={f.id} className="text-[var(--color-text)]">{f.content}</p>
+                )
+              )}
             </div>
           )}
 

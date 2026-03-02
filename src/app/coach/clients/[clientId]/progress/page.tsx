@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { MeasurementLineChart } from "@/components/ui/MeasurementLineChart";
+import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
@@ -477,7 +477,7 @@ export default function CoachClientProgressPage() {
             {trendPoints.length > 0 ? (
               <>
                 <div className="mt-4">
-                  <MeasurementLineChart
+                  <MeasurementLineChartLazy
                     data={trendPoints}
                     unit={trendTab === "bodyWeight" ? "kg" : "cm"}
                   />
