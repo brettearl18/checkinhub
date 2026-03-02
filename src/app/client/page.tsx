@@ -91,6 +91,17 @@ export default function ClientPortalPage() {
     );
   }, [assignments]);
 
+  // Started but not finished – show at top so they see it.
+  const resumeAssignments = useMemo(
+    () => assignments.filter((a) => a.status === "started"),
+    [assignments]
+  );
+  // Any open check-in to complete (open week) – show at top; prefer "started" first so in-progress is most visible.
+  const topPriorityAssignments = useMemo(() => {
+    if (resumeAssignments.length > 0) return resumeAssignments;
+    return openAssignments;
+  }, [resumeAssignments, openAssignments]);
+
   const loadData = async () => {
     setLoading(true);
     setAuthError(false);
@@ -175,6 +186,51 @@ export default function ClientPortalPage() {
           )}
         </div>
       </header>
+
+      {/* Check-in to complete – always at top when there is one (started or open) */}
+      {!authError && !loading && topPriorityAssignments.length > 0 && (
+        <section className="mt-6">
+          <Card className="overflow-hidden border-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)]/50 shadow-md">
+            <div className="p-5 sm:p-6">
+              <h2 className="text-lg font-semibold text-[var(--color-text)] sm:text-xl">
+                {resumeAssignments.length > 0 ? "Finish your check-in" : "You have a check-in to complete"}
+              </h2>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                {resumeAssignments.length > 0
+                  ? "You've started a check-in — complete it when you're ready."
+                  : "Complete your check-in when you're ready."}
+              </p>
+              <ul className="mt-4 space-y-3">
+                {topPriorityAssignments.slice(0, 3).map((a) => (
+                  <li key={a.id}>
+                    <Link
+                      href={`/client/check-in/${a.id}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[var(--color-primary-muted)] bg-[var(--color-bg)] px-4 py-4 text-left transition-all hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-subtle)]/50 hover:shadow-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold text-[var(--color-text)]">{a.formTitle}</span>
+                        {a.reflectionWeekStart && (
+                          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                            Week of {a.reflectionWeekStart}
+                          </p>
+                        )}
+                      </div>
+                      <span className="flex-shrink-0 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary)]/90">
+                        {a.status === "started" ? "Resume →" : "Start →"}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {topPriorityAssignments.length > 3 && (
+                <p className="mt-3 text-sm text-[var(--color-text-muted)]">
+                  +{topPriorityAssignments.length - 3} more in the list below
+                </p>
+              )}
+            </div>
+          </Card>
+        </section>
+      )}
 
       {/* Recent check-in responses – prominent, right under hero */}
       {!authError && !loading && recentResponses.length > 0 && (
