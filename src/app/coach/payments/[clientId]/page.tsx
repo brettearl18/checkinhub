@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 interface Invoice {
   id: string;
@@ -42,6 +44,7 @@ export default function CoachPaymentHistoryPage() {
   const [clientName, setClientName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
+  const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!clientId) return;
@@ -142,7 +145,7 @@ export default function CoachPaymentHistoryPage() {
                     {data.invoices.map((inv) => (
                       <tr key={inv.id} className="border-b border-[var(--color-border)] last:border-0">
                         <td className="px-4 py-3 text-[var(--color-text-muted)]">
-                          {inv.created ? new Date(inv.created).toLocaleDateString() : "—"}
+                          {inv.created ? formatDateDisplay(inv.created) : "—"}
                         </td>
                         <td className="px-4 py-3 text-[var(--color-text)] font-mono">
                           {inv.number || inv.id}
@@ -152,9 +155,9 @@ export default function CoachPaymentHistoryPage() {
                             className={
                               inv.paid
                                 ? "text-green-600 dark:text-green-400"
-                                : inv.status === "open" || inv.status === "draft"
-                                  ? "text-amber-600 dark:text-amber-400"
-                                  : "text-red-600 dark:text-red-400"
+                                : inv.status === "uncollectible"
+                                  ? "text-red-600 dark:text-red-400"
+                                  : "text-[var(--color-text-muted)]"
                             }
                           >
                             {inv.status ?? "—"}
@@ -164,29 +167,69 @@ export default function CoachPaymentHistoryPage() {
                           {formatAmount(inv.amountPaid || inv.amountDue, inv.currency)}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {inv.hostedInvoiceUrl && (
-                            <a
-                              href={inv.hostedInvoiceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[var(--color-primary)] hover:underline"
-                            >
-                              View
-                            </a>
-                          )}
-                          {inv.invoicePdf && (
-                            <>
-                              {" · "}
+                          <span className="flex items-center justify-end gap-2">
+                            {(inv.status === "uncollectible" || inv.status === "open") && !inv.paid && (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={retryingInvoiceId !== null}
+                                onClick={async () => {
+                                  if (!clientId) return;
+                                  setRetryingInvoiceId(inv.id);
+                                  try {
+                                    const res = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/retry-invoice`, {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ invoiceId: inv.id }),
+                                    });
+                                    const body = await res.json().catch(() => ({}));
+                                    if (res.ok) {
+                                      const histRes = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/history`);
+                                      if (histRes.ok) {
+                                        const json = await histRes.json();
+                                        setData({
+                                          clientId: json.clientId ?? clientId,
+                                          customerId: json.customerId ?? data?.customerId ?? null,
+                                          invoices: Array.isArray(json.invoices) ? json.invoices : [],
+                                          message: json.message,
+                                        });
+                                      }
+                                    } else {
+                                      alert((body && body.error) || "Retry failed");
+                                    }
+                                  } finally {
+                                    setRetryingInvoiceId(null);
+                                  }
+                                }}
+                              >
+                                {retryingInvoiceId === inv.id ? "Retrying…" : "Retry payment"}
+                              </Button>
+                            )}
+                            {inv.hostedInvoiceUrl && (
                               <a
-                                href={inv.invoicePdf}
+                                href={inv.hostedInvoiceUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[var(--color-primary)] hover:underline"
                               >
-                                PDF
+                                View
                               </a>
-                            </>
-                          )}
+                            )}
+                            {inv.invoicePdf && (
+                              <>
+                                {inv.hostedInvoiceUrl ? " · " : null}
+                                <a
+                                  href={inv.invoicePdf}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[var(--color-primary)] hover:underline"
+                                >
+                                  PDF
+                                </a>
+                              </>
+                            )}
+                          </span>
                         </td>
                       </tr>
                     ))}

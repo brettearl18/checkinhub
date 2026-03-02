@@ -8,7 +8,15 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 import { PREDEFINED_MEAL_PLANS } from "@/lib/meal-plan-predefined-urls";
+
+const SCORING_PROFILES = [
+  { id: "moderate", label: "Moderate (0–60% red, 61–85% orange, 86–100% green)", redMax: 60, orangeMax: 85 },
+  { id: "lifestyle", label: "Lifestyle (0–33% red, 34–80% orange, 81–100% green)", redMax: 33, orangeMax: 80 },
+  { id: "high-performance", label: "High performance (0–75% red, 76–89% orange, 90–100% green)", redMax: 75, orangeMax: 89 },
+  { id: "custom", label: "Custom", redMax: 70, orangeMax: 85 },
+] as const;
 
 interface ClientSettings {
   firstName: string;
@@ -17,6 +25,7 @@ interface ClientSettings {
   phone: string;
   timezone: string;
   status: string;
+  scoringProfile: string;
   trafficLightRedMax: number;
   trafficLightOrangeMax: number;
   programStartDate: string;
@@ -37,8 +46,9 @@ const DEFAULT_SETTINGS: ClientSettings = {
   phone: "",
   timezone: "",
   status: "active",
-  trafficLightRedMax: 40,
-  trafficLightOrangeMax: 70,
+  scoringProfile: "moderate",
+  trafficLightRedMax: 60,
+  trafficLightOrangeMax: 85,
   programStartDate: "",
   programDurationWeeks: null,
   checkInFrequency: "weekly",
@@ -50,6 +60,12 @@ const DEFAULT_SETTINGS: ClientSettings = {
   mealPlanLinks: [],
 };
 
+function formatBillingAmount(cents: number, currency: string): string {
+  const code = (currency || "aud").toUpperCase();
+  const symbol = code === "AUD" ? "A$" : code === "USD" ? "$" : code + " ";
+  return `${symbol}${(cents / 100).toFixed(2)}`;
+}
+
 function formatTimeWithVana(firstPaymentAt: string | null): string {
   if (!firstPaymentAt) return "";
   const date = new Date(firstPaymentAt);
@@ -59,10 +75,11 @@ function formatTimeWithVana(firstPaymentAt: string | null): string {
     0,
     (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth())
   );
-  if (months < 1) return `Since ${date.toLocaleDateString("en-AU", { month: "short", year: "numeric" })}`;
-  if (months < 12) return `${months} ${months === 1 ? "month" : "months"} (since ${date.toLocaleDateString("en-AU", { month: "short", year: "numeric" })})`;
+  const dateStr = formatDateDisplay(firstPaymentAt);
+  if (months < 1) return `Since ${dateStr}`;
+  if (months < 12) return `${months} ${months === 1 ? "month" : "months"} (since ${dateStr})`;
   const years = Math.floor(months / 12);
-  return `${years} ${years === 1 ? "year" : "years"} (since ${date.toLocaleDateString("en-AU", { month: "short", year: "numeric" })})`;
+  return `${years} ${years === 1 ? "year" : "years"} (since ${dateStr})`;
 }
 
 export default function CoachClientSettingsPage() {
@@ -88,6 +105,21 @@ export default function CoachClientSettingsPage() {
   const [newMealPlanLabel, setNewMealPlanLabel] = useState("");
   const [newMealPlanUrl, setNewMealPlanUrl] = useState("");
   const [selectedPredefinedMealPlan, setSelectedPredefinedMealPlan] = useState<string>("");
+  const [billingHistoryInvoices, setBillingHistoryInvoices] = useState<{
+    id: string;
+    number: string | null;
+    status: string | null;
+    amountPaid: number;
+    amountDue: number;
+    currency: string;
+    created: string | null;
+    paid: boolean;
+    hostedInvoiceUrl: string | null;
+    invoicePdf: string | null;
+  }[]>([]);
+  const [billingHistoryLoading, setBillingHistoryLoading] = useState(false);
+  const [paymentHistoryExpanded, setPaymentHistoryExpanded] = useState(false);
+  const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!clientId) return;
@@ -115,8 +147,9 @@ export default function CoachClientSettingsPage() {
             phone: data.phone ?? "",
             timezone: data.timezone ?? "",
             status: data.status ?? "active",
-            trafficLightRedMax: typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 40,
-            trafficLightOrangeMax: typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 70,
+            scoringProfile: typeof data.scoringProfile === "string" ? data.scoringProfile : "moderate",
+            trafficLightRedMax: typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 60,
+            trafficLightOrangeMax: typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 85,
             programStartDate: data.programStartDate ?? "",
             programDurationWeeks: data.programDurationWeeks ?? null,
             checkInFrequency: data.checkInFrequency ?? "weekly",
@@ -135,6 +168,33 @@ export default function CoachClientSettingsPage() {
       }
     })();
   }, [clientId, fetchWithAuth]);
+
+  // Load payment history when client has a Stripe customer linked
+  useEffect(() => {
+    if (!clientId || !form.stripeCustomerId) {
+      setBillingHistoryInvoices([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setBillingHistoryLoading(true);
+      try {
+        const res = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/history`);
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          setBillingHistoryInvoices(Array.isArray(data.invoices) ? data.invoices : []);
+        } else {
+          setBillingHistoryInvoices([]);
+        }
+      } finally {
+        if (!cancelled) setBillingHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, form.stripeCustomerId, fetchWithAuth]);
 
   useEffect(() => {
     if (!clientId || !form.stripeCustomerId) {
@@ -185,6 +245,7 @@ export default function CoachClientSettingsPage() {
           phone: form.phone,
           timezone: form.timezone,
           status: form.status,
+          scoringProfile: form.scoringProfile || undefined,
           trafficLightRedMax: form.trafficLightRedMax,
           trafficLightOrangeMax: form.trafficLightOrangeMax,
           programStartDate: form.programStartDate || undefined,
@@ -305,8 +366,28 @@ export default function CoachClientSettingsPage() {
           <Card className="p-6">
             <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Traffic light thresholds</h2>
             <p className="text-sm text-[var(--color-text-muted)] mb-4">
-              Set red / orange / green percentage splits for scoring (0–100%).
+              Set red / orange / green percentage splits for scoring (0–100%). Form-level thresholds override these when set.
             </p>
+            <div className="mb-4">
+              <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">Scoring profile</label>
+              <select
+                value={form.scoringProfile}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const preset = SCORING_PROFILES.find((p) => p.id === id);
+                  setForm((p) => ({
+                    ...p,
+                    scoringProfile: id,
+                    ...(preset && preset.id !== "custom" ? { trafficLightRedMax: preset.redMax, trafficLightOrangeMax: preset.orangeMax } : {}),
+                  }));
+                }}
+                className="min-w-[280px] rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+              >
+                {SCORING_PROFILES.map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex flex-wrap items-end gap-6">
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-red-500 flex-shrink-0" aria-hidden />
@@ -316,7 +397,10 @@ export default function CoachClientSettingsPage() {
                   min={0}
                   max={100}
                   value={form.trafficLightRedMax}
-                  onChange={(e) => setForm((p) => ({ ...p, trafficLightRedMax: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                  onChange={(e) => {
+                    const v = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                    setForm((p) => ({ ...p, trafficLightRedMax: v, scoringProfile: "custom" }));
+                  }}
                   className="w-16 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm text-[var(--color-text)]"
                 />
                 <span className="text-sm text-[var(--color-text-muted)]">%)</span>
@@ -329,7 +413,10 @@ export default function CoachClientSettingsPage() {
                   min={0}
                   max={100}
                   value={form.trafficLightOrangeMax}
-                  onChange={(e) => setForm((p) => ({ ...p, trafficLightOrangeMax: Math.min(100, Math.max(0, Number(e.target.value) || 0)) }))}
+                  onChange={(e) => {
+                    const v = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                    setForm((p) => ({ ...p, trafficLightOrangeMax: v, scoringProfile: "custom" }));
+                  }}
                   className="w-16 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm text-[var(--color-text)]"
                 />
                 <span className="text-sm text-[var(--color-text-muted)]">%)</span>
@@ -798,6 +885,160 @@ export default function CoachClientSettingsPage() {
                   >
                     {billingAction === "cancel" ? "Canceling…" : "Cancel subscription"}
                   </Button>
+                </div>
+                {/* Payment history (expandable) */}
+                <div className="mt-6 border-t border-[var(--color-border)] pt-6">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentHistoryExpanded((e) => !e)}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg py-1 text-left hover:bg-[var(--color-bg-elevated)]"
+                  >
+                    <h3 className="text-base font-medium text-[var(--color-text)]">
+                      Payment history
+                      {!billingHistoryLoading && billingHistoryInvoices.length > 0 && (
+                        <span className="ml-2 text-sm font-normal text-[var(--color-text-muted)]">
+                          ({billingHistoryInvoices.length} invoice{billingHistoryInvoices.length !== 1 ? "s" : ""})
+                        </span>
+                      )}
+                    </h3>
+                    <span className="text-[var(--color-text-muted)]" aria-hidden>
+                      {paymentHistoryExpanded ? "▼" : "▶"}
+                    </span>
+                  </button>
+                  {paymentHistoryExpanded && (
+                    <>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm text-[var(--color-text-muted)]">
+                          From Stripe. For full report, open Payment from the menu and click the client.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={billingHistoryLoading}
+                          onClick={async () => {
+                            if (!clientId) return;
+                            setBillingHistoryLoading(true);
+                            try {
+                              const res = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/history`);
+                              if (res.ok) {
+                                const data = await res.json();
+                                setBillingHistoryInvoices(Array.isArray(data.invoices) ? data.invoices : []);
+                              }
+                            } finally {
+                              setBillingHistoryLoading(false);
+                            }
+                          }}
+                        >
+                          {billingHistoryLoading ? "Loading…" : "Refresh"}
+                        </Button>
+                      </div>
+                      {billingHistoryLoading && (
+                        <p className="mt-2 text-sm text-[var(--color-text-muted)]">Loading…</p>
+                      )}
+                      {!billingHistoryLoading && billingHistoryInvoices.length === 0 && (
+                        <p className="mt-2 text-sm text-[var(--color-text-muted)]">No invoices yet for this customer.</p>
+                      )}
+                      {!billingHistoryLoading && billingHistoryInvoices.length > 0 && (
+                        <div className="mt-3 overflow-x-auto rounded-lg border border-[var(--color-border)]">
+                          <table className="w-full min-w-[500px] text-sm">
+                            <thead>
+                              <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+                                <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Date</th>
+                                <th className="px-3 py-2 text-right font-medium text-[var(--color-text)]">Amount</th>
+                                <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Status</th>
+                                <th className="px-3 py-2 text-right font-medium text-[var(--color-text)]">Invoice</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[...billingHistoryInvoices]
+                                .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""))
+                                .map((inv) => (
+                                  <tr key={inv.id} className="border-b border-[var(--color-border)] last:border-b-0">
+                                    <td className="px-3 py-2 text-[var(--color-text-muted)]">
+                                      {inv.created ? formatDateDisplay(inv.created) : "—"}
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-[var(--color-text)]">
+                                      {formatBillingAmount(inv.amountPaid || inv.amountDue, inv.currency)}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <span
+                                        className={
+                                          inv.paid
+                                            ? "text-green-600 dark:text-green-400"
+                                            : inv.status === "uncollectible"
+                                              ? "text-red-600 dark:text-red-400"
+                                              : "text-[var(--color-text-muted)]"
+                                        }
+                                      >
+                                        {inv.status ?? "—"}
+                                      </span>
+                                    </td>
+                                <td className="px-3 py-2 text-right">
+                                      <span className="flex items-center justify-end gap-2">
+                                        {(inv.status === "uncollectible" || inv.status === "open") && !inv.paid && (
+                                          <Button
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={retryingInvoiceId !== null}
+                                            onClick={async () => {
+                                              if (!clientId) return;
+                                              setRetryingInvoiceId(inv.id);
+                                              try {
+                                                const res = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/retry-invoice`, {
+                                                  method: "POST",
+                                                  headers: { "Content-Type": "application/json" },
+                                                  body: JSON.stringify({ invoiceId: inv.id }),
+                                                });
+                                                const data = await res.json().catch(() => ({}));
+                                                if (res.ok) {
+                                                  const histRes = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/history`);
+                                                  if (histRes.ok) {
+                                                    const h = await histRes.json();
+                                                    setBillingHistoryInvoices(Array.isArray(h.invoices) ? h.invoices : []);
+                                                  }
+                                                } else {
+                                                  alert((data && data.error) || "Retry failed");
+                                                }
+                                              } finally {
+                                                setRetryingInvoiceId(null);
+                                              }
+                                            }}
+                                          >
+                                            {retryingInvoiceId === inv.id ? "Retrying…" : "Retry payment"}
+                                          </Button>
+                                        )}
+                                        {inv.hostedInvoiceUrl ? (
+                                          <a
+                                            href={inv.hostedInvoiceUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[var(--color-primary)] hover:underline"
+                                          >
+                                            View
+                                          </a>
+                                        ) : inv.invoicePdf ? (
+                                          <a
+                                            href={inv.invoicePdf}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[var(--color-primary)] hover:underline"
+                                          >
+                                            PDF
+                                          </a>
+                                        ) : null}
+                                        {!inv.hostedInvoiceUrl && !inv.invoicePdf && "—"}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </>
             )}

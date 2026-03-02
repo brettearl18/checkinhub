@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateTimeDisplay } from "@/lib/format-date";
 
 interface QuestionRow {
   id: string;
@@ -26,6 +27,8 @@ interface ResponseData {
   formTitle: string;
   responses: ResponseRow[];
   score: number;
+  band?: "red" | "orange" | "green";
+  message?: string;
   submittedAt: string | null;
 }
 
@@ -125,16 +128,27 @@ export default function CoachViewResponsePage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <Link
+            href={`/coach/clients/${clientId}`}
+            className="text-sm text-[var(--color-primary)] hover:underline"
+          >
+            ← Back to check-ins
+          </Link>
+          <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
+            Past check-in response
+          </h1>
+        </div>
         <Link
-          href={`/coach/clients/${clientId}`}
-          className="text-sm text-[var(--color-primary)] hover:underline"
+          href={`/coach/clients/${clientId}/progress`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-primary-subtle)] hover:border-[var(--color-primary-muted)]"
         >
-          ← Back to check-ins
+          View progress
+          <span className="ml-1.5 text-[var(--color-text-muted)]" aria-hidden>↗</span>
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
-          Past check-in response
-        </h1>
       </div>
 
       {error && <p className="text-sm text-[var(--color-error)]" role="alert">{error}</p>}
@@ -142,15 +156,48 @@ export default function CoachViewResponsePage() {
 
       {!loading && response && (
         <Card className="p-6 space-y-6">
+          {/* Scorecard at top: score %, band, message */}
+          <div
+            className={`rounded-lg border-2 p-4 ${
+              response.band === "green"
+                ? "border-green-500/50 bg-green-500/10"
+                : response.band === "orange"
+                  ? "border-amber-500/50 bg-amber-500/10"
+                  : "border-red-500/50 bg-red-500/10"
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-4">
+              {typeof response.score === "number" && (
+                <span className="text-2xl font-bold tabular-nums text-[var(--color-text)]">
+                  {response.score}%
+                </span>
+              )}
+              {response.band && (
+                <span
+                  className={`inline-flex h-8 w-8 flex-shrink-0 rounded-full ${
+                    response.band === "green"
+                      ? "bg-green-500"
+                      : response.band === "orange"
+                        ? "bg-amber-500"
+                        : "bg-red-500"
+                  }`}
+                  aria-hidden
+                />
+              )}
+              {response.message && (
+                <span className="text-lg font-medium text-[var(--color-text)]">
+                  {response.message}
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-baseline gap-4">
             <h2 className="text-lg font-medium text-[var(--color-text)]">{response.formTitle}</h2>
             {response.submittedAt && (
               <span className="text-sm text-[var(--color-text-muted)]">
-                Submitted {new Date(response.submittedAt).toLocaleString()}
+                Submitted {formatDateTimeDisplay(response.submittedAt)}
               </span>
-            )}
-            {typeof response.score === "number" && (
-              <span className="text-sm text-[var(--color-text)]">Score: {response.score}</span>
             )}
           </div>
 

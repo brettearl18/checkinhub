@@ -5,46 +5,14 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+import {
+  buildResponses,
+  checkInInputClass as inputClass,
+  type DraftResponse,
+  QuestionBlock,
+  type CheckInQuestion as Question,
+} from "@/components/client/CheckInFormFields";
 import { useApiClient } from "@/lib/api-client";
-
-interface Question {
-  id: string;
-  text: string;
-  title?: string;
-  type: string;
-  description?: string | null;
-  options?: string[] | Array<{ text: string; weight?: number }>;
-}
-
-const inputClass =
-  "w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
-
-function getOptionLabels(options: Question["options"]): string[] {
-  if (!options || !Array.isArray(options)) return [];
-  return options.map((o) => (typeof o === "string" ? o : o.text ?? ""));
-}
-
-function getScaleRange(options: Question["options"]): { min: number; max: number } {
-  const labels = getOptionLabels(options);
-  const nums = labels.map((s) => parseInt(s, 10)).filter((n) => !Number.isNaN(n));
-  if (nums.length >= 2) return { min: Math.min(...nums), max: Math.max(...nums) };
-  return { min: 1, max: 10 };
-}
-
-type DraftResponse = { questionId: string; answer: string | number | string[]; notes?: string };
-
-function buildResponses(
-  questions: Question[],
-  answers: Record<string, string | number | string[]>,
-  notes: Record<string, string>
-): DraftResponse[] {
-  return questions.map((q) => {
-    const raw = answers[q.id];
-    const answer = raw === undefined || raw === null ? "" : raw;
-    return { questionId: q.id, answer, notes: notes[q.id] ?? "" };
-  });
-}
 
 export default function CheckInFormPage() {
   const router = useRouter();
@@ -63,6 +31,11 @@ export default function CheckInFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitResult, setSubmitResult] = useState<{
+    score: number;
+    band: "red" | "orange" | "green";
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +148,12 @@ export default function CheckInFormPage() {
         setError(text || "Submit failed.");
         return;
       }
-      router.push("/client");
+      const result = await res.json();
+      setSubmitResult({
+        score: typeof result.score === "number" ? result.score : 0,
+        band: result.band === "red" || result.band === "orange" || result.band === "green" ? result.band : "green",
+        message: typeof result.message === "string" ? result.message : "Done",
+      });
     } catch {
       setError("Submit failed.");
     } finally {
@@ -203,6 +181,45 @@ export default function CheckInFormPage() {
   if (!data) return null;
 
   const { assignment, questions } = data;
+
+  if (submitResult) {
+    const { score, band, message } = submitResult;
+    const bandStyles = {
+      red: "bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-200",
+      orange: "bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200",
+      green: "bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200",
+    };
+    const bandLabel = band === "green" ? "Excellent" : band === "orange" ? "On track" : "Needs attention";
+    return (
+      <div className="space-y-6">
+        <Card className="overflow-hidden border-[var(--color-border)] p-0">
+          <div className={`p-6 text-center border-b-4 ${band === "red" ? "border-red-500" : band === "orange" ? "border-amber-500" : "border-green-500"}`}>
+            <h2 className="text-xl font-semibold text-[var(--color-text)]">Check-in submitted</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Here’s your summary</p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-4xl font-bold tabular-nums text-[var(--color-text)]">{score}%</span>
+              <span className="text-sm font-medium text-[var(--color-text-muted)]">Overall score</span>
+            </div>
+            <div className={`rounded-lg border px-4 py-3 text-center ${bandStyles[band]}`}>
+              <span className="font-semibold">{bandLabel}</span>
+              <p className="mt-0.5 text-sm opacity-90">{message}</p>
+            </div>
+            <p className="text-xs text-center text-[var(--color-text-muted)]">
+              Your coach uses this traffic light to see how you’re tracking. Green = excellent, orange = on track, red = needs attention.
+            </p>
+            <div className="pt-2 flex justify-center">
+              <Button asChild variant="primary">
+                <Link href="/client">Back to dashboard</Link>
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (assignment.status === "completed") {
     const responseId = (assignment as { responseId?: string }).responseId;
     return (
@@ -213,9 +230,14 @@ export default function CheckInFormPage() {
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {responseId && (
-              <Button asChild variant="primary">
-                <Link href={`/client/response/${responseId}`}>View response & coach feedback</Link>
-              </Button>
+              <>
+                <Button asChild variant="primary">
+                  <Link href={`/client/response/${responseId}`}>View response & coach feedback</Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link href={`/client/check-in/${assignmentId}/edit`}>Edit check-in</Link>
+                </Button>
+              </>
             )}
             <Button asChild variant="secondary">
               <Link href="/client">Back to dashboard</Link>
@@ -312,220 +334,6 @@ export default function CheckInFormPage() {
           )}
         </Card>
       </form>
-    </div>
-  );
-}
-
-function QuestionBlock({
-  q,
-  answers,
-  setAnswers,
-  notes,
-  setNotes,
-  inputClass,
-}: {
-  q: Question;
-  answers: Record<string, string | number | string[]>;
-  setAnswers: React.Dispatch<React.SetStateAction<Record<string, string | number | string[]>>>;
-  notes: Record<string, string>;
-  setNotes: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  inputClass: string;
-}) {
-  const label = q.text || (q.title as string) || "Question";
-  const desc = q.description;
-  const options = getOptionLabels(q.options);
-
-  return (
-    <div className="space-y-4">
-      <label className="block text-sm font-medium text-[var(--color-text)]">
-        {label}
-      </label>
-      {desc && (
-        <p className="text-xs text-[var(--color-text-muted)]">{desc}</p>
-      )}
-
-      {q.type === "scale" && (() => {
-        const { min, max } = getScaleRange(q.options);
-        const val = Number(answers[q.id]);
-        const value = Number.isNaN(val) ? Math.round((min + max) / 2) : Math.max(min, Math.min(max, val));
-        return (
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={min}
-                max={max}
-                value={value}
-                onChange={(e) =>
-                  setAnswers((prev) => ({ ...prev, [q.id]: Number(e.target.value) }))
-                }
-                className="flex-1 h-2 rounded-full appearance-none bg-[var(--color-border)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--color-primary)]"
-              />
-              <span className="min-w-[2rem] text-sm font-medium text-[var(--color-text)]">
-                {value}
-              </span>
-            </div>
-            <p className="text-xs text-[var(--color-text-muted)]">{min} – {max}</p>
-          </div>
-        );
-      })()}
-
-      {q.type === "text" && (
-        <input
-          type="text"
-          value={String(answers[q.id] ?? "")}
-          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-          className={inputClass}
-          placeholder="Your answer"
-        />
-      )}
-
-      {q.type === "textarea" && (
-        <textarea
-          value={String(answers[q.id] ?? "")}
-          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-          className={inputClass}
-          rows={4}
-          placeholder="Your answer"
-        />
-      )}
-
-      {q.type === "number" && (
-        <input
-          type="number"
-          step="any"
-          value={answers[q.id] !== undefined && answers[q.id] !== "" ? String(answers[q.id]) : ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            setAnswers((prev) => ({ ...prev, [q.id]: v === "" ? "" : Number(v) }));
-          }}
-          className={inputClass}
-          placeholder="Number"
-        />
-      )}
-
-      {q.type === "boolean" && (
-        <div className="flex gap-3">
-          {["Yes", "No"].map((opt) => {
-            const current = answers[q.id];
-            const selected =
-              current === "Yes" || current === "yes" || current === true ? "Yes"
-              : current === "No" || current === "no" || current === false ? "No"
-              : null;
-            const isSelected = selected === opt;
-            return (
-              <label
-                key={opt}
-                className={`flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border px-4 py-2.5 text-sm font-medium transition-colors ${
-                  isSelected
-                    ? "border-[var(--color-primary)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
-                    : "border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] hover:border-[var(--color-primary-muted)]"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={q.id}
-                  checked={isSelected}
-                  onChange={() => setAnswers((prev) => ({ ...prev, [q.id]: opt }))}
-                  className="sr-only"
-                />
-                {opt}
-              </label>
-            );
-          })}
-        </div>
-      )}
-
-      {q.type === "select" && options.length > 0 && (
-        <div className="space-y-2">
-          {options.map((opt) => (
-            <label
-              key={opt}
-              className={`flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border px-4 py-2.5 text-sm transition-colors ${
-                answers[q.id] === opt
-                  ? "border-[var(--color-primary)] bg-[var(--color-primary-subtle)] text-[var(--color-text)]"
-                  : "border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] hover:border-[var(--color-primary-muted)]"
-              }`}
-            >
-              <input
-                type="radio"
-                name={q.id}
-                checked={answers[q.id] === opt}
-                onChange={() => setAnswers((prev) => ({ ...prev, [q.id]: opt }))}
-                className="h-4 w-4 border-[var(--color-border)] text-[var(--color-primary)]"
-              />
-              {opt}
-            </label>
-          ))}
-        </div>
-      )}
-
-      {q.type === "multiple_choice" && options.length > 0 && (() => {
-        const current = answers[q.id];
-        const selected = Array.isArray(current) ? current : typeof current === "string" ? [current] : [];
-        const toggle = (opt: string) => {
-          const next = selected.includes(opt) ? selected.filter((x) => x !== opt) : [...selected, opt];
-          setAnswers((prev) => ({ ...prev, [q.id]: next }));
-        };
-        return (
-          <div className="space-y-2">
-            {options.map((opt) => (
-              <label
-                key={opt}
-                className="flex cursor-pointer items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2.5 text-sm text-[var(--color-text)] hover:border-[var(--color-primary-muted)]"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt)}
-                  onChange={() => toggle(opt)}
-                  className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)]"
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-        );
-      })()}
-
-      {q.type === "date" && (
-        <input
-          type="date"
-          value={String(answers[q.id] ?? "")}
-          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-          className={inputClass}
-        />
-      )}
-
-      {q.type === "time" && (
-        <input
-          type="time"
-          value={String(answers[q.id] ?? "")}
-          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-          className={inputClass}
-        />
-      )}
-
-      {!["scale", "text", "textarea", "number", "boolean", "select", "multiple_choice", "date", "time"].includes(q.type) && (
-        <Input
-          value={String(answers[q.id] ?? "")}
-          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-          placeholder="Your answer"
-        />
-      )}
-
-      <div className="pt-2">
-        <label htmlFor={`notes-${q.id}`} className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">
-          Notes (optional)
-        </label>
-        <textarea
-          id={`notes-${q.id}`}
-          value={notes[q.id] ?? ""}
-          onChange={(e) => setNotes((prev) => ({ ...prev, [q.id]: e.target.value }))}
-          placeholder="Add context or details to back up your answer"
-          rows={2}
-          className={inputClass}
-        />
-      </div>
     </div>
   );
 }

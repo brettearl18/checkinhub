@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { MeasurementLineChart } from "@/components/ui/MeasurementLineChart";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 interface Measurement {
   id: string;
@@ -243,7 +244,7 @@ export default function ClientMeasurementsPage() {
                 {list.map((m) => (
                   <tr key={m.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-primary-subtle)]/20">
                     <td className="px-4 py-3">
-                      <span className="font-medium text-[var(--color-text)]">{m.date ?? "—"}</span>
+                      <span className="font-medium text-[var(--color-text)]">{formatDateDisplay(m.date)}</span>
                       {m.isBaseline && (
                         <span className="ml-2 inline rounded bg-[var(--color-primary-subtle)] px-1.5 py-0.5 text-xs text-[var(--color-primary)]">
                           Baseline

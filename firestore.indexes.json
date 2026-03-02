@@ -79,6 +79,20 @@
       ]
     },
     {
+      "collectionGroup": "check_in_assignments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "reflectionWeekStart",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "client_measurements",
       "queryScope": "COLLECTION",
       "fields": [

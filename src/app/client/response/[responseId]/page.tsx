@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateTimeDisplay } from "@/lib/format-date";
 
 interface FeedbackItem {
   id: string;
@@ -20,7 +21,11 @@ export default function ClientViewResponsePage() {
   const { fetchWithAuth } = useApiClient();
   const [response, setResponse] = useState<{
     formTitle: string;
+    assignmentId: string | null;
     responses: Array<{ questionId: string; answer: string | number | string[]; notes?: string }>;
+    score: number | null;
+    band: "red" | "orange" | "green" | null;
+    message: string | null;
     submittedAt: string | null;
   } | null>(null);
   const [questions, setQuestions] = useState<Array<{ id: string; text: string }>>([]);
@@ -80,17 +85,63 @@ export default function ClientViewResponsePage() {
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
 
       {!loading && response && (
-        <Card className="p-6 space-y-6">
-          <div className="flex flex-wrap items-baseline gap-4">
-            <h2 className="text-lg font-medium text-[var(--color-text)]">{response.formTitle}</h2>
-            {response.submittedAt && (
-              <span className="text-sm text-[var(--color-text-muted)]">
-                Submitted {new Date(response.submittedAt).toLocaleString()}
-              </span>
-            )}
-          </div>
+        <>
+          {response.score != null && (
+            <Card className="overflow-hidden border-[var(--color-border)] p-0">
+              <div
+                className={`p-6 text-center border-b-4 ${
+                  response.band === "red"
+                    ? "border-red-500"
+                    : response.band === "orange"
+                      ? "border-amber-500"
+                      : "border-green-500"
+                }`}
+              >
+                <h2 className="text-xl font-semibold text-[var(--color-text)]">Your check-in score</h2>
+                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Review your traffic light anytime</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-4xl font-bold tabular-nums text-[var(--color-text)]">{response.score}%</span>
+                  <span className="text-sm font-medium text-[var(--color-text-muted)]">Overall score</span>
+                </div>
+                <div
+                  className={`rounded-lg border px-4 py-3 text-center ${
+                    response.band === "red"
+                      ? "bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-200"
+                      : response.band === "orange"
+                        ? "bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200"
+                        : "bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200"
+                  }`}
+                >
+                  <span className="font-semibold">
+                    {response.band === "green" ? "Excellent" : response.band === "orange" ? "On track" : "Needs attention"}
+                  </span>
+                  {response.message && <p className="mt-0.5 text-sm opacity-90">{response.message}</p>}
+                </div>
+              </div>
+            </Card>
+          )}
 
-          <dl className="space-y-4">
+          <Card className="p-6 space-y-6">
+            <div className="flex flex-wrap items-baseline gap-4">
+              <h2 className="text-lg font-medium text-[var(--color-text)]">{response.formTitle}</h2>
+              {response.submittedAt && (
+                <span className="text-sm text-[var(--color-text-muted)]">
+                  Submitted {formatDateTimeDisplay(response.submittedAt)}
+                </span>
+              )}
+              {response.assignmentId && (
+                <Link
+                  href={`/client/check-in/${response.assignmentId}/edit`}
+                  className="ml-auto text-sm font-medium text-[var(--color-primary)] hover:underline"
+                >
+                  Edit check-in
+                </Link>
+              )}
+            </div>
+
+            <dl className="space-y-4">
             {response.responses.map((r) => {
               const q = byId[r.questionId];
               const label = q?.text ?? r.questionId;
@@ -125,7 +176,8 @@ export default function ClientViewResponsePage() {
               ))}
             </div>
           )}
-        </Card>
+          </Card>
+        </>
       )}
 
       {!loading && !response && !error && (

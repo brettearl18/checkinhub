@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 interface GalleryImage {
   id: string;
@@ -129,7 +130,7 @@ export default function CoachGalleryPage() {
                   <p className="text-xs text-[var(--color-text-muted)]">
                     {img.imageType?.replace(/_/g, " ") ?? "Photo"}
                     {img.uploadedAt && (
-                      <> · {new Date(img.uploadedAt).toLocaleDateString()}</>
+                      <> · {formatDateDisplay(img.uploadedAt)}</>
                     )}
                   </p>
                   {img.caption && (

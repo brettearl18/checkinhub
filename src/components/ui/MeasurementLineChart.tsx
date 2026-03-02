@@ -10,6 +10,7 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+import { formatDateDisplay } from "@/lib/format-date";
 
 export interface ChartPoint {
   date: string;
@@ -34,14 +35,7 @@ export function MeasurementLineChart({
 
   if (data.length === 0) return null;
 
-  const formatDate = (d: string) => {
-    try {
-      const [y, m, day] = d.split("-");
-      return day && m ? `${day}/${m}` : d;
-    } catch {
-      return d;
-    }
-  };
+  const formatDate = (d: string) => formatDateDisplay(d);
 
   return (
     <div style={{ width: "100%", height }} className="min-h-[200px]">
@@ -85,7 +79,7 @@ export function MeasurementLineChart({
             }}
             labelStyle={{ color: "var(--color-text)" }}
             formatter={(value: number) => [`${value} ${unit}`, ""]}
-            labelFormatter={(label) => (label ? `Date: ${label}` : "")}
+            labelFormatter={(label) => (label ? formatDateDisplay(label) : "")}
           />
           <Area
             type="monotone"

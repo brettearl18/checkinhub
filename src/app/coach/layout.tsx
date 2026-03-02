@@ -6,6 +6,17 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
 
+const NAV_LINKS = [
+  { href: "/coach", label: "Dashboard" },
+  { href: "/coach/clients", label: "Clients" },
+  { href: "/coach/messages", label: "Messages" },
+  { href: "/coach/notifications", label: "Notifications" },
+  { href: "/coach/payments", label: "Payment" },
+  { href: "/coach/gallery", label: "Gallery" },
+  { href: "/coach/forms", label: "Forms" },
+  { href: "/coach/questions", label: "Questions" },
+] as const;
+
 export default function CoachLayout({
   children,
 }: { children: React.ReactNode }) {
@@ -35,67 +46,48 @@ export default function CoachLayout({
   if (!user) return null;
 
   return (
-    <div className="min-h-screen">
-      <nav className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-6 py-3">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <div className="flex flex-wrap items-center gap-4">
-            <Link
-              href="/coach"
-              className={`text-sm font-medium ${pathname === "/coach" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/coach/clients"
-              className={`text-sm font-medium ${pathname?.startsWith("/coach/clients") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Clients
-            </Link>
-            <Link
-              href="/coach/messages"
-              className={`text-sm font-medium ${pathname?.startsWith("/coach/messages") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Messages
-            </Link>
-            <Link
-              href="/coach/notifications"
-              className={`text-sm font-medium ${pathname === "/coach/notifications" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Notifications
-            </Link>
-            <Link
-              href="/coach/payments"
-              className={`text-sm font-medium ${pathname?.startsWith("/coach/payments") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Payment
-            </Link>
-            <Link
-              href="/coach/gallery"
-              className={`text-sm font-medium ${pathname === "/coach/gallery" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Gallery
-            </Link>
-            <Link
-              href="/coach/forms"
-              className={`text-sm font-medium ${pathname?.startsWith("/coach/forms") ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Forms
-            </Link>
-            <Link
-              href="/coach/questions"
-              className={`text-sm font-medium ${pathname === "/coach/questions" ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}`}
-            >
-              Questions
-            </Link>
-            <span className="text-[var(--color-border)]">|</span>
-            <span className="text-sm text-[var(--color-text-muted)]">Coach</span>
-          </div>
-          <Button variant="ghost" onClick={() => signOut()}>
+    <div className="flex min-h-screen">
+      {/* Side menu */}
+      <aside className="flex w-56 flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-elevated)] md:w-60">
+        <div className="border-b border-[var(--color-border)] p-4">
+          <Link href="/coach" className="font-semibold text-[var(--color-text)] hover:text-[var(--color-primary)]">
+            CheckinHUB
+          </Link>
+          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">Coach</p>
+        </div>
+        <nav className="flex-1 space-y-0.5 p-3">
+          {NAV_LINKS.map(({ href, label }) => {
+            const active =
+              href === "/coach"
+                ? pathname === "/coach"
+                : pathname?.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`block rounded-lg px-3 py-2 text-sm font-medium ${
+                  active
+                    ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
+                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="border-t border-[var(--color-border)] p-3">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+            onClick={() => signOut()}
+          >
             Sign out
           </Button>
         </div>
-      </nav>
-      <main className="mx-auto w-full max-w-[75vw] p-6">{children}</main>
+      </aside>
+      {/* Main content */}
+      <main className="min-w-0 flex-1 overflow-auto p-6">{children}</main>
     </div>
   );
 }

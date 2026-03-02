@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { getScoreBand } from "@/lib/check-in-score";
+import { resolveThresholds, BAND_LABELS } from "@/lib/scoring-utils";
 
 function toDate(v: unknown): string | null {
   if (!v) return null;
@@ -31,6 +33,8 @@ export async function GET(
         clientId,
         responses: [{ questionId: "q1", answer: "Sample answer" }],
         score: 75,
+        band: "green",
+        message: "Excellent",
         submittedAt: new Date().toISOString(),
       },
       form: { id: "form-1", title: "Weekly check-in", questions: ["q1"] },
@@ -77,13 +81,26 @@ export async function GET(
     });
   }
 
+  const score = (responseData.score as number) ?? 0;
+  const scoringSnap = await db.collection("clientScoring").doc(clientId).get();
+  const clientScoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const formThresholds = formSnap.exists ? (formSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number } })?.thresholds : undefined;
+  const { redMax, orangeMax } = resolveThresholds({
+    formThresholds: formThresholds ?? undefined,
+    clientScoring: clientScoringData ?? undefined,
+  });
+  const band = getScoreBand(score, redMax, orangeMax);
+  const message = BAND_LABELS[band];
+
   const response = {
     id: responseSnap.id,
     formId: responseData.formId,
     formTitle: responseData.formTitle,
     clientId: responseData.clientId,
     responses: responseData.responses as Array<{ questionId: string; answer: string | number | string[]; score?: number }>,
-    score: (responseData.score as number) ?? 0,
+    score,
+    band,
+    message,
     submittedAt: toDate(responseData.submittedAt) ?? toDate(responseData.createdAt),
   };
 

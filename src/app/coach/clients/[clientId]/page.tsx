@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
 
 interface CheckInRow {
   id: string;
@@ -40,11 +41,12 @@ function getWeekOptions(count: number): { value: string; label: string }[] {
   const options: { value: string; label: string }[] = [];
   for (let i = count; i >= 0; i--) {
     const d = new Date(today);
-    d.setDate(d.getDate() - 7 * i);
+    d.setDate(today.getDate() - 7 * i);
     const monday = getMonday(d);
-    const end = new Date(monday);
+    const [y, mo, day] = monday.split("-").map(Number);
+    const end = new Date(y, mo - 1, day);
     end.setDate(end.getDate() + 6);
-    const label = `${monday} – ${end.toISOString().slice(0, 10)}`;
+    const label = `${formatDateDisplay(monday)} – ${formatDateDisplay(toLocalDateString(end))}`;
     options.push({ value: monday, label });
   }
   return options;
@@ -291,16 +293,16 @@ export default function CoachClientCheckInsPage() {
                 {list.map((row) => {
                   const isCompleted = row.status === "completed";
                   const displayDate = isCompleted && row.completedAt
-                    ? new Date(row.completedAt).toLocaleDateString()
+                    ? formatDateDisplay(row.completedAt)
                     : row.dueDate
-                      ? new Date(row.dueDate).toLocaleDateString()
+                      ? formatDateDisplay(row.dueDate)
                       : "—";
                   const dateLabel = isCompleted ? "Completed" : "Due";
                   return (
                     <tr key={row.id} className="border-b border-[var(--color-border)]">
                       <td className="px-4 py-3 text-[var(--color-text)]">{row.formTitle}</td>
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">
-                        {row.reflectionWeekStart ?? "—"}
+                        {row.reflectionWeekStart ? formatDateDisplay(row.reflectionWeekStart) : "—"}
                       </td>
                       <td className="px-4 py-3 text-[var(--color-text)]">{row.status}</td>
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">

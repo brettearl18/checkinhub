@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 type PaymentFilter = "all" | "paid" | "behind" | "not_linked";
 
@@ -194,7 +195,7 @@ export default function CoachPaymentsPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-[var(--color-text-muted)]">
-                            {c.lastPaymentAt ? new Date(c.lastPaymentAt).toLocaleDateString() : "—"}
+                            {c.lastPaymentAt ? formatDateDisplay(c.lastPaymentAt) : "—"}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Link

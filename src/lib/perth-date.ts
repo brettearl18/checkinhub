@@ -1,0 +1,55 @@
+/**
+ * Perth (Australia/Perth) date helpers for cron: Friday 9am = check-in open, Monday 5pm = closing.
+ * reflectionWeekStart is always a Monday in YYYY-MM-DD.
+ */
+
+const PERTH_TZ = "Australia/Perth";
+
+/** Current date in Perth (YYYY-MM-DD). */
+export function todayPerth(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: PERTH_TZ });
+}
+
+/** Next Monday in Perth (YYYY-MM-DD). Used for "check-in open" Friday run: week starting next Monday. */
+export function nextMondayPerth(): string {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: PERTH_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const year = parseInt(get("year"), 10);
+  const month = parseInt(get("month"), 10) - 1;
+  const day = parseInt(get("day"), 10);
+  const perthDate = new Date(year, month, day);
+  const dayOfWeek = perthDate.getDay();
+  const daysUntilNextMonday = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : 8 - dayOfWeek;
+  const nextMonday = new Date(perthDate);
+  nextMonday.setDate(perthDate.getDate() + daysUntilNextMonday);
+  return nextMonday.toISOString().slice(0, 10);
+}
+
+/** This Monday in Perth (YYYY-MM-DD). Used for "check-in closing" Monday 5pm run: week closing today. */
+export function thisMondayPerth(): string {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: PERTH_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const year = parseInt(get("year"), 10);
+  const month = parseInt(get("month"), 10) - 1;
+  const day = parseInt(get("day"), 10);
+  const perthDate = new Date(year, month, day);
+  const dayOfWeek = perthDate.getDay();
+  const daysBackToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const thisMonday = new Date(perthDate);
+  thisMonday.setDate(perthDate.getDate() - daysBackToMonday);
+  return thisMonday.toISOString().slice(0, 10);
+}

@@ -17,24 +17,24 @@ interface Assignment {
   dueDate: string | null;
 }
 
-interface Goal {
-  id: string;
-  title: string;
-  progress: number;
-  status: string;
-  targetValue: number;
-  currentValue: number;
-  unit: string;
-}
-
 interface Profile {
   firstName: string;
   lastName: string;
   profilePersonalization?: { showQuote?: boolean; quote?: string | null };
+  paymentStatus: string | null;
+  mealPlanLinks: { label: string; url: string }[];
+}
+
+interface ProgressImage {
+  id: string;
+  imageUrl: string;
+  caption: string | null;
+  uploadedAt: string | null;
 }
 
 const QUICK_LINKS = [
   { href: "/client/history", label: "Check-in history", description: "Past check-ins & feedback", emoji: "📋" },
+  { href: "/client/progress", label: "Question progress", description: "Traffic light chart by week", emoji: "📊" },
   { href: "/client/goals", label: "Goals", description: "Track your progress", emoji: "🎯" },
   { href: "/client/measurements", label: "Measurements", description: "Weight & measurements", emoji: "📏" },
   { href: "/client/progress-photos", label: "Before & after photos", description: "Progress photos", emoji: "📸" },
@@ -62,7 +62,7 @@ export default function ClientPortalPage() {
   const { fetchWithAuth } = useApiClient();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,18 +72,22 @@ export default function ClientPortalPage() {
     setAuthError(false);
     setError(null);
     try {
-      const [profileRes, assignmentsRes, goalsRes] = await Promise.all([
+      const [profileRes, assignmentsRes, imagesRes] = await Promise.all([
         fetchWithAuth("/api/client/profile"),
         fetchWithAuth("/api/check-in/assignments"),
-        fetchWithAuth("/api/client/goals"),
+        fetchWithAuth("/api/client/progress-images"),
       ]);
-      if (profileRes.status === 401 || assignmentsRes.status === 401 || goalsRes.status === 401) {
+      if (profileRes.status === 401 || assignmentsRes.status === 401 || imagesRes.status === 401) {
         setAuthError(true);
         return;
       }
       if (profileRes.ok) {
         const p = await profileRes.json();
-        setProfile(p);
+        setProfile({
+          ...p,
+          paymentStatus: p.paymentStatus ?? null,
+          mealPlanLinks: Array.isArray(p.mealPlanLinks) ? p.mealPlanLinks : [],
+        });
       }
       if (assignmentsRes.ok) {
         const data = await assignmentsRes.json();
@@ -92,9 +96,9 @@ export default function ClientPortalPage() {
         const body = await assignmentsRes.json().catch(() => ({}));
         setError((body && typeof body.error === "string") ? body.error : "Could not load check-ins.");
       }
-      if (goalsRes.ok) {
-        const g = await goalsRes.json();
-        setGoals(Array.isArray(g) ? g : []);
+      if (imagesRes.ok) {
+        const list = await imagesRes.json();
+        setProgressImages(Array.isArray(list) ? list.slice(0, 6) : []);
       }
     } catch {
       setError("Could not load check-ins.");
@@ -109,8 +113,6 @@ export default function ClientPortalPage() {
 
   const firstName = profile?.firstName?.trim() ?? null;
   const showQuote = profile?.profilePersonalization?.showQuote && profile?.profilePersonalization?.quote;
-  const activeGoals = goals.filter((g) => g.status === "active");
-  const topGoal = activeGoals.length > 0 ? activeGoals[0] : null;
   const motivationalLine = MOTIVATIONAL_LINES[firstName ? firstName.length % MOTIVATIONAL_LINES.length : 0];
 
   return (
@@ -131,42 +133,6 @@ export default function ClientPortalPage() {
           )}
         </div>
       </header>
-
-      {/* Progress at a glance (goals) */}
-      {activeGoals.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
-            Your progress
-          </h2>
-          <Card className="p-5 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-            <p className="text-[var(--color-text)] font-medium">
-              You're working on {activeGoals.length} {activeGoals.length === 1 ? "goal" : "goals"}
-            </p>
-            {topGoal && (
-              <div className="mt-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--color-text-secondary)]">{topGoal.title}</span>
-                  <span className="font-medium text-[var(--color-primary)]">
-                    {Math.round(topGoal.progress ?? 0)}%
-                  </span>
-                </div>
-                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
-                  <div
-                    className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500"
-                    style={{ width: `${Math.min(100, Math.max(0, topGoal.progress ?? 0))}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            <Link
-              href="/client/goals"
-              className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline"
-            >
-              View all goals →
-            </Link>
-          </Card>
-        </section>
-      )}
 
       {/* Primary action: check-in */}
       <section className="mt-8">
@@ -198,6 +164,92 @@ export default function ClientPortalPage() {
           </div>
         </Card>
       </section>
+
+      {/* To do, Payments, Meal plan: compact cards */}
+      {!authError && !loading && (
+        <section className="mt-8">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* To do – only when check-ins are open */}
+            {assignments.length > 0 && (
+              <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+                  To do
+                </h3>
+                <p className="text-sm text-[var(--color-text-secondary)] mb-2">
+                  {assignments.length} check-in{assignments.length !== 1 ? "s" : ""} open
+                </p>
+                <ul className="space-y-1.5">
+                  {assignments.slice(0, 3).map((a) => (
+                    <li key={a.id}>
+                      <Link
+                        href={`/client/check-in/${a.id}`}
+                        className="text-sm text-[var(--color-primary)] hover:underline"
+                      >
+                        {a.formTitle}
+                        {a.reflectionWeekStart ? ` (week of ${a.reflectionWeekStart})` : ""} →
+                      </Link>
+                    </li>
+                  ))}
+                  {assignments.length > 3 && (
+                    <li>
+                      <Link href="/client/check-in/new" className="text-sm text-[var(--color-text-muted)] hover:underline">
+                        +{assignments.length - 3} more…
+                      </Link>
+                    </li>
+                  )}
+                </ul>
+              </Card>
+            )}
+            {/* Payments */}
+            <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+                Payments
+              </h3>
+              {profile?.paymentStatus === "paid" ? (
+                <p className="text-sm text-green-600 dark:text-green-400 font-medium">Paid up</p>
+              ) : profile?.paymentStatus ? (
+                <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">Action needed</p>
+              ) : (
+                <p className="text-sm text-[var(--color-text-muted)]">No payment linked</p>
+              )}
+              <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                Your coach manages billing. Contact them if you need to update payment.
+              </p>
+            </Card>
+            {/* Meal plan */}
+            <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+                Meal plan
+              </h3>
+              {profile?.mealPlanLinks && profile.mealPlanLinks.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {profile.mealPlanLinks.slice(0, 3).map((link, i) => (
+                    <li key={i}>
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-[var(--color-primary)] hover:underline"
+                      >
+                        {link.label || "Meal plan"} →
+                      </a>
+                    </li>
+                  ))}
+                  {profile.mealPlanLinks.length > 3 && (
+                    <li className="text-xs text-[var(--color-text-muted)]">
+                      +{profile.mealPlanLinks.length - 3} more
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  No meal plan assigned. Your coach can add one in your settings.
+                </p>
+              )}
+            </Card>
+          </div>
+        </section>
+      )}
 
       {/* Resume list or empty state */}
       <section className="mt-6">
@@ -244,6 +296,40 @@ export default function ClientPortalPage() {
           </ul>
         )}
       </section>
+
+      {/* Mini photo gallery */}
+      {!authError && !loading && progressImages.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
+            Recent photos
+          </h2>
+          <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {progressImages.map((img) => (
+                <a
+                  key={img.id}
+                  href={img.imageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 block w-24 h-24 rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-bg)]"
+                >
+                  <img
+                    src={img.imageUrl}
+                    alt={img.caption || "Progress"}
+                    className="w-full h-full object-cover"
+                  />
+                </a>
+              ))}
+            </div>
+            <Link
+              href="/client/progress-photos"
+              className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline"
+            >
+              View all photos →
+            </Link>
+          </Card>
+        </section>
+      )}
 
       {/* Quick links: toolkit */}
       <section className="mt-10">

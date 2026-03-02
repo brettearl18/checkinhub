@@ -74,6 +74,7 @@ export async function GET(
     isStandard: formData.isStandard ?? false,
     isActive: formData.isActive !== false,
     isArchived: formData.isArchived ?? false,
+    thresholds: formData.thresholds ?? null,
     createdAt: toDate(formData.createdAt),
     updatedAt: toDate(formData.updatedAt),
   });
@@ -97,6 +98,7 @@ export async function PATCH(
     isActive?: boolean;
     isArchived?: boolean;
     estimatedTime?: number;
+    thresholds?: { redMax?: number; orangeMax?: number };
   };
   try {
     body = await request.json();
@@ -126,6 +128,14 @@ export async function PATCH(
   if (body.isActive !== undefined) update.isActive = body.isActive;
   if (body.isArchived !== undefined) update.isArchived = body.isArchived;
   if (body.estimatedTime !== undefined) update.estimatedTime = body.estimatedTime;
+  if (body.thresholds !== undefined) {
+    const t = body.thresholds;
+    if (t && typeof t.redMax === "number" && typeof t.orangeMax === "number") {
+      update.thresholds = { redMax: t.redMax, orangeMax: t.orangeMax };
+    } else {
+      update.thresholds = null;
+    }
+  }
 
   await ref.update(update);
   return NextResponse.json({ ok: true });

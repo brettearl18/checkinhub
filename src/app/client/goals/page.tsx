@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 interface Goal {
   id: string;
@@ -76,7 +77,7 @@ export default function ClientGoalsPage() {
               </div>
               {g.deadline && (
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  By {new Date(g.deadline).toLocaleDateString()}
+                  By {formatDateDisplay(g.deadline)}
                 </p>
               )}
               {typeof g.progress === "number" && (

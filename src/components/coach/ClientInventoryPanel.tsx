@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { formatDateDisplay } from "@/lib/format-date";
 
 export interface InventoryClient {
   id: string;
@@ -42,7 +43,7 @@ function formatLastCheckIn(iso: string | null, overdueCount: number): string {
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "1 day ago";
   if (diffDays < 7) return `${diffDays} days ago`;
-  return d.toLocaleDateString();
+  return formatDateDisplay(iso);
 }
 
 interface ClientInventoryPanelProps {

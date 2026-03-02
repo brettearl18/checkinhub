@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 interface ProgressImage {
   id: string;
@@ -194,7 +195,7 @@ export default function ProgressPhotosPage() {
                   )}
                   {img.uploadedAt && (
                     <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                      {new Date(img.uploadedAt).toLocaleDateString()}
+                      {formatDateDisplay(img.uploadedAt)}
                     </p>
                   )}
                 </div>

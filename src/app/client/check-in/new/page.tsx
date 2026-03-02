@@ -5,13 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { WeekCalendar, type WeekOption } from "@/components/client/WeekCalendar";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
 
-const WEEK_RANGE = { past: 2, future: 0 };
+const WEEK_RANGE = { past: 2, future: 1 }; // include next week as pending (opens Friday 9am)
 
 // Week is always Monday (inclusive) to Sunday (inclusive). reflectionWeekStart = Monday YYYY-MM-DD.
-function getWeekOptions(): { label: string; reflectionWeekStart: string }[] {
-  const options: { label: string; reflectionWeekStart: string }[] = [];
+function getWeekOptions(): WeekOption[] {
+  const options: WeekOption[] = [];
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   for (let i = -WEEK_RANGE.past; i <= WEEK_RANGE.future; i++) {
@@ -20,14 +22,22 @@ function getWeekOptions(): { label: string; reflectionWeekStart: string }[] {
     const day = d.getDay();
     const diffToMonday = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + diffToMonday);
-    const monday = d.toISOString().slice(0, 10);
+    const monday = toLocalDateString(d);
     const sunday = new Date(d);
     sunday.setDate(sunday.getDate() + 6);
+    const sundayStr = toLocalDateString(sunday);
     const label =
       i === 0
-        ? `This week (${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sunday.toLocaleDateString("en-AU", { day: "numeric", month: "short" })})`
-        : `${d.toLocaleDateString("en-AU", { day: "numeric", month: "short" })} – ${sunday.toLocaleDateString("en-AU", { day: "numeric", month: "short" })}`;
-    options.push({ label, reflectionWeekStart: monday });
+        ? `This week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
+        : i === 1
+          ? `Next week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
+          : `${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)}`;
+    options.push({
+      label,
+      reflectionWeekStart: monday,
+      isThisWeek: i === 0,
+      isNextWeek: i === 1,
+    });
   }
   return options;
 }
@@ -46,6 +56,7 @@ export default function NewCheckInPage() {
   const [forms, setForms] = useState<FormItem[]>([]);
   const [selectedForm, setSelectedForm] = useState<FormItem | null>(null);
   const [completedWeeks, setCompletedWeeks] = useState<string[]>([]);
+  const [inProgressWeeks, setInProgressWeeks] = useState<string[]>([]);
   const [loadingForms, setLoadingForms] = useState(true);
   const [loadingWeeks, setLoadingWeeks] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -82,8 +93,11 @@ export default function NewCheckInPage() {
           `/api/check-in/completed-weeks?formId=${encodeURIComponent(selectedForm.id)}`
         );
         if (res.ok) {
-          const list = await res.json();
-          if (!cancelled) setCompletedWeeks(Array.isArray(list) ? list : []);
+          const data = await res.json();
+          if (!cancelled) {
+            setCompletedWeeks(Array.isArray(data?.completed) ? data.completed : []);
+            setInProgressWeeks(Array.isArray(data?.inProgress) ? data.inProgress : []);
+          }
         }
       } finally {
         if (!cancelled) setLoadingWeeks(false);
@@ -94,7 +108,7 @@ export default function NewCheckInPage() {
 
   const handleSelectWeek = async (reflectionWeekStart: string) => {
     if (!selectedForm) return;
-    if (completedWeeks.includes(reflectionWeekStart)) return;
+    if (completedWeeks.includes(reflectionWeekStart)) return; // no second check-in for completed weeks
     setResolving(true);
     setError(null);
     try {
@@ -201,7 +215,7 @@ export default function NewCheckInPage() {
               Choose week
             </h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-              Last 2 weeks and this week. Completed weeks are marked.
+              Select the week you’re checking in for. Last 2 weeks, this week, and next week (opens Friday 9am).
             </p>
             {loadingWeeks && (
               <p className="mt-4 text-sm text-[var(--color-text-muted)]">
@@ -209,24 +223,15 @@ export default function NewCheckInPage() {
               </p>
             )}
             {!loadingWeeks && (
-              <ul className="mt-4 space-y-2">
-                {weekOptions.map((w) => {
-                  const done = completedWeeks.includes(w.reflectionWeekStart);
-                  return (
-                    <li key={w.reflectionWeekStart}>
-                      <button
-                        type="button"
-                        onClick={() => handleSelectWeek(w.reflectionWeekStart)}
-                        disabled={done || resolving}
-                        className={`w-full rounded-[var(--radius-md)] border px-4 py-3 text-left text-sm ${done ? "cursor-not-allowed border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-muted)]" : "border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-primary-subtle)]"}`}
-                      >
-                        {w.label}
-                        {done && " ✓ Done"}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="mt-4">
+                <WeekCalendar
+                  weeks={weekOptions}
+                  completedWeekStarts={completedWeeks}
+                  inProgressWeekStarts={inProgressWeeks}
+                  onSelectWeek={handleSelectWeek}
+                  resolving={resolving}
+                />
+              </div>
             )}
             {resolving && (
               <p className="mt-3 text-sm text-[var(--color-text-muted)]">

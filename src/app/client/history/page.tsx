@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 interface HistoryItem {
   id: string;
@@ -82,26 +84,34 @@ export default function ClientHistoryPage() {
         <Card className="overflow-hidden">
           <ul className="divide-y divide-[var(--color-border)]">
             {list.map((item) => (
-              <li key={item.id}>
+              <li
+                key={item.id}
+                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-[var(--color-primary-subtle)]"
+              >
                 <Link
                   href={item.responseId ? `/client/response/${item.responseId}` : `/client/check-in/${item.id}`}
-                  className="block px-4 py-3 hover:bg-[var(--color-primary-subtle)]"
+                  className="min-w-0 flex-1"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-[var(--color-text)]">{item.formTitle}</span>
                     {item.score != null && (
-                      <span className="text-sm text-[var(--color-text-muted)]">{item.score}%</span>
+                      <span className="text-sm text-[var(--color-text-muted)] shrink-0">{item.score}%</span>
                     )}
                   </div>
                   <div className="mt-1 flex gap-2 text-sm text-[var(--color-text-muted)]">
                     {item.completedAt && (
-                      <span>Completed {new Date(item.completedAt).toLocaleDateString()}</span>
+                      <span>Completed {formatDateDisplay(item.completedAt)}</span>
                     )}
                     {item.reflectionWeekStart && (
-                      <span>Week of {item.reflectionWeekStart}</span>
+                      <span>Week of {formatDateDisplay(item.reflectionWeekStart)}</span>
                     )}
                   </div>
                 </Link>
+                {item.responseId && (
+                  <Button asChild variant="secondary" className="shrink-0">
+                    <Link href={`/client/response/${item.responseId}`}>Scorecard</Link>
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

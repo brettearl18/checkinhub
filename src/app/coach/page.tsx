@@ -8,6 +8,7 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { ClientInventoryPanel, type InventoryClient, type InventoryStats } from "@/components/coach/ClientInventoryPanel";
 import { useApiClient } from "@/lib/api-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatDateDisplay } from "@/lib/format-date";
 
 type ResponseItem = {
   responseId: string;
@@ -33,13 +34,20 @@ const SORT_OPTIONS = [
   { value: "oldest", label: "Oldest first" },
 ] as const;
 
+const DATE_RANGE_OPTIONS = [
+  { value: "all", label: "All time" },
+  { value: "7", label: "Last 7 days" },
+  { value: "30", label: "Last 30 days" },
+  { value: "90", label: "Last 90 days" },
+] as const;
+
 function formatTimeAgo(ts: number) {
   const sec = Math.floor((Date.now() - ts) / 1000);
   if (sec < 60) return "Just now";
   if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
   if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
   if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
-  return new Date(ts).toLocaleDateString();
+  return formatDateDisplay(ts);
 }
 
 export default function CoachDashboardPage() {
@@ -53,6 +61,7 @@ export default function CoachDashboardPage() {
   const [authError, setAuthError] = useState(false);
   const [checkInsTab, setCheckInsTab] = useState<"toReview" | "completed">("toReview");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [dateRange, setDateRange] = useState<string>("all");
   const [inventorySearch, setInventorySearch] = useState("");
   const [inventorySort, setInventorySort] = useState<"name" | "lastCheckIn" | "overdue">("name");
 
@@ -110,11 +119,14 @@ export default function CoachDashboardPage() {
   const list = useMemo(() => {
     if (!overview) return [];
     const raw = checkInsTab === "toReview" ? overview.toReview : overview.completed;
-    const sorted = [...raw].sort((a, b) =>
+    const days = dateRange === "all" ? null : parseInt(dateRange, 10);
+    const cutoff = days != null && !Number.isNaN(days) ? Date.now() - days * 24 * 60 * 60 * 1000 : 0;
+    const filtered = cutoff > 0 ? raw.filter((r) => r.submittedAt >= cutoff) : raw;
+    const sorted = [...filtered].sort((a, b) =>
       sort === "newest" ? b.submittedAt - a.submittedAt : a.submittedAt - b.submittedAt
     );
     return sorted;
-  }, [overview, checkInsTab, sort]);
+  }, [overview, checkInsTab, sort, dateRange]);
 
   if (authError) {
     return <AuthErrorRetry onRetry={load} />;
@@ -247,6 +259,17 @@ export default function CoachDashboardPage() {
                       Done ({overview.completed.length})
                     </button>
                   </div>
+                  <select
+                    id="date-range-checkins"
+                    value={dateRange}
+                    onChange={(e) => setDateRange(e.target.value)}
+                    className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                    aria-label="Filter by date range"
+                  >
+                    {DATE_RANGE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
                   <select
                     id="sort-checkins"
                     value={sort}

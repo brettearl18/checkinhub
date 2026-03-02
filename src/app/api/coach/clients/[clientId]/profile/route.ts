@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { resolveThresholds, SCORING_PROFILES, type ScoringProfileId } from "@/lib/scoring-utils";
 
 function toIso(v: unknown): string | null {
   if (!v) return null;
@@ -29,8 +30,9 @@ export async function GET(
       phone: "",
       timezone: "",
       status: "active",
-      trafficLightRedMax: 40,
-      trafficLightOrangeMax: 70,
+      trafficLightRedMax: 60,
+      trafficLightOrangeMax: 85,
+      scoringProfile: null as string | null,
       programStartDate: "",
       programDurationWeeks: null as number | null,
       checkInFrequency: "weekly",
@@ -76,10 +78,9 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const scoring = scoringSnap.exists ? scoringSnap.data() as { thresholds?: { red?: number[]; orange?: number[]; green?: number[] } } : {};
-  const th = scoring.thresholds ?? {};
-  const redMax = Array.isArray(th.red) && th.red[1] != null ? th.red[1] : 40;
-  const orangeMax = Array.isArray(th.orange) && th.orange[1] != null ? th.orange[1] : 70;
+  const scoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const { redMax, orangeMax } = resolveThresholds({ clientScoring: scoringData ?? undefined });
+  const scoringProfile = scoringData?.scoringProfile ?? null;
 
   let firstPaymentAt: string | null = toIso(data.firstPaymentAt) ?? null;
 
@@ -119,6 +120,7 @@ export async function GET(
     status: data.status ?? "active",
     trafficLightRedMax: redMax,
     trafficLightOrangeMax: orangeMax,
+    scoringProfile: scoringProfile,
     programStartDate: data.programStartDate ?? "",
     programDurationWeeks: data.programDurationWeeks ?? null,
     checkInFrequency: data.profile?.preferences?.checkInFrequency ?? "weekly",
@@ -219,16 +221,25 @@ export async function PATCH(
 
   const redMax = typeof body.trafficLightRedMax === "number" ? body.trafficLightRedMax : undefined;
   const orangeMax = typeof body.trafficLightOrangeMax === "number" ? body.trafficLightOrangeMax : undefined;
-  if (redMax !== undefined || orangeMax !== undefined) {
-    const r = redMax ?? 40;
-    const o = orangeMax ?? 70;
+  const scoringProfile = typeof body.scoringProfile === "string" && body.scoringProfile ? (body.scoringProfile as ScoringProfileId) : undefined;
+  if (redMax !== undefined || orangeMax !== undefined || scoringProfile !== undefined) {
+    const profileDef = scoringProfile && SCORING_PROFILES[scoringProfile];
+    const r = redMax ?? profileDef?.redMax ?? 60;
+    const o = orangeMax ?? profileDef?.orangeMax ?? 85;
     const thresholds = {
       red: [0, r] as [number, number],
       orange: [r + 1, o] as [number, number],
       green: [o + 1, 100] as [number, number],
+      redMax: r,
+      orangeMax: o,
     };
     await db.collection("clientScoring").doc(clientId).set(
-      { clientId, thresholds, updatedAt: now },
+      {
+        clientId,
+        thresholds,
+        ...(scoringProfile !== undefined && { scoringProfile }),
+        updatedAt: now,
+      },
       { merge: true }
     );
   }

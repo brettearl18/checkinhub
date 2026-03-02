@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateTimeDisplay } from "@/lib/format-date";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Conversation {
@@ -173,7 +174,7 @@ export default function CoachMessagesPage() {
                     >
                       <p className="text-xs font-medium text-[var(--color-text-muted)]">{isCoach ? "You" : (m.senderName || "Client")}</p>
                       <p className="text-sm text-[var(--color-text)]">{m.content}</p>
-                      {m.timestamp && <p className="text-xs text-[var(--color-text-muted)] mt-1">{new Date(m.timestamp).toLocaleString()}</p>}
+                      {m.timestamp && <p className="text-xs text-[var(--color-text-muted)] mt-1">{formatDateTimeDisplay(m.timestamp)}</p>}
                     </div>
                   );
                 })}

@@ -17,7 +17,7 @@ interface Notification {
   createdAt: string | null;
 }
 
-export default function CoachNotificationsPage() {
+export default function ClientNotificationsPage() {
   const { fetchWithAuth } = useApiClient();
   const [list, setList] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function CoachNotificationsPage() {
     setLoading(true);
     setAuthError(false);
     try {
-      const res = await fetchWithAuth("/api/coach/notifications");
+      const res = await fetchWithAuth("/api/client/notifications");
       if (res.status === 401) {
         setAuthError(true);
         return;
@@ -43,7 +43,7 @@ export default function CoachNotificationsPage() {
 
   const markRead = async (id: string) => {
     try {
-      const res = await fetchWithAuth(`/api/coach/notifications/${id}`, { method: "PATCH" });
+      const res = await fetchWithAuth(`/api/client/notifications/${id}`, { method: "PATCH" });
       if (res.ok) {
         setList((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
       }
@@ -65,7 +65,7 @@ export default function CoachNotificationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/coach" className="text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/client" className="text-sm text-[var(--color-primary)] hover:underline">
           ← Dashboard
         </Link>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Notifications</h1>
@@ -77,7 +77,7 @@ export default function CoachNotificationsPage() {
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
       {!loading && list.length === 0 && (
         <Card className="p-6">
-          <p className="text-[var(--color-text-muted)]">No notifications yet.</p>
+          <p className="text-[var(--color-text-muted)]">No notifications yet. Check-in reminders will appear here.</p>
         </Card>
       )}
       {!loading && list.length > 0 && (

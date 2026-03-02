@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { MeasurementLineChart } from "@/components/ui/MeasurementLineChart";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDisplay } from "@/lib/format-date";
 
 interface Measurement {
   id: string;
@@ -41,6 +42,24 @@ interface CheckInScore {
   formTitle: string;
   submittedAt: string | null;
   score: number;
+}
+
+interface QuestionProgressWeek {
+  key: string;
+  label: string;
+}
+
+interface QuestionProgress {
+  questions: Array<{ id: string; text: string }>;
+  weeks: QuestionProgressWeek[];
+  grid: Record<string, Record<string, number>>;
+}
+
+/** Fixed bands for per-question grid (Good 7–10, Moderate 4–6, Needs attention 0–3). Score is 0–100. */
+function getQuestionBand(score: number): "green" | "orange" | "red" {
+  if (score < 40) return "red";
+  if (score < 70) return "orange";
+  return "green";
 }
 
 // Traffic light bands for overall score 0–100 (per-client thresholds).
@@ -90,6 +109,7 @@ export default function CoachClientProgressPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
   const [checkInScores, setCheckInScores] = useState<CheckInScore[]>([]);
+  const [questionProgress, setQuestionProgress] = useState<QuestionProgress | null>(null);
   const [trafficLightRedMax, setTrafficLightRedMax] = useState(40);
   const [trafficLightOrangeMax, setTrafficLightOrangeMax] = useState(70);
   const [loading, setLoading] = useState(true);
@@ -123,6 +143,12 @@ export default function CoachClientProgressPage() {
           setGoals(Array.isArray(data.goals) ? data.goals : []);
           setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
           setCheckInScores(Array.isArray(data.checkInScores) ? data.checkInScores : []);
+          const qp = data.questionProgress;
+          setQuestionProgress(
+            qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
+              ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
+              : null
+          );
           setTrafficLightRedMax(typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 40);
           setTrafficLightOrangeMax(typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 70);
         }
@@ -338,13 +364,96 @@ export default function CoachClientProgressPage() {
                       <span className="text-[var(--color-text-muted)]">
                         {r.formTitle}
                         {r.submittedAt && (
-                          <> · {new Date(r.submittedAt).toLocaleDateString()}</>
+                          <> · {formatDateDisplay(r.submittedAt)}</>
                         )}
                       </span>
                     </Link>
                   );
                 })}
               </div>
+            </Card>
+          )}
+
+          {/* Question progress table (per-question traffic light grid) */}
+          {questionProgress && questionProgress.questions.length > 0 && questionProgress.weeks.length > 0 && (
+            <Card className="overflow-x-auto p-0">
+              <div className="p-4 pb-2">
+                <h3 className="font-medium text-[var(--color-text)]">Question progress over time</h3>
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Per-question score by week (fixed scale: Good 7–10, Moderate 4–6, Needs attention 0–3)
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-[var(--color-text-muted)]">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded-full bg-green-500" aria-hidden />
+                    Good (7–10)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded-full bg-amber-500" aria-hidden />
+                    Moderate (4–6)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded-full bg-red-500" aria-hidden />
+                    Needs attention (0–3)
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded-full bg-[var(--color-border)]" aria-hidden />
+                    Not scored
+                  </span>
+                </div>
+              </div>
+              <table className="w-full min-w-[600px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+                    <th className="px-3 py-2 text-left font-medium text-[var(--color-text-muted)]">
+                      Question
+                    </th>
+                    {questionProgress.weeks.map((w) => (
+                      <th
+                        key={w.key}
+                        className="px-2 py-2 text-center font-medium text-[var(--color-text-muted)] whitespace-nowrap"
+                      >
+                        {w.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {questionProgress.questions.map((q) => (
+                    <tr
+                      key={q.id}
+                      className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]/50"
+                    >
+                      <td className="px-3 py-2 text-[var(--color-text)] max-w-[200px] truncate" title={q.text}>
+                        {q.text}
+                      </td>
+                      {questionProgress.weeks.map((w) => {
+                        const score = questionProgress.grid[q.id]?.[w.key];
+                        const band = score != null ? getQuestionBand(score) : null;
+                        return (
+                          <td key={w.key} className="px-2 py-2 text-center">
+                            <span
+                              className={`inline-block h-4 w-4 rounded-full ${
+                                band === "green"
+                                  ? "bg-green-500"
+                                  : band === "orange"
+                                    ? "bg-amber-500"
+                                    : band === "red"
+                                      ? "bg-red-500"
+                                      : "bg-[var(--color-border)]"
+                              }`}
+                              title={score != null ? `${score}%` : "Not scored"}
+                              aria-hidden
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="px-3 py-2 text-xs text-[var(--color-text-muted)]">
+                Scroll horizontally on small screens to see all weeks.
+              </p>
             </Card>
           )}
 
@@ -388,7 +497,7 @@ export default function CoachClientProgressPage() {
                   <tbody>
                     {trendPoints.map((p, i) => (
                       <tr key={`${p.date}-${i}-${p.value}`} className="border-b border-[var(--color-border)]">
-                        <td className="py-1.5 pr-4 text-[var(--color-text)]">{p.date}</td>
+                        <td className="py-1.5 pr-4 text-[var(--color-text)]">{formatDateDisplay(p.date)}</td>
                         <td className="py-1.5 text-[var(--color-text)]">
                           {p.value}
                           {trendTab === "bodyWeight" ? " kg" : " cm"}
@@ -436,7 +545,7 @@ export default function CoachClientProgressPage() {
                       </p>
                       {img.uploadedAt && (
                         <p className="text-xs text-[var(--color-text-muted)]">
-                          {new Date(img.uploadedAt).toLocaleDateString()}
+                          {formatDateDisplay(img.uploadedAt)}
                         </p>
                       )}
                     </div>

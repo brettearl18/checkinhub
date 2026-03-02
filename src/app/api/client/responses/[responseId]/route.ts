@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { computeScore, getScoreBand } from "@/lib/check-in-score";
+import { resolveThresholds, BAND_LABELS } from "@/lib/scoring-utils";
 
 function toDate(v: unknown): string | null {
   if (!v) return null;
@@ -24,7 +26,15 @@ export async function GET(
 
   if (!isAdminConfigured()) {
     return NextResponse.json({
-      response: { id: responseId, formTitle: "Check-in", responses: [], score: 0, submittedAt: null },
+      response: {
+        id: responseId,
+        formTitle: "Check-in",
+        responses: [],
+        score: 0,
+        band: "green" as const,
+        message: "Excellent",
+        submittedAt: null,
+      },
       questions: [],
       feedback: [],
     });
@@ -76,13 +86,109 @@ export async function GET(
     };
   });
 
+  const score = (responseData.score as number) ?? 0;
+  const scoringSnap = await db.collection("clientScoring").doc(respClientId).get();
+  const clientScoringData = scoringSnap.exists ? scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string } : null;
+  const formThresholds = formSnap.exists ? (formSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number } })?.thresholds : undefined;
+  const { redMax, orangeMax } = resolveThresholds({
+    formThresholds: formThresholds ?? undefined,
+    clientScoring: clientScoringData ?? undefined,
+  });
+  const band = getScoreBand(score, redMax, orangeMax);
+  const message = BAND_LABELS[band];
+
   const response = {
     id: responseSnap.id,
+    assignmentId: (responseData.assignmentId as string) ?? null,
     formTitle: responseData.formTitle,
     responses: responseData.responses as Array<{ questionId: string; answer: string | number | string[] }>,
-    score: (responseData.score as number) ?? 0,
+    score,
+    band,
+    message,
     submittedAt: toDate(responseData.submittedAt) ?? toDate(responseData.createdAt),
   };
 
   return NextResponse.json({ response, questions, feedback });
+}
+
+/** PATCH: client updates their own response (edit check-in); recalculates score. */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ responseId: string }> }
+) {
+  const authResult = await requireClient(request);
+  if ("error" in authResult) return authResult.error;
+  const clientId = authResult.identity.clientId!;
+  const { responseId } = await params;
+
+  let body: { responses: Array<{ questionId: string; answer: string | number | string[]; notes?: string }> };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const { responses } = body;
+  if (!Array.isArray(responses)) {
+    return NextResponse.json({ error: "responses array required" }, { status: 400 });
+  }
+
+  if (!isAdminConfigured()) {
+    return NextResponse.json({ score: 0, band: "green", message: "Excellent" });
+  }
+
+  const db = getAdminDb();
+  const responseRef = db.collection("formResponses").doc(responseId);
+  const responseSnap = await responseRef.get();
+  if (!responseSnap.exists) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const responseData = responseSnap.data()!;
+  if ((responseData.clientId as string) !== clientId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const formId = responseData.formId as string;
+  const formSnap = await db.collection("forms").doc(formId).get();
+  const questionIds = formSnap.exists ? ((formSnap.data() as { questions?: string[] }).questions ?? []) : [];
+  const questionSnaps = await Promise.all(
+    questionIds.map((id: string) => db.collection("questions").doc(id).get())
+  );
+  const questions = questionSnaps
+    .filter((s) => s.exists)
+    .map((s) => ({ id: s.id, ...s.data() })) as Array<{
+    id: string;
+    type?: string;
+    options?: string[] | Array<{ text: string; weight?: number }>;
+    questionWeight?: number;
+    yesNoWeight?: number;
+    yesIsPositive?: boolean;
+  }>;
+
+  const score = computeScore(responses, questions);
+
+  const scoringSnap = await db.collection("clientScoring").doc(clientId).get();
+  const clientScoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const formThresholds = formSnap.exists ? (formSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number } })?.thresholds : undefined;
+  const { redMax, orangeMax } = resolveThresholds({
+    formThresholds: formThresholds ?? undefined,
+    clientScoring: clientScoringData ?? undefined,
+  });
+  const band = getScoreBand(score, redMax, orangeMax);
+  const message = BAND_LABELS[band];
+
+  const now = new Date();
+  await responseRef.update({
+    responses,
+    score,
+    answeredQuestions: responses.length,
+    updatedAt: now,
+  });
+
+  return NextResponse.json({
+    score,
+    band,
+    message,
+    trafficLightRedMax: redMax,
+    trafficLightOrangeMax: orangeMax,
+  });
 }

@@ -20,11 +20,18 @@ function toTime(v: unknown): number {
   return d ? d.getTime() : 0;
 }
 
-// GET: client inventory with stats and per-client aggregates (last check-in, overdue, avg score, trend).
+function toIso(v: unknown): string | null {
+  const d = toDate(v);
+  return d ? d.toISOString() : null;
+}
+
+// GET: client inventory with stats and per-client aggregates (last check-in, overdue, avg score, trend, payment, weight).
 export async function GET(request: Request) {
   const authResult = await requireCoach(request);
   if ("error" in authResult) return authResult.error;
   const coachId = authResult.identity.coachId!;
+  const { searchParams } = new URL(request.url);
+  const includeArchived = searchParams.get("includeArchived") === "true";
 
   if (!isAdminConfigured()) {
     return NextResponse.json({
@@ -45,6 +52,20 @@ export async function GET(request: Request) {
     const clientData = new Map(
       clientsSnap.docs.map((d) => {
         const data = d.data();
+        const programStartDate = (data.programStartDate as string) || null;
+        const stripeCustomerId = (data.stripeCustomerId as string) || null;
+        const firstPaymentAt = toIso(data.firstPaymentAt);
+        const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+        let programWeeks: number | null = null;
+        if (stripeCustomerId && firstPaymentAt) {
+          const firstMs = new Date(firstPaymentAt).getTime();
+          if (!Number.isNaN(firstMs)) {
+            programWeeks = Math.max(0, Math.floor((Date.now() - firstMs) / msPerWeek));
+          }
+        }
+        if (programWeeks == null && programStartDate && /^\d{4}-\d{2}-\d{2}/.test(programStartDate)) {
+          programWeeks = Math.max(0, Math.floor((Date.now() - new Date(programStartDate).getTime()) / msPerWeek));
+        }
         return [
           d.id,
           {
@@ -54,11 +75,44 @@ export async function GET(request: Request) {
             email: data.email ?? "",
             phone: data.phone ?? "",
             status: (data.status as string) ?? "active",
+            programStartDate,
+            programWeeks,
+            paymentStatus: (data.paymentStatus as string) || null,
+            lastPaymentAt: toIso(data.lastPaymentAt),
             progress: data.progress as { overallScore?: number; completedCheckins?: number; totalCheckins?: number } | undefined,
           },
         ];
       })
     );
+
+    // Weight loss: first vs last bodyWeight per client (batch by clientId)
+    const weightByClient = new Map<string, { firstKg: number; lastKg: number }>();
+    for (let i = 0; i < clientIds.length; i += 30) {
+      const chunk = clientIds.slice(i, i + 30);
+      const measSnap = await db
+        .collection("client_measurements")
+        .where("clientId", "in", chunk)
+        .get();
+      const byClient = new Map<string, { date: number; bodyWeight: number }[]>();
+      for (const doc of measSnap.docs) {
+        const d = doc.data();
+        const clientId = d.clientId as string;
+        const date = toTime(d.date);
+        const bw = typeof d.bodyWeight === "number" ? d.bodyWeight : null;
+        if (clientId && date && bw != null) {
+          if (!byClient.has(clientId)) byClient.set(clientId, []);
+          byClient.get(clientId)!.push({ date, bodyWeight: bw });
+        }
+      }
+      for (const [cid, arr] of byClient) {
+        arr.sort((a, b) => a.date - b.date);
+        const first = arr[0];
+        const last = arr[arr.length - 1];
+        if (first && last && first.bodyWeight != null && last.bodyWeight != null) {
+          weightByClient.set(cid, { firstKg: first.bodyWeight, lastKg: last.bodyWeight });
+        }
+      }
+    }
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -133,6 +187,9 @@ export async function GET(request: Request) {
       while (progressDots.length < 5) progressDots.push("empty");
 
       const weeks = assignments.length;
+      const weight = weightByClient.get(id);
+      const weightLossKg =
+        weight != null ? Math.round((weight.lastKg - weight.firstKg) * 10) / 10 : null;
 
       return {
         id: c.id,
@@ -141,12 +198,17 @@ export async function GET(request: Request) {
         email: c.email,
         phone: c.phone ?? null,
         status: c.status,
+        programWeeks: c.programWeeks ?? null,
+        paymentStatus: c.paymentStatus ?? null,
+        lastPaymentAt: c.lastPaymentAt ?? null,
+        weightLossKg,
         lastCheckInAt: lastCheckInAt ? new Date(lastCheckInAt).toISOString() : null,
         overdueCount,
         avgScore: avgScore != null ? Math.round(avgScore) : null,
         trendCompleted,
         trendTotal,
         trendPct,
+        avgCheckInPct: trendPct,
         progressDots,
         weeks,
       };
@@ -167,7 +229,8 @@ export async function GET(request: Request) {
       avgProgress,
     };
 
-    return NextResponse.json({ stats, clients: nonArchived });
+    const clientsOut = includeArchived ? clients : nonArchived;
+    return NextResponse.json({ stats, clients: clientsOut });
   } catch (err) {
     console.error("[coach/clients/inventory]", err);
     return NextResponse.json(

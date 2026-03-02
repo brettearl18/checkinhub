@@ -3,6 +3,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { computeScore, getScoreBand } from "@/lib/check-in-score";
+import { resolveThresholds, BAND_LABELS } from "@/lib/scoring-utils";
 
 export async function POST(request: Request) {
   const authResult = await requireClient(request);
@@ -28,7 +30,13 @@ export async function POST(request: Request) {
   }
 
   if (!isAdminConfigured()) {
-    return NextResponse.json({ responseId: "mock-response-1", success: true });
+    return NextResponse.json({
+      responseId: "mock-response-1",
+      success: true,
+      score: 0,
+      band: "green",
+      message: "Excellent",
+    });
   }
 
   const db = getAdminDb();
@@ -45,8 +53,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Already submitted" }, { status: 400 });
   }
 
+  const formId = assignmentData.formId as string;
+  const formSnap = await db.collection("forms").doc(formId).get();
+  const questionIds = formSnap.exists ? ((formSnap.data() as { questions?: string[] }).questions ?? []) : [];
+  const questionSnaps = await Promise.all(questionIds.map((id: string) => db.collection("questions").doc(id).get()));
+  const questions = questionSnaps
+    .filter((s) => s.exists)
+    .map((s) => ({ id: s.id, ...s.data() })) as Array<{
+    id: string;
+    type?: string;
+    options?: string[] | Array<{ text: string; weight?: number }>;
+    questionWeight?: number;
+    yesNoWeight?: number;
+    yesIsPositive?: boolean;
+  }>;
+
+  const score = computeScore(responses, questions);
+
+  const formData = formSnap.exists ? formSnap.data() : null;
+  const scoringSnap = await db.collection("clientScoring").doc(clientId).get();
+  const clientScoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const { redMax, orangeMax } = resolveThresholds({
+    formThresholds: formData?.thresholds as { redMax?: number; orangeMax?: number } | undefined,
+    clientScoring: clientScoringData ?? undefined,
+  });
+  const band = getScoreBand(score, redMax, orangeMax);
+  const message = BAND_LABELS[band];
+
   const now = new Date();
-  const score = 0;
   const responseRef = await db.collection("formResponses").add({
     assignmentId,
     formId: assignmentData.formId,
@@ -72,5 +106,13 @@ export async function POST(request: Request) {
     draftUpdatedAt: FieldValue.delete(),
   });
 
-  return NextResponse.json({ responseId: responseRef.id, success: true });
+  return NextResponse.json({
+    responseId: responseRef.id,
+    success: true,
+    score,
+    band,
+    message,
+    trafficLightRedMax: redMax,
+    trafficLightOrangeMax: orangeMax,
+  });
 }

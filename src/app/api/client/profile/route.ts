@@ -18,6 +18,8 @@ export async function GET(request: Request) {
       timezone: "Australia/Perth",
       profile: {},
       profilePersonalization: { quote: null, showQuote: false, colorTheme: "#daa450", icon: null },
+      paymentStatus: null,
+      mealPlanLinks: [],
     });
   }
 
@@ -27,6 +29,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Profile not found" }, { status: 404 });
   }
   const data = clientSnap.data()!;
+  const mealPlanLinks = Array.isArray(data.mealPlanLinks)
+    ? (data.mealPlanLinks as { label?: string; url?: string }[]).map((l) => ({
+        label: l?.label ?? "",
+        url: l?.url ?? "",
+      }))
+    : [];
   const profile = {
     id: clientSnap.id,
     firstName: data.firstName ?? "",
@@ -41,6 +49,8 @@ export async function GET(request: Request) {
       colorTheme: "#daa450",
       icon: null,
     },
+    paymentStatus: (data.paymentStatus as string) || null,
+    mealPlanLinks,
   };
   return NextResponse.json(profile);
 }
