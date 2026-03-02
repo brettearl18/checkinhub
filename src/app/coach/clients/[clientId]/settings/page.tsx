@@ -102,6 +102,7 @@ export default function CoachClientSettingsPage() {
   const [prices, setPrices] = useState<{ id: string; label: string }[]>([]);
   const [changePriceId, setChangePriceId] = useState<string>("");
   const [updatePriceLoading, setUpdatePriceLoading] = useState(false);
+  const [syncBillingLoading, setSyncBillingLoading] = useState(false);
   const [newMealPlanLabel, setNewMealPlanLabel] = useState("");
   const [newMealPlanUrl, setNewMealPlanUrl] = useState("");
   const [selectedPredefinedMealPlan, setSelectedPredefinedMealPlan] = useState<string>("");
@@ -850,17 +851,56 @@ export default function CoachClientSettingsPage() {
             )}
             {form.stripeCustomerId && (
               <>
-                <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-                  Current status: {form.paymentStatus === "paid" ? (
-                    <span className="text-green-600 dark:text-green-400">Paid up</span>
-                  ) : form.paymentStatus === "failed" || form.paymentStatus === "past_due" ? (
-                    <span className="text-red-600 dark:text-red-400">Payment failed / past due</span>
-                  ) : form.paymentStatus === "canceled" ? (
-                    <span className="text-amber-600 dark:text-amber-400">Canceled</span>
-                  ) : (
-                    <span>Not synced yet (webhook will update after you add the endpoint)</span>
-                  )}
-                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-[var(--color-text-muted)]">
+                    Current status: {form.paymentStatus === "paid" ? (
+                      <span className="text-green-600 dark:text-green-400">Paid up</span>
+                    ) : form.paymentStatus === "failed" || form.paymentStatus === "past_due" ? (
+                      <span className="text-red-600 dark:text-red-400">Payment failed / past due</span>
+                    ) : form.paymentStatus === "canceled" ? (
+                      <span className="text-amber-600 dark:text-amber-400">Canceled</span>
+                    ) : (
+                      <span>Not synced yet (webhook will update after you add the endpoint)</span>
+                    )}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={syncBillingLoading}
+                    onClick={async () => {
+                      setBillingError(null);
+                      setSyncBillingLoading(true);
+                      try {
+                        const res = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/sync`, { method: "POST" });
+                        const data = await res.json().catch(() => ({}));
+                        if (res.ok && data.paymentStatus != null) {
+                          setForm((f) => ({ ...f, paymentStatus: data.paymentStatus }));
+                          const profileRes = await fetchWithAuth(`/api/coach/clients/${clientId}/profile`);
+                          if (profileRes.ok) {
+                            const p = await profileRes.json();
+                            setForm((f) => ({ ...f, paymentStatus: p.paymentStatus ?? null }));
+                          }
+                          const subRes = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/subscription`);
+                          if (subRes.ok) {
+                            const subData = await subRes.json();
+                            setSubscription(subData.subscription ?? null);
+                          } else {
+                            setSubscription(null);
+                          }
+                        } else {
+                          setBillingError((data && data.error) || "Sync failed");
+                        }
+                      } catch {
+                        setBillingError("Sync failed");
+                      } finally {
+                        setSyncBillingLoading(false);
+                      }
+                    }}
+                  >
+                    {syncBillingLoading ? "Syncing…" : "Sync from Stripe"}
+                  </Button>
+                </div>
                 {subscription?.currentPrice && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="text-sm text-[var(--color-text-muted)]">Current plan:</span>
