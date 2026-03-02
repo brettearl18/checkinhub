@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
 
 let app: admin.app.App | undefined;
@@ -38,6 +39,11 @@ export function getAdminDb(): admin.firestore.Firestore {
 export function getAdminStorage() {
   if (!app) app = getAdminApp();
   return getStorage(app);
+}
+
+export function getAdminMessaging(): ReturnType<typeof getMessaging> {
+  if (!app) app = getAdminApp();
+  return getMessaging(app);
 }
 
 export async function verifyIdToken(token: string) {

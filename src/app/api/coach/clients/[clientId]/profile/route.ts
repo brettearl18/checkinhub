@@ -73,6 +73,8 @@ export async function GET(
     nextBillingAt?: unknown;
     firstPaymentAt?: unknown;
     mealPlanLinks?: { label?: string; url?: string }[];
+    mealPlanName?: string;
+    mealPlanUrl?: string;
   };
   if (data.coachId !== coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -133,9 +135,16 @@ export async function GET(
     lastPaymentAt: toIso(data.lastPaymentAt) ?? null,
     nextBillingAt: toIso(data.nextBillingAt) ?? null,
     firstPaymentAt,
-    mealPlanLinks: Array.isArray(data.mealPlanLinks)
-      ? data.mealPlanLinks.map((l) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
-      : [],
+    mealPlanLinks: (() => {
+      const links = Array.isArray(data.mealPlanLinks)
+        ? data.mealPlanLinks.map((l) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
+        : [];
+      if (links.length > 0) return links;
+      const name = data.mealPlanName ?? "";
+      const url = data.mealPlanUrl ?? "";
+      if (name && url) return [{ label: name, url }];
+      return [];
+    })(),
   });
 }
 

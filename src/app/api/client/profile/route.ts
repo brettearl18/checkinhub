@@ -29,12 +29,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Profile not found" }, { status: 404 });
   }
   const data = clientSnap.data()!;
-  const mealPlanLinks = Array.isArray(data.mealPlanLinks)
+  let mealPlanLinks = Array.isArray(data.mealPlanLinks)
     ? (data.mealPlanLinks as { label?: string; url?: string }[]).map((l) => ({
         label: l?.label ?? "",
         url: l?.url ?? "",
       }))
     : [];
+  if (mealPlanLinks.length === 0 && data.mealPlanName && data.mealPlanUrl) {
+    mealPlanLinks = [{ label: String(data.mealPlanName), url: String(data.mealPlanUrl) }];
+  }
   const profile = {
     id: clientSnap.id,
     firstName: data.firstName ?? "",

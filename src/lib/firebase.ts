@@ -19,6 +19,12 @@ function getFirebase(): FirebaseApp {
   return initializeApp(firebaseConfig, "checkinhub");
 }
 
+/** For use in client-only code (e.g. push notifications). */
+export function getFirebaseApp(): FirebaseApp {
+  if (typeof window === "undefined") throw new Error("Firebase app is only available on the client.");
+  return getFirebase();
+}
+
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;

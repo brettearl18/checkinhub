@@ -30,6 +30,7 @@ In the Vercel project: **Settings → Environment Variables**. Add these for **P
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Project settings | |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Project settings | |
 | `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | Optional (analytics) | |
+| `NEXT_PUBLIC_FIREBASE_VAPID_KEY` or `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Your VAPID **public** key (or Firebase Console → Cloud Messaging → Web Push certificates) | Must be `NEXT_PUBLIC_*` so the client can use it. If you have `VAPID_PUBLIC_KEY` in env, set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` to the same value. Required for push. |
 
 ### Firebase Admin (server)
 

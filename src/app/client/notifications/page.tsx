@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { PushNotificationSetup } from "@/components/client/PushNotificationSetup";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateTimeDisplay } from "@/lib/format-date";
 
@@ -73,6 +74,11 @@ export default function ClientNotificationsPage() {
           {unreadCount > 0 ? `${unreadCount} unread` : "All caught up."}
         </p>
       </div>
+
+      <Card className="p-4">
+        <h2 className="text-sm font-medium text-[var(--color-text)] mb-2">Phone & browser notifications</h2>
+        <PushNotificationSetup />
+      </Card>
 
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
       {!loading && list.length === 0 && (

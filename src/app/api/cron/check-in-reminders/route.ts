@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { sendPushToUser } from "@/lib/push-server";
 import { nextMondayPerth, thisMondayPerth } from "@/lib/perth-date";
 
 const RESUMABLE_STATUSES = ["pending", "active", "overdue", "started"];
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
   }
 
   let sent = 0;
+  let pushSent = 0;
   const now = new Date();
   const title =
     type === "open"
@@ -99,7 +101,19 @@ export async function POST(request: Request) {
       createdAt: now,
     });
     sent++;
+    try {
+      const result = await sendPushToUser({
+        userId,
+        title,
+        body: message,
+        actionPath: actionUrl,
+        tag: type === "open" ? "check_in_open" : "check_in_closing",
+      });
+      pushSent += result.sent;
+    } catch {
+      // continue; in-app notification already saved
+    }
   }
 
-  return NextResponse.json({ ok: true, type, weekStart, sent });
+  return NextResponse.json({ ok: true, type, weekStart, sent, pushSent });
 }

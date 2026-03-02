@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 export const metadata: Metadata = {
   title: "CheckinHUB",
   description: "Coach–client check-in and progress platform",
+  icons: { icon: "/icon-192.png" },
 };
 
 export const viewport: Viewport = {
