@@ -615,11 +615,84 @@ export default function CoachClientSettingsPage() {
           <Card className="p-6">
             <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Meal plan</h2>
             <p className="text-sm text-[var(--color-text-muted)] mb-4">
-              Assign and manage meal plan links for this client. Choose from Hub Vana plans below or add custom links.
+              Add links (name + URL) and they’re added to this client’s list. The client sees them on their dashboard. Click &quot;Save settings&quot; when done.
             </p>
+
+            {/* Assigned list – shown first */}
             <div className="mb-4">
+              <h3 className="text-sm font-medium text-[var(--color-text)] mb-2">Assigned meal plans</h3>
+              {form.mealPlanLinks.length === 0 ? (
+                <p className="text-sm text-[var(--color-text-muted)] py-2">No meal plans yet. Add one below (or pick from the dropdown).</p>
+              ) : (
+                <ul className="space-y-2">
+                  {form.mealPlanLinks.map((link, idx) => (
+                    <li key={idx} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium text-[var(--color-text)]">{link.label || "Meal plan"}</span>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 text-sm text-[var(--color-primary)] hover:underline truncate block"
+                        >
+                          {link.url}
+                        </a>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((p) => ({
+                            ...p,
+                            mealPlanLinks: p.mealPlanLinks.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        className="text-sm text-[var(--color-error)] hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Add a link: name + URL → added to list */}
+            <h3 className="text-sm font-medium text-[var(--color-text)] mb-2">Add a link</h3>
+            <p className="text-sm text-[var(--color-text-muted)] mb-2">Enter a name and URL; it will be added to the list above.</p>
+            <div className="flex flex-wrap items-end gap-3 mb-3">
+              <input
+                type="text"
+                placeholder="Name (e.g. Week 1–4 Plan)"
+                value={newMealPlanLabel}
+                onChange={(e) => setNewMealPlanLabel(e.target.value)}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] w-48"
+              />
+              <input
+                type="url"
+                placeholder="https://..."
+                value={newMealPlanUrl}
+                onChange={(e) => setNewMealPlanUrl(e.target.value)}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] flex-1 min-w-[200px]"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const url = newMealPlanUrl.trim();
+                  if (!url) return;
+                  setForm((p) => ({ ...p, mealPlanLinks: [...p.mealPlanLinks, { label: newMealPlanLabel.trim() || "Meal plan", url }] }));
+                  setNewMealPlanLabel("");
+                  setNewMealPlanUrl("");
+                }}
+              >
+                Add to list
+              </Button>
+            </div>
+
+            {/* Predefined dropdown */}
+            <div className="pt-3 border-t border-[var(--color-border)]">
               <label htmlFor="predefined-meal-plan" className="mb-1 block text-sm font-medium text-[var(--color-text)]">
-                Select meal plan
+                Or pick from Hub Vana plans
               </label>
               <div className="flex flex-wrap items-end gap-3">
                 <select
@@ -650,74 +723,10 @@ export default function CoachClientSettingsPage() {
                     setSelectedPredefinedMealPlan("");
                   }}
                 >
-                  Assign meal plan to client
+                  Add to list
                 </Button>
               </div>
             </div>
-            <p className="text-sm text-[var(--color-text-muted)] mb-3">Or add a custom link (PDF, Notion, etc.):</p>
-            {form.mealPlanLinks.length > 0 && (
-              <ul className="mb-4 space-y-2">
-                {form.mealPlanLinks.map((link, idx) => (
-                  <li key={idx} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
-                    <div className="min-w-0 flex-1">
-                      <span className="font-medium text-[var(--color-text)]">{link.label || "Meal plan"}</span>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-2 text-sm text-[var(--color-primary)] hover:underline truncate block"
-                      >
-                        {link.url}
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setForm((p) => ({
-                          ...p,
-                          mealPlanLinks: p.mealPlanLinks.filter((_, i) => i !== idx),
-                        }))
-                      }
-                      className="text-sm text-[var(--color-error)] hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="flex flex-wrap items-end gap-3 mt-2">
-              <input
-                type="text"
-                placeholder="Label (e.g. Week 1–4 Plan)"
-                value={newMealPlanLabel}
-                onChange={(e) => setNewMealPlanLabel(e.target.value)}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] w-48"
-              />
-              <input
-                type="url"
-                placeholder="https://..."
-                value={newMealPlanUrl}
-                onChange={(e) => setNewMealPlanUrl(e.target.value)}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] flex-1 min-w-[200px]"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  const url = newMealPlanUrl.trim();
-                  if (!url) return;
-                  setForm((p) => ({ ...p, mealPlanLinks: [...p.mealPlanLinks, { label: newMealPlanLabel.trim() || "Meal plan", url }] }));
-                  setNewMealPlanLabel("");
-                  setNewMealPlanUrl("");
-                }}
-              >
-                Add link
-              </Button>
-            </div>
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              Add from the dropdown or custom link above, then click &quot;Save settings&quot; below to save.
-            </p>
           </Card>
 
           {/* Communication settings */}
