@@ -46,3 +46,11 @@
     @apply bg-[var(--color-bg)] text-[var(--color-text)];
   }
 }
+
+/* Mobile: safe area for notched devices */
+.safe-area-inset-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

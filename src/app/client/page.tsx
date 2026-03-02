@@ -183,7 +183,7 @@ export default function ClientPortalPage() {
                     <li key={a.id}>
                       <Link
                         href={`/client/check-in/${a.id}`}
-                        className="text-sm text-[var(--color-primary)] hover:underline"
+                        className="block py-1.5 text-sm text-[var(--color-primary)] hover:underline min-h-[44px] flex items-center"
                       >
                         {a.formTitle}
                         {a.reflectionWeekStart ? ` (week of ${a.reflectionWeekStart})` : ""} →
@@ -192,7 +192,7 @@ export default function ClientPortalPage() {
                   ))}
                   {assignments.length > 3 && (
                     <li>
-                      <Link href="/client/check-in/new" className="text-sm text-[var(--color-text-muted)] hover:underline">
+                      <Link href="/client/check-in/new" className="block py-1.5 text-sm text-[var(--color-text-muted)] hover:underline min-h-[44px] flex items-center">
                         +{assignments.length - 3} more…
                       </Link>
                     </li>

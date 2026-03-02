@@ -12,7 +12,7 @@ export interface CheckInQuestion {
 }
 
 export const checkInInputClass =
-  "w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
+  "w-full min-h-[44px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
 
 export function getOptionLabels(options: CheckInQuestion["options"]): string[] {
   if (!options || !Array.isArray(options)) return [];
