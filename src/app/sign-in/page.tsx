@@ -74,6 +74,10 @@ function SignInForm() {
           <Link href="/" className="text-[var(--color-primary)] hover:underline">
             Back to home
           </Link>
+          {" · "}
+          <Link href="/privacy" className="text-[var(--color-primary)] hover:underline">
+            Privacy
+          </Link>
         </p>
       </Card>
     </main>

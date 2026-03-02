@@ -42,7 +42,7 @@ In the Vercel project: **Settings → Environment Variables**. Add these for **P
 
 | Variable | Example | Notes |
 |----------|---------|--------|
-| `NEXT_PUBLIC_APP_URL` | `https://checkinhub.vercel.app` or your custom domain | Used for client onboarding invite links. If unset, Vercel uses `https://${VERCEL_URL}` automatically. |
+| `NEXT_PUBLIC_APP_URL` | `https://checkinhub-alpha.vercel.app` (or your custom domain) | Used for client onboarding invite links. Set this to your primary app URL so invite links point to the right place. If unset, Vercel uses `https://${VERCEL_URL}` automatically. |
 
 ### Stripe (if you use payments)
 
@@ -61,10 +61,14 @@ In the Vercel project: **Settings → Environment Variables**. Add these for **P
 
 ## 3. Firebase: allow your Vercel domain
 
-1. Firebase Console → **Authentication** → **Settings** → **Authorized domains**.
-2. Add:
-   - `*.vercel.app` (for default Vercel URLs), and/or
-   - Your custom domain (e.g. `checkinhub.yourdomain.com`).
+Firebase Auth only allows requests from domains you list. If you skip this step, you’ll see:  
+`auth/requests-from-referer-https://your-domain-are-blocked`.
+
+1. Open [Firebase Console](https://console.firebase.google.com) → your project → **Authentication** → **Settings** (tab) → **Authorized domains**.
+2. Click **Add domain** and add **each** domain your app uses (Firebase does not support wildcards like `*.vercel.app`):
+   - Your app URL, e.g. `checkinhub-alpha.vercel.app`
+   - Any other Vercel deployment URLs you use (e.g. preview branches)
+   - Your custom domain if you add one later (e.g. `app.checkinhub.com`)
 
 Without this, sign-in and redirects will be blocked.
 
@@ -80,7 +84,7 @@ Without this, sign-in and redirects will be blocked.
 
 ## 5. After first deploy
 
-- **Stripe webhooks:** In Stripe, create a webhook for production with URL `https://<your-vercel-url>/api/webhooks/stripe` and set `STRIPE_WEBHOOK_SECRET` to the signing secret.
+- **Stripe webhooks:** In Stripe, create a webhook for production with URL `https://checkinhub-alpha.vercel.app/api/webhooks/stripe` and set `STRIPE_WEBHOOK_SECRET` to the signing secret.
 - **Custom domain (optional):** In Vercel → Project → **Settings → Domains**, add your domain and follow DNS instructions.
 - **Cron:** If you use Vercel Cron (Pro plan), add a `vercel.json` schedule for `/api/cron/check-in-reminders`. Otherwise call that URL from an external cron (e.g. cron-job.org) with `Authorization: Bearer <CRON_SECRET>`.
 

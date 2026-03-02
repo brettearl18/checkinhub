@@ -107,7 +107,8 @@ export default function ClientLayout({
             <NavLink key={href} href={href} label={label} active={isActive(href)} />
           ))}
         </nav>
-        <div className="border-t border-[var(--color-border)] p-3">
+        <div className="border-t border-[var(--color-border)] p-3 space-y-0.5">
+          <NavLink href="/privacy" label="Privacy" active={pathname === "/privacy"} />
           <Button
             variant="ghost"
             className="w-full justify-start text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text)] min-h-[44px]"
@@ -202,7 +203,13 @@ export default function ClientLayout({
                   />
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+              <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-0.5">
+                <NavLink
+                  href="/privacy"
+                  label="Privacy"
+                  active={pathname === "/privacy"}
+                  onClick={() => setDrawerOpen(false)}
+                />
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-[var(--color-text-secondary)] min-h-[48px]"
