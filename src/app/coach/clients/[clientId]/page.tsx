@@ -197,9 +197,12 @@ export default function CoachClientCheckInsPage() {
             {clientName ?? "Client"} – Check-ins
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary">
             <Link href={`/coach/clients/${clientId}/progress`}>Progress</Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href={`/coach/clients/${clientId}/habits`}>Habits</Link>
           </Button>
           <Button asChild variant="secondary">
             <Link href={`/coach/clients/${clientId}/settings`}>Settings</Link>

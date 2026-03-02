@@ -259,6 +259,28 @@ export default function ClientPortalPage() {
         </Card>
       </section>
 
+      {/* Habit Tracker – prominent so push notifications can deep-link here */}
+      <section className="mt-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
+          Habits
+        </h2>
+        <Card className="overflow-hidden border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+          <div className="p-6 sm:p-8">
+            <p className="text-lg font-semibold text-[var(--color-text)]">
+              Habit tracker
+            </p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Steps, hydration, sleep. Log today and keep your streak.
+            </p>
+            <div className="mt-5">
+              <Button asChild variant="primary">
+                <Link href="/client/habits">Open Habit Tracker</Link>
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </section>
+
       {/* To do, Payments, Meal plan: compact cards */}
       {!authError && !loading && (
         <section className="mt-8">
