@@ -90,6 +90,11 @@ export async function POST(
   if (!responseSnap.exists || (responseSnap.data() as { clientId?: string }).clientId !== clientId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  const responseData = responseSnap.data() as {
+    clientId?: string;
+    coachResponded?: boolean;
+    assignmentId?: string;
+  };
 
   const now = new Date();
   const ref = await db.collection("coachFeedback").add({
@@ -102,5 +107,61 @@ export async function POST(
     createdAt: now,
     updatedAt: now,
   });
+
+  // First feedback: set coachResponded on formResponses and linked assignment; notify client.
+  const isFirstFeedback = !responseData.coachResponded;
+  if (isFirstFeedback) {
+    const responseRef = db.collection("formResponses").doc(responseId);
+    await responseRef.update({
+      coachResponded: true,
+      coachRespondedAt: now,
+      feedbackStatus: "responded",
+      updatedAt: now,
+    });
+    const assignmentId = responseData.assignmentId;
+    if (assignmentId) {
+      const assignRef = db.collection("check_in_assignments").doc(assignmentId);
+      await assignRef.update({
+        coachResponded: true,
+        coachRespondedAt: now,
+        workflowStatus: "responded",
+        updatedAt: now,
+      });
+    } else {
+      const assignSnap = await db
+        .collection("check_in_assignments")
+        .where("responseId", "==", responseId)
+        .limit(1)
+        .get();
+      if (!assignSnap.empty) {
+        await assignSnap.docs[0].ref.update({
+          coachResponded: true,
+          coachRespondedAt: now,
+          workflowStatus: "responded",
+          updatedAt: now,
+        });
+      }
+    }
+    // In-app notification for client: coach feedback available.
+    const clientSnap = await db.collection("clients").doc(clientId).get();
+    const clientData = clientSnap.exists ? (clientSnap.data() as { authUid?: string; email?: string }) : null;
+    let userId: string | null = clientData?.authUid ?? null;
+    if (!userId && clientData?.email) {
+      const usersSnap = await db.collection("users").where("email", "==", clientData.email).limit(1).get();
+      if (!usersSnap.empty) userId = usersSnap.docs[0].id;
+    }
+    if (!userId) userId = clientId;
+    await db.collection("notifications").add({
+      userId,
+      type: "coach_feedback",
+      title: "Coach feedback available",
+      message: "Your coach has added feedback to your check-in. Tap to view.",
+      actionUrl: `/client/response/${responseId}`,
+      metadata: { responseId, clientId },
+      isRead: false,
+      createdAt: now,
+    });
+  }
+
   return NextResponse.json({ id: ref.id });
 }

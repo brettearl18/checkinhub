@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 import { computeScore, getScoreBand } from "@/lib/check-in-score";
 import { resolveThresholds, BAND_LABELS } from "@/lib/scoring-utils";
 
@@ -51,6 +52,17 @@ export async function POST(request: Request) {
   }
   if (assignmentData.responseId) {
     return NextResponse.json({ error: "Already submitted" }, { status: 400 });
+  }
+
+  const reflectionWeekStart = assignmentData.reflectionWeekStart as string | undefined;
+  if (reflectionWeekStart) {
+    const thisMonday = thisMondayPerth();
+    if (reflectionWeekStart >= thisMonday && !isWeekOpenPerth(reflectionWeekStart)) {
+      return NextResponse.json(
+        { error: "This check-in opens Friday 9am Perth. Please submit then." },
+        { status: 403 }
+      );
+    }
   }
 
   const formId = assignmentData.formId as string;

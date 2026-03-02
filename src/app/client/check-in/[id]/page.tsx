@@ -45,7 +45,10 @@ export default function CheckInFormPage() {
       try {
         const res = await fetchWithAuth(`/api/check-in/${assignmentId}`);
         if (!res.ok) {
-          if (res.status === 404) setError("Check-in not found.");
+          const body = await res.json().catch(() => ({}));
+          const message = typeof body?.error === "string" ? body.error : null;
+          if (res.status === 404) setError(message ?? "Check-in not found.");
+          else if (res.status === 403) setError(message ?? "This check-in is not open yet.");
           else setError("Could not load check-in.");
           return;
         }

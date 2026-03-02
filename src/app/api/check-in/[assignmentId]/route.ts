@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
 export async function GET(
   request: Request,
@@ -36,6 +37,22 @@ export async function GET(
   const assignmentData = assignmentSnap.data()!;
   if (assignmentData.clientId !== clientId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const reflectionWeekStart = assignmentData.reflectionWeekStart as string | undefined;
+  if (reflectionWeekStart) {
+    const thisMonday = thisMondayPerth();
+    if (reflectionWeekStart >= thisMonday && !isWeekOpenPerth(reflectionWeekStart)) {
+      const [y, m, d] = reflectionWeekStart.split("-").map(Number);
+      const mon = new Date(y, m - 1, d);
+      const fri = new Date(mon);
+      fri.setDate(mon.getDate() + 4);
+      const friStr = fri.toISOString().slice(0, 10);
+      return NextResponse.json(
+        { error: `This check-in opens Friday 9am Perth (${friStr}). Please come back then.` },
+        { status: 403 }
+      );
+    }
   }
 
   const formId = assignmentData.formId as string;

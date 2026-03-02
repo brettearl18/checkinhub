@@ -60,7 +60,7 @@ export default function CoachCheckInsPage() {
     setLoading(true);
     setAuthError(false);
     try {
-      const res = await fetchWithAuth("/api/coach/dashboard");
+      const res = await fetchWithAuth("/api/coach/check-ins");
       if (res.status === 401) {
         setAuthError(true);
         return;
@@ -68,7 +68,10 @@ export default function CoachCheckInsPage() {
       if (res.ok) {
         const data = await res.json();
         setOverview({
-          ...data,
+          needsResponse: data.needsResponse ?? 0,
+          activeClients: 0,
+          formsCount: 0,
+          completedThisWeek: 0,
           toReview: data.toReview ?? [],
           completed: data.completed ?? [],
         });

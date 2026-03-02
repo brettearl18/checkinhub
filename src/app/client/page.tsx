@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateTimeDisplay } from "@/lib/format-date";
+import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
 interface Assignment {
   id: string;
@@ -30,6 +32,15 @@ interface ProgressImage {
   imageUrl: string;
   caption: string | null;
   uploadedAt: string | null;
+}
+
+interface RecentResponse {
+  id: string;
+  formTitle: string;
+  completedAt: string | null;
+  responseId: string | null;
+  score: number | null;
+  readByClient?: boolean;
 }
 
 const QUICK_LINKS = [
@@ -62,22 +73,35 @@ export default function ClientPortalPage() {
   const { fetchWithAuth } = useApiClient();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [recentResponses, setRecentResponses] = useState<RecentResponse[]>([]);
   const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Only show assignments in TO DO when the week has opened (Friday 9am Perth for this/next week).
+  const openAssignments = useMemo(() => {
+    const thisMonday = thisMondayPerth();
+    return assignments.filter(
+      (a) =>
+        !a.reflectionWeekStart ||
+        a.reflectionWeekStart < thisMonday ||
+        isWeekOpenPerth(a.reflectionWeekStart)
+    );
+  }, [assignments]);
 
   const loadData = async () => {
     setLoading(true);
     setAuthError(false);
     setError(null);
     try {
-      const [profileRes, assignmentsRes, imagesRes] = await Promise.all([
+      const [profileRes, assignmentsRes, historyRes, imagesRes] = await Promise.all([
         fetchWithAuth("/api/client/profile"),
         fetchWithAuth("/api/check-in/assignments"),
+        fetchWithAuth("/api/client/history"),
         fetchWithAuth("/api/client/progress-images"),
       ]);
-      if (profileRes.status === 401 || assignmentsRes.status === 401 || imagesRes.status === 401) {
+      if (profileRes.status === 401 || assignmentsRes.status === 401 || historyRes.status === 401 || imagesRes.status === 401) {
         setAuthError(true);
         return;
       }
@@ -95,6 +119,22 @@ export default function ClientPortalPage() {
       } else {
         const body = await assignmentsRes.json().catch(() => ({}));
         setError((body && typeof body.error === "string") ? body.error : "Could not load check-ins.");
+      }
+      if (historyRes.ok) {
+        const history = await historyRes.json();
+        const list = Array.isArray(history) ? history : [];
+        setRecentResponses(
+          list.slice(0, 2).map((item: { id: string; formTitle?: string; completedAt?: string | null; responseId?: string | null; score?: number | null; readByClient?: boolean }) => ({
+            id: item.id,
+            formTitle: item.formTitle ?? "Check-in",
+            completedAt: item.completedAt ?? null,
+            responseId: item.responseId ?? null,
+            score: item.score ?? null,
+            readByClient: item.readByClient === true,
+          }))
+        );
+      } else {
+        setRecentResponses([]);
       }
       if (imagesRes.ok) {
         const list = await imagesRes.json();
@@ -134,6 +174,60 @@ export default function ClientPortalPage() {
         </div>
       </header>
 
+      {/* Recent check-in responses – prominent, right under hero */}
+      {!authError && !loading && recentResponses.length > 0 && (
+        <section className="mt-6">
+          <Card className="overflow-hidden border-2 border-[var(--color-primary-muted)] bg-gradient-to-br from-[var(--color-primary-subtle)]/80 to-[var(--color-bg-elevated)]">
+            <div className="p-5 sm:p-6">
+              <h2 className="text-lg font-semibold text-[var(--color-text)] sm:text-xl">
+                Your recent check-in responses
+              </h2>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                View your answers and coach feedback
+              </p>
+              <ul className="mt-4 space-y-3">
+                {recentResponses.map((r) => (
+                  <li key={r.id}>
+                    <Link
+                      href={r.responseId ? `/client/response/${r.responseId}` : "/client/history"}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-4 text-left transition-all hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-subtle)]/50 hover:shadow-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold text-[var(--color-text)]">{r.formTitle}</span>
+                        {r.responseId && !r.readByClient && (
+                          <span className="ml-2 rounded bg-[var(--color-primary)] px-1.5 py-0.5 text-xs font-medium text-white">
+                            New
+                          </span>
+                        )}
+                        {r.completedAt && (
+                          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                            {formatDateTimeDisplay(r.completedAt)}
+                          </p>
+                        )}
+                        {typeof r.score === "number" && (
+                          <p className="mt-1 text-sm font-medium text-[var(--color-text-secondary)]">
+                            Score: {r.score}%
+                          </p>
+                        )}
+                      </div>
+                      <span className="flex-shrink-0 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary)]/90">
+                        {r.responseId ? "View response →" : "View history →"}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/client/history"
+                className="mt-4 inline-block text-sm font-semibold text-[var(--color-primary)] hover:underline"
+              >
+                View all check-in history →
+              </Link>
+            </div>
+          </Card>
+        </section>
+      )}
+
       {/* Primary action: check-in */}
       <section className="mt-8">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
@@ -142,22 +236,22 @@ export default function ClientPortalPage() {
         <Card className="overflow-hidden border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
           <div className="p-6 sm:p-8">
             <p className="text-lg font-semibold text-[var(--color-text)]">
-              {assignments.length > 0
-                ? "Pick up where you left off"
+              {openAssignments.length > 0
+                ? "You have a check-in to complete"
                 : "Start your check-in"}
             </p>
             <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              {assignments.length > 0
-                ? "A few minutes to reflect and stay on track."
+              {openAssignments.length > 0
+                ? "Complete your open check-in below, or start a new one from the week picker."
                 : "A quick reflection to keep your momentum going."}
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Button asChild variant="primary" size="default">
                 <Link href="/client/check-in/new">New check-in</Link>
               </Button>
-              {assignments.length > 0 && (
+              {openAssignments.length > 0 && (
                 <span className="flex items-center text-sm text-[var(--color-text-muted)]">
-                  or resume one below
+                  or open one from the list below
                 </span>
               )}
             </div>
@@ -169,17 +263,17 @@ export default function ClientPortalPage() {
       {!authError && !loading && (
         <section className="mt-8">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {/* To do – only when check-ins are open */}
-            {assignments.length > 0 && (
+            {/* To do – only when check-ins are open (week has opened, e.g. Friday 9am Perth for this/next week) */}
+            {openAssignments.length > 0 && (
               <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
                   To do
                 </h3>
                 <p className="text-sm text-[var(--color-text-secondary)] mb-2">
-                  {assignments.length} check-in{assignments.length !== 1 ? "s" : ""} open
+                  {openAssignments.length} check-in{openAssignments.length !== 1 ? "s" : ""} open
                 </p>
                 <ul className="space-y-1.5">
-                  {assignments.slice(0, 3).map((a) => (
+                  {openAssignments.slice(0, 3).map((a) => (
                     <li key={a.id}>
                       <Link
                         href={`/client/check-in/${a.id}`}
@@ -190,10 +284,10 @@ export default function ClientPortalPage() {
                       </Link>
                     </li>
                   ))}
-                  {assignments.length > 3 && (
+                  {openAssignments.length > 3 && (
                     <li>
                       <Link href="/client/check-in/new" className="block py-1.5 text-sm text-[var(--color-text-muted)] hover:underline min-h-[44px] flex items-center">
-                        +{assignments.length - 3} more…
+                        +{openAssignments.length - 3} more…
                       </Link>
                     </li>
                   )}

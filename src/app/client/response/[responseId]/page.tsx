@@ -30,9 +30,23 @@ export default function ClientViewResponsePage() {
   } | null>(null);
   const [questions, setQuestions] = useState<Array<{ id: string; text: string }>>([]);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
+  const [reviewDetails, setReviewDetails] = useState<{
+    whereResponded: string[];
+    notes: string | null;
+    progressRating: number | null;
+    reviewedAt: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const WHERE_LABELS: Record<string, string> = {
+    whatsapp: "WhatsApp",
+    phone_call: "Phone Call",
+    email: "Email",
+    checkinhub: "CheckinHub",
+    other: "Other",
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +68,7 @@ export default function ClientViewResponsePage() {
           setResponse(data.response ?? null);
           setQuestions(Array.isArray(data.questions) ? data.questions : []);
           setFeedback(Array.isArray(data.feedback) ? data.feedback : []);
+          setReviewDetails(data.reviewDetails ?? null);
         }
       } catch {
         if (!cancelled) setError("Could not load response.");
@@ -63,6 +78,12 @@ export default function ClientViewResponsePage() {
     })();
     return () => { cancelled = true; };
   }, [fetchWithAuth, responseId]);
+
+  // Mark as read when the client views this response
+  useEffect(() => {
+    if (!response || loading) return;
+    fetchWithAuth(`/api/client/responses/${responseId}/read`, { method: "POST" }).catch(() => {});
+  }, [response, loading, responseId, fetchWithAuth]);
 
   const byId = Object.fromEntries(questions.map((q) => [q.id, q]));
   const feedbackByQuestion = (qId: string | null) =>
@@ -174,6 +195,32 @@ export default function ClientViewResponsePage() {
               {feedbackByQuestion(null).map((f) => (
                 <p key={f.id} className="text-[var(--color-text)]">{f.content}</p>
               ))}
+            </div>
+          )}
+
+          {reviewDetails && (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
+              <h3 className="text-sm font-medium text-[var(--color-text)] mb-2">Coach review summary</h3>
+              {reviewDetails.reviewedAt && (
+                <p className="text-xs text-[var(--color-text-muted)] mb-2">
+                  Reviewed {formatDateTimeDisplay(reviewDetails.reviewedAt)}
+                </p>
+              )}
+              {reviewDetails.whereResponded.length > 0 && (
+                <p className="text-sm text-[var(--color-text)] mb-1">
+                  <span className="text-[var(--color-text-muted)]">Where they responded: </span>
+                  {reviewDetails.whereResponded.map((k) => WHERE_LABELS[k] || k).join(", ")}
+                </p>
+              )}
+              {reviewDetails.progressRating != null && (
+                <p className="text-sm text-[var(--color-text)] mb-1">
+                  <span className="text-[var(--color-text-muted)]">Progress rating: </span>
+                  {reviewDetails.progressRating}/10
+                </p>
+              )}
+              {reviewDetails.notes && (
+                <p className="text-sm text-[var(--color-text)] mt-2">{reviewDetails.notes}</p>
+              )}
             </div>
           )}
           </Card>

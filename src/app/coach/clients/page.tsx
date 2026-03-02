@@ -64,14 +64,19 @@ export default function CoachClientsListPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <Link href="/coach" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Dashboard
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Clients</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Your client list. Open a client to view check-ins, add feedback, or assign a check-in.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link href="/coach" className="text-sm text-[var(--color-primary)] hover:underline">
+            ← Dashboard
+          </Link>
+          <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Clients</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            Your client list. Open a client to view check-ins, add feedback, or assign a check-in.
+          </p>
+        </div>
+        <Button asChild variant="primary">
+          <Link href="/coach/clients/new">Add new client</Link>
+        </Button>
       </div>
 
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
@@ -79,7 +84,9 @@ export default function CoachClientsListPage() {
       {!loading && clients.length === 0 && (
         <EmptyState
           title="No clients yet"
-          description="Clients assigned to you will appear here."
+          description="Add your first client to get started."
+          actionLabel="Add new client"
+          actionHref="/coach/clients/new"
         />
       )}
 

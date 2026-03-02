@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
+import { isWeekOpenPerth } from "@/lib/perth-date";
 
 export interface WeekOption {
   reflectionWeekStart: string; // Monday YYYY-MM-DD
@@ -47,6 +48,12 @@ interface WeekCalendarProps {
   resolving?: boolean;
 }
 
+/** Today in local YYYY-MM-DD for highlighting the current day. */
+function getTodayLocal(): string {
+  const d = new Date();
+  return toLocalDateString(d);
+}
+
 export function WeekCalendar({
   weeks,
   completedWeekStarts,
@@ -55,6 +62,7 @@ export function WeekCalendar({
   disabled = false,
   resolving = false,
 }: WeekCalendarProps) {
+  const todayLocal = getTodayLocal();
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
@@ -64,12 +72,13 @@ export function WeekCalendar({
         {weeks.map((w) => {
           const done = completedWeekStarts.includes(w.reflectionWeekStart);
           const inProgress = inProgressWeekStarts.includes(w.reflectionWeekStart);
-          const pending = w.isNextWeek === true;
+          const thisWeekNotYetOpen = w.isThisWeek === true && !isWeekOpenPerth(w.reflectionWeekStart);
+          const pending = w.isNextWeek === true || thisWeekNotYetOpen;
           const isDisabled = done || pending || disabled || resolving;
           const days = getWeekDays(w.reflectionWeekStart);
           const sunday = days[6];
           const weekRangeLabel = `${formatDateDisplay(w.reflectionWeekStart)} – ${formatDateDisplay(sunday.date)}`;
-          const fridayDate = pending ? getFridayOfWeek(w.reflectionWeekStart) : null;
+          const fridayDate = pending ? getFridayOfWeek(w.reflectionWeekStart) : null; // Friday of that week for "opens Fri 9am"
           const outstanding = !done && !pending;
 
           const rowBg =
@@ -118,20 +127,28 @@ export function WeekCalendar({
                 )}
               </div>
               <div className="flex flex-wrap gap-1 px-3 py-2">
-                {days.map((day) => (
-                  <span
-                    key={day.date}
-                    className="inline-flex min-w-[2.25rem] flex-col items-center rounded bg-black/5 px-1.5 py-1 text-center dark:bg-white/10"
-                    aria-hidden
-                  >
-                    <span className="text-[10px] font-medium text-[var(--color-text-muted)]">
-                      {day.dayLabel}
+                {days.map((day) => {
+                  const isToday = day.date === todayLocal;
+                  return (
+                    <span
+                      key={day.date}
+                      className={`inline-flex min-w-[2.25rem] flex-col items-center rounded px-1.5 py-1 text-center ${
+                        isToday
+                          ? "bg-[var(--color-primary)]/25 ring-2 ring-[var(--color-primary)] dark:bg-[var(--color-primary)]/30"
+                          : "bg-black/5 dark:bg-white/10"
+                      }`}
+                      aria-hidden={!isToday}
+                      aria-current={isToday ? "date" : undefined}
+                    >
+                      <span className={`text-[10px] font-medium ${isToday ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}`}>
+                        {day.dayLabel}
+                      </span>
+                      <span className={`text-sm font-semibold tabular-nums ${isToday ? "text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
+                        {day.display.split(" ")[1]}
+                      </span>
                     </span>
-                    <span className="text-sm font-semibold tabular-nums text-[var(--color-text)]">
-                      {day.display.split(" ")[1]}
-                    </span>
-                  </span>
-                ))}
+                  );
+                })}
               </div>
             </button>
           );

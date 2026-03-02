@@ -106,9 +106,27 @@ export async function GET(
     band,
     message,
     submittedAt: toDate(responseData.submittedAt) ?? toDate(responseData.createdAt),
+    readByClient: (responseData as { readByClient?: boolean }).readByClient === true,
   };
 
-  return NextResponse.json({ response, questions, feedback });
+  const reviewedByCoach = (responseData as { reviewedByCoach?: boolean }).reviewedByCoach === true;
+  let reviewDetails: { whereResponded: string[]; notes: string | null; progressRating: number | null; reviewedAt: string | null } | null = null;
+  if (reviewedByCoach) {
+    const rd = responseData as {
+      reviewWhereResponded?: string[];
+      reviewNotes?: string;
+      reviewProgressRating?: number;
+      reviewedAt?: unknown;
+    };
+    reviewDetails = {
+      whereResponded: Array.isArray(rd.reviewWhereResponded) ? rd.reviewWhereResponded : [],
+      notes: typeof rd.reviewNotes === "string" ? rd.reviewNotes : null,
+      progressRating: typeof rd.reviewProgressRating === "number" ? rd.reviewProgressRating : null,
+      reviewedAt: toDate(rd.reviewedAt),
+    };
+  }
+
+  return NextResponse.json({ response, questions, feedback, reviewDetails });
 }
 
 /** PATCH: client updates their own response (edit check-in); recalculates score. */

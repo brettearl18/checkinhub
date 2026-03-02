@@ -97,11 +97,15 @@ export async function GET(
     formId: responseData.formId,
     formTitle: responseData.formTitle,
     clientId: responseData.clientId,
-    responses: responseData.responses as Array<{ questionId: string; answer: string | number | string[]; score?: number }>,
+    responses: responseData.responses as Array<{ questionId: string; answer: string | number | string[]; score?: number; notes?: string }>,
     score,
     band,
     message,
     submittedAt: toDate(responseData.submittedAt) ?? toDate(responseData.createdAt),
+    coachResponded: !!(responseData as { coachResponded?: boolean }).coachResponded,
+    coachRespondedAt: toDate((responseData as { coachRespondedAt?: unknown }).coachRespondedAt),
+    reviewedByCoach: !!(responseData as { reviewedByCoach?: boolean }).reviewedByCoach,
+    reviewedAt: toDate((responseData as { reviewedAt?: unknown }).reviewedAt),
   };
 
   return NextResponse.json({ response, form, questions });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -120,6 +120,32 @@ export default function CoachClientSettingsPage() {
   const [billingHistoryLoading, setBillingHistoryLoading] = useState(false);
   const [paymentHistoryExpanded, setPaymentHistoryExpanded] = useState(false);
   const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
+  const [allocationForms, setAllocationForms] = useState<{ id: string; title?: string }[]>([]);
+  const [allocationAssignments, setAllocationAssignments] = useState<{ id: string; formTitle: string; formId: string; status: string; reflectionWeekStart: string | null; responseId: string | null }[]>([]);
+  const [assignFormId, setAssignFormId] = useState("");
+  const [assignWeek, setAssignWeek] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+
+  const allocationWeekOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [];
+    const today = new Date();
+    for (let i = -2; i <= 1; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + 7 * i);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const m = new Date(d);
+      m.setDate(diff);
+      const monday = m.toISOString().slice(0, 10);
+      const [y, mo, dayNum] = monday.split("-").map(Number);
+      const end = new Date(y, mo - 1, dayNum);
+      end.setDate(end.getDate() + 6);
+      const endStr = end.toISOString().slice(0, 10);
+      options.push({ value: monday, label: `${formatDateDisplay(monday)} – ${formatDateDisplay(endStr)}` });
+    }
+    return options;
+  }, []);
 
   useEffect(() => {
     if (!clientId) return;
@@ -168,6 +194,61 @@ export default function CoachClientSettingsPage() {
       }
     })();
   }, [clientId, fetchWithAuth]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    (async () => {
+      try {
+        const [formsRes, checkInsRes] = await Promise.all([
+          fetchWithAuth("/api/coach/forms"),
+          fetchWithAuth(`/api/coach/clients/${clientId}/check-ins`),
+        ]);
+        if (formsRes.ok) {
+          const data = await formsRes.json();
+          setAllocationForms(Array.isArray(data) ? data : []);
+        }
+        if (checkInsRes.ok) {
+          const data = await checkInsRes.json();
+          setAllocationAssignments(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        // non-fatal
+      }
+    })();
+  }, [clientId, fetchWithAuth]);
+
+  const handleAssignCheckIn = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!assignFormId || !assignWeek) return;
+    setAssigning(true);
+    setAssignError(null);
+    try {
+      const res = await fetchWithAuth(`/api/coach/clients/${clientId}/assignments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formId: assignFormId, reflectionWeekStart: assignWeek }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAssignError(data.message ?? "Failed to assign check-in.");
+        return;
+      }
+      setAssignError(null);
+      const newRow = {
+        id: data.assignmentId ?? "",
+        formTitle: allocationForms.find((f) => f.id === assignFormId)?.title ?? "Check-in",
+        formId: assignFormId,
+        status: "pending",
+        reflectionWeekStart: assignWeek,
+        responseId: null,
+      };
+      setAllocationAssignments((prev) => [newRow, ...prev]);
+      setAssignFormId("");
+      setAssignWeek("");
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   // Load payment history when client has a Stripe customer linked
   useEffect(() => {
@@ -360,6 +441,81 @@ export default function CoachClientSettingsPage() {
                 </select>
               </div>
             </div>
+          </Card>
+
+          {/* Check-in allocation */}
+          <Card className="p-6">
+            <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Check-in allocation</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
+              Choose a check-in form and the first week this client&apos;s check-ins start (week beginning Monday). You can also assign from the client&apos;s Check-ins tab.
+            </p>
+            <div className="flex flex-wrap items-end gap-3 mb-4">
+              <div className="min-w-[200px]">
+                <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">Form</label>
+                <select
+                  value={assignFormId}
+                  onChange={(e) => setAssignFormId(e.target.value)}
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                >
+                  <option value="">Select form</option>
+                  {allocationForms.map((f) => (
+                    <option key={f.id} value={f.id}>{f.title ?? f.id}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-[220px]">
+                <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">First week check-ins start</label>
+                <select
+                  value={assignWeek}
+                  onChange={(e) => setAssignWeek(e.target.value)}
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                >
+                  <option value="">Select week</option>
+                  {allocationWeekOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                type="button"
+                onClick={() => handleAssignCheckIn()}
+                disabled={!assignFormId || !assignWeek || assigning}
+              >
+                {assigning ? "Assigning…" : "Assign check-in"}
+              </Button>
+            </div>
+            {assignError && (
+              <p className="text-sm text-[var(--color-error)] mb-4" role="alert">{assignError}</p>
+            )}
+            {allocationAssignments.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-[var(--color-text)] mb-2">Current assignments</p>
+                <ul className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
+                  {allocationAssignments.map((a) => (
+                    <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="text-[var(--color-text)]">{a.formTitle}</span>
+                      <span className="text-[var(--color-text-muted)]">
+                        {a.reflectionWeekStart ? formatDateDisplay(a.reflectionWeekStart) : "—"}
+                      </span>
+                      <span className="capitalize text-[var(--color-text-muted)]">{a.status}</span>
+                      {a.responseId && (
+                        <Link
+                          href={`/coach/clients/${clientId}/responses/${a.responseId}`}
+                          className="text-[var(--color-primary)] hover:underline"
+                        >
+                          View response
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                  <Link href={`/coach/clients/${clientId}`} className="text-[var(--color-primary)] hover:underline">
+                    Manage all check-ins →
+                  </Link>
+                </p>
+              </div>
+            )}
           </Card>
 
           {/* Traffic light thresholds */}

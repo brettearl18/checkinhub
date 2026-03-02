@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateTimeDisplay } from "@/lib/format-date";
 
 interface Profile {
   id: string;
@@ -19,9 +20,20 @@ interface Profile {
   profilePersonalization: { quote: string | null; showQuote: boolean; colorTheme: string; icon: string | null };
 }
 
+interface CoachReview {
+  responseId: string;
+  formTitle: string;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  whereResponded: string[];
+  notes: string | null;
+  progressRating: number | null;
+}
+
 export default function ClientProfilePage() {
   const { fetchWithAuth } = useApiClient();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [coachReviews, setCoachReviews] = useState<CoachReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [authError, setAuthError] = useState(false);
@@ -58,9 +70,25 @@ export default function ClientProfilePage() {
     }
   };
 
+  const loadCoachReviews = async () => {
+    try {
+      const res = await fetchWithAuth("/api/client/coach-reviews");
+      if (res.ok) {
+        const data = await res.json();
+        setCoachReviews(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     loadProfile();
   }, [fetchWithAuth]);
+
+  useEffect(() => {
+    if (profile) loadCoachReviews();
+  }, [profile, fetchWithAuth]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +151,52 @@ export default function ClientProfilePage() {
           </Link>
         </div>
       </Card>
+
+      {coachReviews.length > 0 && (
+        <Card className="p-6">
+          <h2 className="text-lg font-medium text-[var(--color-text)] mb-3">Coach feedback on your check-ins</h2>
+          <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+            Where your coach responded, notes, and how they rated your progress.
+          </p>
+          <ul className="space-y-4">
+            {coachReviews.map((r) => (
+              <li key={r.responseId} className="border-b border-[var(--color-border)] pb-4 last:border-0 last:pb-0">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                  <span className="font-medium text-[var(--color-text)]">{r.formTitle}</span>
+                  <Link
+                    href={`/client/response/${r.responseId}`}
+                    className="text-sm text-[var(--color-primary)] hover:underline"
+                  >
+                    View response →
+                  </Link>
+                </div>
+                {r.reviewedAt && (
+                  <p className="text-xs text-[var(--color-text-muted)] mb-2">
+                    Reviewed {formatDateTimeDisplay(r.reviewedAt)}
+                  </p>
+                )}
+                {r.whereResponded.length > 0 && (
+                  <p className="text-sm text-[var(--color-text)] mb-1">
+                    <span className="text-[var(--color-text-muted)]">Where they responded: </span>
+                    {r.whereResponded.join(", ")}
+                  </p>
+                )}
+                {r.progressRating != null && (
+                  <p className="text-sm text-[var(--color-text)] mb-1">
+                    <span className="text-[var(--color-text-muted)]">Progress rating: </span>
+                    {r.progressRating}/10
+                  </p>
+                )}
+                {r.notes && (
+                  <p className="text-sm text-[var(--color-text)] mt-2 rounded bg-[var(--color-bg-elevated)] p-2">
+                    {r.notes}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card className="p-6">
         <h2 className="text-lg font-medium text-[var(--color-text)] mb-3">Personal details</h2>

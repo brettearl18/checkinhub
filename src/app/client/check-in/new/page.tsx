@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { WeekCalendar, type WeekOption } from "@/components/client/WeekCalendar";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
+import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
 const WEEK_RANGE = { past: 2, future: 1 }; // include next week as pending (opens Friday 9am)
 
@@ -64,18 +65,37 @@ export default function NewCheckInPage() {
 
   const weekOptions = getWeekOptions();
 
+  const openWeeks = weekOptions.filter(
+    (w) => w.reflectionWeekStart < thisMondayPerth() || isWeekOpenPerth(w.reflectionWeekStart)
+  );
+  const allOpenWeeksDone =
+    openWeeks.length > 0 && openWeeks.every((w) => completedWeeks.includes(w.reflectionWeekStart));
+
+  // Only show forms this client has been assigned (from their check-in assignments).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoadingForms(true);
       try {
-        const res = await fetchWithAuth("/api/forms");
+        const res = await fetchWithAuth("/api/check-in/assignments");
         if (!res.ok) {
-          if (!cancelled) setError("Could not load forms.");
+          if (!cancelled) setError("Could not load check-ins.");
           return;
         }
         const data = await res.json();
-        if (!cancelled) setForms(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        const byFormId = new Map<string, FormItem>();
+        list.forEach((a: { formId: string; formTitle?: string }) => {
+          if (a.formId && !byFormId.has(a.formId)) {
+            byFormId.set(a.formId, {
+              id: a.formId,
+              title: a.formTitle ?? "Check-in",
+              description: undefined,
+              category: undefined,
+            });
+          }
+        });
+        if (!cancelled) setForms(Array.from(byFormId.values()));
       } finally {
         if (!cancelled) setLoadingForms(false);
       }
@@ -167,7 +187,7 @@ export default function NewCheckInPage() {
           )}
           {!loadingForms && forms.length === 0 && (
             <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-              No forms available.
+              No check-ins assigned yet. Your coach will assign check-ins for you—check back later or ask them to add one in Client settings.
             </p>
           )}
           {!loadingForms && forms.length > 0 && (
@@ -215,11 +235,16 @@ export default function NewCheckInPage() {
               Choose week
             </h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-              Select the week you’re checking in for. Last 2 weeks, this week, and next week (opens Friday 9am).
+              Select the week you’re checking in for. Past weeks are always available; this week and next week open Friday 9am Perth so you review the week that's just passed.
             </p>
             {loadingWeeks && (
               <p className="mt-4 text-sm text-[var(--color-text-muted)]">
                 Loading…
+              </p>
+            )}
+            {!loadingWeeks && allOpenWeeksDone && (
+              <p className="mt-4 rounded-lg bg-green-100 dark:bg-green-900/30 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200" role="status">
+                You are up to date — well done!
               </p>
             )}
             {!loadingWeeks && (

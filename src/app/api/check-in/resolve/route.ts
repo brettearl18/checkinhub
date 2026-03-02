@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
 // reflectionWeekStart = Monday YYYY-MM-DD
 function nextMondayAfter(date: Date): string {
@@ -36,6 +37,15 @@ export async function POST(request: Request) {
   if (!isAdminConfigured()) {
     const mockId = `mock-assignment-${formId}-${reflectionWeekStart}`;
     return NextResponse.json({ assignmentId: mockId });
+  }
+
+  // This week and next week open Friday 9am Perth only; past weeks are always open.
+  const thisMonday = thisMondayPerth();
+  if (reflectionWeekStart >= thisMonday && !isWeekOpenPerth(reflectionWeekStart)) {
+    return NextResponse.json(
+      { error: "This check-in opens Friday 9am Perth. Please try again then." },
+      { status: 400 }
+    );
   }
 
   const db = getAdminDb();

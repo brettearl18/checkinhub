@@ -13,9 +13,12 @@ function toTime(v: unknown): number {
 }
 
 const IN_CHUNK = 30;
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_LIST = 500;
 
-// GET: business overview for coach dashboard (KPIs + check-ins to review).
+/**
+ * GET: Full list of check-ins to review and completed (for Check-ins Management page).
+ * Returns all items up to MAX_LIST; dashboard API only returns 20 for KPIs.
+ */
 export async function GET(request: Request) {
   const authResult = await requireCoach(request);
   if ("error" in authResult) return authResult.error;
@@ -24,9 +27,6 @@ export async function GET(request: Request) {
   if (!isAdminConfigured()) {
     return NextResponse.json({
       needsResponse: 0,
-      activeClients: 0,
-      formsCount: 0,
-      completedThisWeek: 0,
       toReview: [],
       completed: [],
     });
@@ -43,10 +43,6 @@ export async function GET(request: Request) {
       return [d.id, name];
     })
   );
-  const activeClients = clientsSnap.docs.filter((d) => (d.data().status as string) === "active").length;
-
-  const formsSnap = await db.collection("forms").where("coachId", "==", coachId).get();
-  const formsCount = formsSnap.docs.length;
 
   const allResponses: {
     id: string;
@@ -94,14 +90,11 @@ export async function GET(request: Request) {
   const isDone = (r: (typeof allResponses)[0]) =>
     r.coachResponded === true || r.reviewedByCoach === true || responseIdsWithFeedback.has(r.id);
   const needsResponse = allResponses.filter((r) => !isDone(r)).length;
-  const now = Date.now();
-  const weekAgo = now - ONE_WEEK_MS;
-  const completedThisWeek = allResponses.filter((r) => r.submittedAt >= weekAgo).length;
 
   const toReview = allResponses
     .filter((r) => !isDone(r))
     .sort((a, b) => b.submittedAt - a.submittedAt)
-    .slice(0, 20)
+    .slice(0, MAX_LIST)
     .map((r) => ({
       responseId: r.id,
       clientId: r.clientId,
@@ -114,7 +107,7 @@ export async function GET(request: Request) {
   const completed = allResponses
     .filter((r) => isDone(r))
     .sort((a, b) => b.submittedAt - a.submittedAt)
-    .slice(0, 20)
+    .slice(0, MAX_LIST)
     .map((r) => ({
       responseId: r.id,
       clientId: r.clientId,
@@ -126,9 +119,6 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     needsResponse,
-    activeClients,
-    formsCount,
-    completedThisWeek,
     toReview,
     completed,
   });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
 export async function PUT(
   request: Request,
@@ -39,6 +40,17 @@ export async function PUT(
   }
   if (assignmentData.responseId) {
     return NextResponse.json({ error: "Check-in already submitted" }, { status: 400 });
+  }
+
+  const reflectionWeekStart = assignmentData.reflectionWeekStart as string | undefined;
+  if (reflectionWeekStart) {
+    const thisMonday = thisMondayPerth();
+    if (reflectionWeekStart >= thisMonday && !isWeekOpenPerth(reflectionWeekStart)) {
+      return NextResponse.json(
+        { error: "This check-in opens Friday 9am Perth. You can save progress then." },
+        { status: 403 }
+      );
+    }
   }
 
   const now = new Date();

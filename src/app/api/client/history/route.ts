@@ -69,6 +69,7 @@ export async function GET(request: Request) {
         dueDate: dueDate ? dueDate.toISOString() : null,
         score: d.score ?? null,
         responseId: d.responseId ?? null,
+        readByClient: (d.readByClient as boolean) === true,
       };
     });
     return NextResponse.json(list);
