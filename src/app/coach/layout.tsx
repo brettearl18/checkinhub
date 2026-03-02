@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/coach", label: "Dashboard" },
   { href: "/coach/check-ins", label: "Check ins" },
   { href: "/coach/clients", label: "Clients" },
+  { href: "/coach/habits", label: "Habits" },
   { href: "/coach/messages", label: "Messages" },
   { href: "/coach/notifications", label: "Notifications" },
   { href: "/coach/payments", label: "Payment" },
