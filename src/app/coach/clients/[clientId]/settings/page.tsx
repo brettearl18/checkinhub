@@ -37,6 +37,9 @@ interface ClientSettings {
   paymentStatus: string | null;
   firstPaymentAt: string | null;
   mealPlanLinks: { label: string; url: string }[];
+  packagePaidAt: string;
+  packageMonths: number | null;
+  packageFreeWeeks: number;
 }
 
 const DEFAULT_SETTINGS: ClientSettings = {
@@ -58,6 +61,9 @@ const DEFAULT_SETTINGS: ClientSettings = {
   paymentStatus: null,
   firstPaymentAt: null,
   mealPlanLinks: [],
+  packagePaidAt: "",
+  packageMonths: null,
+  packageFreeWeeks: 0,
 };
 
 function formatBillingAmount(cents: number, currency: string): string {
@@ -185,6 +191,9 @@ export default function CoachClientSettingsPage() {
             stripeCustomerId: data.stripeCustomerId ?? null,
             paymentStatus: data.paymentStatus ?? null,
             firstPaymentAt: data.firstPaymentAt ?? null,
+            packagePaidAt: data.packagePaidAt ?? "",
+            packageMonths: data.packageMonths ?? null,
+            packageFreeWeeks: typeof data.packageFreeWeeks === "number" ? data.packageFreeWeeks : 0,
             mealPlanLinks: Array.isArray(data.mealPlanLinks)
               ? data.mealPlanLinks.map((l: { label?: string; url?: string }) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
               : [],
@@ -336,6 +345,9 @@ export default function CoachClientSettingsPage() {
           communicationPreference: form.communicationPreference,
           coachNotes: form.coachNotes,
           stripeCustomerId: form.stripeCustomerId || undefined,
+          packagePaidAt: form.packagePaidAt || undefined,
+          packageMonths: form.packageMonths ?? undefined,
+          packageFreeWeeks: form.packageFreeWeeks,
           mealPlanLinks: form.mealPlanLinks,
         }),
       });
@@ -1237,6 +1249,74 @@ export default function CoachClientSettingsPage() {
                   )}
                 </div>
               </>
+            )}
+          </Card>
+
+          {/* Upfront package: months + free weeks, expiry auto-calculated */}
+          <Card className="p-6">
+            <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Upfront package</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
+              For clients who paid upfront. Set payment date, months and free weeks — expiry is calculated automatically.
+            </p>
+            <div className="flex flex-wrap items-end gap-6">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">Payment date</label>
+                <input
+                  type="date"
+                  value={form.packagePaidAt || ""}
+                  onChange={(e) => setForm((p) => ({ ...p, packagePaidAt: e.target.value }))}
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">Months</label>
+                <select
+                  value={form.packageMonths ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, packageMonths: e.target.value === "" ? null : Number(e.target.value) }))}
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                >
+                  <option value="">—</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">Free weeks</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={52}
+                  value={form.packageFreeWeeks}
+                  onChange={(e) => setForm((p) => ({ ...p, packageFreeWeeks: Math.max(0, Math.min(52, Number(e.target.value) || 0)) }))}
+                  className="w-20 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                />
+              </div>
+              <div className="min-w-[140px]">
+                <span className="mb-1 block text-sm font-medium text-[var(--color-text-muted)]">Expires</span>
+                <p className="text-sm font-medium text-[var(--color-text)]">
+                  {form.packagePaidAt && form.packageMonths != null
+                    ? formatDateDisplay(
+                        (() => {
+                          const d = new Date(form.packagePaidAt);
+                          if (Number.isNaN(d.getTime())) return "";
+                          d.setMonth(d.getMonth() + form.packageMonths!);
+                          d.setDate(d.getDate() + form.packageFreeWeeks * 7);
+                          return d.toISOString().slice(0, 10);
+                        })()
+                      )
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            {(form.packagePaidAt || form.packageMonths != null) && (
+              <p className="mt-3 text-sm text-[var(--color-text-muted)]">
+                {form.packagePaidAt && form.packageMonths != null
+                  ? `Paid ${formatDateDisplay(form.packagePaidAt)} · ${form.packageMonths} month${form.packageMonths !== 1 ? "s" : ""}${form.packageFreeWeeks > 0 ? ` + ${form.packageFreeWeeks} free week${form.packageFreeWeeks !== 1 ? "s" : ""}` : ""}`
+                  : form.packagePaidAt
+                    ? `Paid ${formatDateDisplay(form.packagePaidAt)}`
+                    : ""}
+              </p>
             )}
           </Card>
 

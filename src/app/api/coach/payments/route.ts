@@ -32,6 +32,18 @@ export async function GET(request: Request) {
     const status = (data.status as string) ?? "active";
     const stripeCustomerId = (data.stripeCustomerId as string) || null;
     const paymentStatus = (data.paymentStatus as string) || null;
+    const packagePaidAt = toIso(data.packagePaidAt);
+    const packageMonths = typeof data.packageMonths === "number" ? data.packageMonths : null;
+    const packageFreeWeeks = typeof data.packageFreeWeeks === "number" ? data.packageFreeWeeks : 0;
+    let packageExpiresAt: string | null = null;
+    if (packagePaidAt && packageMonths != null) {
+      const d = new Date(packagePaidAt);
+      if (!Number.isNaN(d.getTime())) {
+        d.setMonth(d.getMonth() + packageMonths);
+        d.setDate(d.getDate() + packageFreeWeeks * 7);
+        packageExpiresAt = d.toISOString().slice(0, 10);
+      }
+    }
     return {
       id: d.id,
       firstName: data.firstName ?? "",
@@ -42,15 +54,18 @@ export async function GET(request: Request) {
       paymentStatus,
       lastPaymentAt: toIso(data.lastPaymentAt),
       nextBillingAt: toIso(data.nextBillingAt),
+      packageExpiresAt,
     };
   });
 
   const nonArchived = clients.filter((c) => c.status !== "archived");
-  const paidUp = nonArchived.filter((c) => c.paymentStatus === "paid").length;
+  const isPaidUp = (c: (typeof clients)[0]) =>
+    c.paymentStatus === "paid" || (c.packageExpiresAt != null && c.packageExpiresAt !== "");
+  const paidUp = nonArchived.filter(isPaidUp).length;
   const behind = nonArchived.filter((c) =>
-    c.paymentStatus === "failed" || c.paymentStatus === "past_due" || c.paymentStatus === "canceled"
+    !isPaidUp(c) && (c.paymentStatus === "failed" || c.paymentStatus === "past_due" || c.paymentStatus === "canceled")
   ).length;
-  const notLinked = nonArchived.filter((c) => !c.stripeCustomerId).length;
+  const notLinked = nonArchived.filter((c) => !c.stripeCustomerId && !c.packageExpiresAt).length;
 
   return NextResponse.json({
     clients: nonArchived,

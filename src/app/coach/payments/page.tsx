@@ -19,6 +19,7 @@ interface PaymentClient {
   paymentStatus: string | null;
   lastPaymentAt: string | null;
   nextBillingAt: string | null;
+  packageExpiresAt: string | null;
 }
 
 interface PaymentsData {
@@ -27,6 +28,7 @@ interface PaymentsData {
 }
 
 function getPaymentLabel(c: PaymentClient): string {
+  if (c.packageExpiresAt) return "Paid up";
   if (!c.stripeCustomerId) return "Not linked";
   switch (c.paymentStatus) {
     case "paid":
@@ -44,9 +46,10 @@ function getPaymentLabel(c: PaymentClient): string {
 
 function matchesFilter(c: PaymentClient, filter: PaymentFilter): boolean {
   if (filter === "all") return true;
-  if (filter === "not_linked") return !c.stripeCustomerId;
-  if (filter === "paid") return c.paymentStatus === "paid";
-  if (filter === "behind") return c.paymentStatus === "failed" || c.paymentStatus === "past_due" || c.paymentStatus === "canceled";
+  const isPaidUp = c.packageExpiresAt != null && c.packageExpiresAt !== "" || c.paymentStatus === "paid";
+  if (filter === "not_linked") return !c.stripeCustomerId && !c.packageExpiresAt;
+  if (filter === "paid") return isPaidUp;
+  if (filter === "behind") return !isPaidUp && (c.paymentStatus === "failed" || c.paymentStatus === "past_due" || c.paymentStatus === "canceled");
   return true;
 }
 
@@ -152,16 +155,21 @@ export default function CoachPaymentsPage() {
                       <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Name</th>
                       <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Email</th>
                       <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Status</th>
-                      <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Last payment</th>
+                      <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Expiry / Last payment</th>
                       <th className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((c) => {
                       const label = getPaymentLabel(c);
-                      const isPaid = c.paymentStatus === "paid";
+                      const isPaidUp = (c.packageExpiresAt != null && c.packageExpiresAt !== "") || c.paymentStatus === "paid";
                       const isBehind = label === "Payment failed" || label === "Past due" || label === "Canceled";
-                      const isNotLinked = !c.stripeCustomerId;
+                      const isNotLinked = !c.stripeCustomerId && !c.packageExpiresAt;
+                      const dateDisplay = c.packageExpiresAt
+                        ? formatDateDisplay(c.packageExpiresAt)
+                        : c.lastPaymentAt
+                          ? formatDateDisplay(c.lastPaymentAt)
+                          : "—";
                       return (
                         <tr key={c.id} className="border-b border-[var(--color-border)] last:border-0">
                           <td className="px-4 py-3 text-[var(--color-text)]">
@@ -176,7 +184,7 @@ export default function CoachPaymentsPage() {
                           <td className="px-4 py-3">
                             <span
                               className={`inline-flex items-center gap-1.5 ${
-                                isPaid
+                                isPaidUp
                                   ? "text-green-600 dark:text-green-400"
                                   : isBehind
                                     ? "text-red-600 dark:text-red-400"
@@ -187,15 +195,23 @@ export default function CoachPaymentsPage() {
                             >
                               <span
                                 className={`h-2 w-2 rounded-full ${
-                                  isPaid ? "bg-green-500" : isBehind ? "bg-red-500" : isNotLinked ? "bg-[var(--color-border)]" : "bg-amber-500"
+                                  isPaidUp ? "bg-green-500" : isBehind ? "bg-red-500" : isNotLinked ? "bg-[var(--color-border)]" : "bg-amber-500"
                                 }`}
                                 aria-hidden
                               />
                               {label}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-[var(--color-text-muted)]">
-                            {c.lastPaymentAt ? formatDateDisplay(c.lastPaymentAt) : "—"}
+                          <td className="px-4 py-3" title={c.packageExpiresAt ? "Package expires" : undefined}>
+                            <span
+                              className={
+                                c.packageExpiresAt && dateDisplay !== "—"
+                                  ? "font-semibold text-green-600 dark:text-green-400"
+                                  : "text-[var(--color-text-muted)]"
+                              }
+                            >
+                              {dateDisplay}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Link

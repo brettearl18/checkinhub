@@ -78,6 +78,7 @@ export default function ClientPortalPage() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [payLinkLoading, setPayLinkLoading] = useState(false);
 
   // Only show assignments in TO DO when the week has opened (Friday 9am Perth for this/next week).
   const openAssignments = useMemo(() => {
@@ -324,14 +325,45 @@ export default function ClientPortalPage() {
               </h3>
               {profile?.paymentStatus === "paid" ? (
                 <p className="text-sm text-green-600 dark:text-green-400 font-medium">Paid up</p>
+              ) : profile?.paymentStatus === "failed" || profile?.paymentStatus === "past_due" ? (
+                <>
+                  <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">Action needed</p>
+                  <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                    You have an outstanding payment. Pay securely below or contact your coach.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="mt-3"
+                    disabled={payLinkLoading}
+                    onClick={async () => {
+                      setPayLinkLoading(true);
+                      try {
+                        const res = await fetchWithAuth("/api/client/billing/pay-link");
+                        const data = await res.json().catch(() => ({}));
+                        if (data?.url) {
+                          window.open(data.url, "_blank", "noopener,noreferrer");
+                        } else {
+                          window.alert("No payment link is available right now. Please contact your coach to pay.");
+                        }
+                      } finally {
+                        setPayLinkLoading(false);
+                      }
+                    }}
+                  >
+                    {payLinkLoading ? "Opening…" : "Pay now"}
+                  </Button>
+                </>
               ) : profile?.paymentStatus ? (
                 <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">Action needed</p>
               ) : (
                 <p className="text-sm text-[var(--color-text-muted)]">No payment linked</p>
               )}
-              <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                Your coach manages billing. Contact them if you need to update payment.
-              </p>
+              {(profile?.paymentStatus === "paid" || !profile?.paymentStatus) && (
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  Your coach manages billing. Contact them if you need to update payment.
+                </p>
+              )}
             </Card>
             {/* Meal plan */}
             <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">

@@ -44,6 +44,10 @@ export async function GET(
       nextBillingAt: null,
       firstPaymentAt: null,
       mealPlanLinks: [],
+      packagePaidAt: null as string | null,
+      packageMonths: null as number | null,
+      packageFreeWeeks: 0,
+      packageExpiresAt: null as string | null,
     });
   }
 
@@ -75,6 +79,9 @@ export async function GET(
     mealPlanLinks?: { label?: string; url?: string }[];
     mealPlanName?: string;
     mealPlanUrl?: string;
+    packagePaidAt?: unknown;
+    packageMonths?: number | null;
+    packageFreeWeeks?: number | null;
   };
   if (data.coachId !== coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -145,6 +152,20 @@ export async function GET(
       if (name && url) return [{ label: name, url }];
       return [];
     })(),
+    packagePaidAt: toIso(data.packagePaidAt) ?? null,
+    packageMonths: typeof data.packageMonths === "number" ? data.packageMonths : null,
+    packageFreeWeeks: typeof data.packageFreeWeeks === "number" ? data.packageFreeWeeks : 0,
+    packageExpiresAt: (() => {
+      const paid = toIso(data.packagePaidAt);
+      const months = typeof data.packageMonths === "number" ? data.packageMonths : null;
+      const weeks = typeof data.packageFreeWeeks === "number" ? data.packageFreeWeeks : 0;
+      if (!paid || months == null) return null;
+      const d = new Date(paid);
+      if (Number.isNaN(d.getTime())) return null;
+      d.setMonth(d.getMonth() + months);
+      d.setDate(d.getDate() + weeks * 7);
+      return d.toISOString().slice(0, 10);
+    })(),
   });
 }
 
@@ -207,6 +228,18 @@ export async function PATCH(
   if (body.programDurationWeeks !== undefined) clientUpdate.programDurationWeeks = body.programDurationWeeks;
   if (body.coachNotes !== undefined) clientUpdate.coachNotes = body.coachNotes;
   if (body.stripeCustomerId !== undefined) clientUpdate.stripeCustomerId = body.stripeCustomerId === "" || body.stripeCustomerId == null ? null : body.stripeCustomerId;
+  if (body.packagePaidAt !== undefined) {
+    const v = body.packagePaidAt;
+    clientUpdate.packagePaidAt = v === "" || v == null ? null : new Date(v as string);
+  }
+  if (body.packageMonths !== undefined) {
+    const v = body.packageMonths;
+    clientUpdate.packageMonths = v === "" || v == null || (typeof v === "number" && (v < 1 || v > 120)) ? null : Number(v);
+  }
+  if (body.packageFreeWeeks !== undefined) {
+    const v = body.packageFreeWeeks;
+    clientUpdate.packageFreeWeeks = typeof v === "number" && v >= 0 ? v : 0;
+  }
   if (body.mealPlanLinks !== undefined) {
     const raw = body.mealPlanLinks;
     clientUpdate.mealPlanLinks = Array.isArray(raw)
