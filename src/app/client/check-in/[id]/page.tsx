@@ -79,7 +79,7 @@ export default function CheckInFormPage() {
       const nextAnswers: Record<string, string | number | string[]> = {};
       const nextNotes: Record<string, string> = {};
       data.questions.forEach((q) => {
-        const r = byId[q.questionId];
+        const r = byId[q.id];
         if (r) {
           nextAnswers[q.id] = r.answer;
           if (r.notes != null) nextNotes[q.id] = r.notes;

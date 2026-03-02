@@ -48,10 +48,10 @@ export async function POST(request: Request) {
   const db = getAdminDb();
   const now = new Date();
 
-  function getCustomerId(obj: { customer?: string | Stripe.Customer }): string | null {
+  function getCustomerId(obj: { customer?: string | Stripe.Customer | Stripe.DeletedCustomer | null }): string | null {
     const c = obj.customer;
     if (!c) return null;
-    return typeof c === "string" ? c : c.id ?? null;
+    return typeof c === "string" ? c : (c as { id?: string }).id ?? null;
   }
 
   async function updateClientByCustomerId(
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
               paymentStatus: "paid",
               lastPaymentAt: paidAt,
               updatedAt: now,
-              ...(nextBilling && { nextBillingAt: nextBilling }),
+              ...(nextBilling != null ? { nextBillingAt: nextBilling } : {}),
             };
             if (existing.firstPaymentAt == null) {
               updatePayload.firstPaymentAt = paidAt;
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
         break;
       }
       case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as Stripe.Subscription & { current_period_end?: number };
         const customerId = getCustomerId(subscription);
         if (customerId) {
           const status = subscription.status;
@@ -123,14 +123,13 @@ export async function POST(request: Request) {
                 : status === "canceled" || status === "unpaid"
                   ? "canceled"
                   : "past_due";
+          const periodEnd = subscription.current_period_end;
           const nextBilling =
-            subscription.current_period_end != null
-              ? new Date(subscription.current_period_end * 1000)
-              : null;
+            periodEnd != null ? new Date(periodEnd * 1000) : null;
           await updateClientByCustomerId(customerId, {
             paymentStatus,
             stripeSubscriptionId: subscription.id ?? null,
-            ...(nextBilling && { nextBillingAt: nextBilling }),
+            ...(nextBilling != null ? { nextBillingAt: nextBilling } : {}),
           });
         }
         break;

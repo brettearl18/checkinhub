@@ -75,7 +75,6 @@ export default function CoachAddNewClientPage() {
               <p className="text-sm text-[var(--color-text)] break-all select-all">{success.inviteLink}</p>
               <Button
                 variant="secondary"
-                size="sm"
                 className="mt-2"
                 onClick={() => navigator.clipboard.writeText(success.inviteLink!)}
               >

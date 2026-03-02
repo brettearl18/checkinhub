@@ -51,18 +51,20 @@ export async function GET(
           s.status === "trialing" ||
           s.status === "paused"
       );
-      subscriptionId = sub?.id ?? null;
+      subscriptionId = sub?.id ?? undefined;
     }
 
     if (!subscriptionId) {
       return NextResponse.json({ subscription: null, message: "No subscription found" });
     }
 
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    const sub = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ["items.data.price.product"],
     });
+    const subscription = sub as unknown as Record<string, unknown>;
 
-    const item = subscription.items?.data?.[0];
+    const items = subscription.items as { data?: Array<{ id?: string; price?: { id?: string; unit_amount?: number; currency?: string; recurring?: { interval?: string; interval_count?: number }; product?: { name?: string } | string } }> } | undefined;
+    const item = items?.data?.[0];
     const price = item?.price;
     const amount = price?.unit_amount ?? 0;
     const currency = price?.currency ?? "aud";
@@ -74,12 +76,13 @@ export async function GET(
     const productName = typeof product === "object" && product?.name ? product.name : "";
     const label = productName ? `${productName} – ${priceStr}` : priceStr;
 
+    const currentPeriodEnd = subscription.current_period_end as number | undefined;
     return NextResponse.json({
       subscription: {
-        id: subscription.id,
-        status: subscription.status,
-        currentPeriodEnd: subscription.current_period_end
-          ? new Date(subscription.current_period_end * 1000).toISOString()
+        id: subscription.id as string,
+        status: subscription.status as string,
+        currentPeriodEnd: currentPeriodEnd != null
+          ? new Date(currentPeriodEnd * 1000).toISOString()
           : null,
         currentPrice: {
           id: price?.id,

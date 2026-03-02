@@ -78,7 +78,9 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const scoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const scoringData = scoringSnap.exists
+    ? (scoringSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number }; scoringProfile?: string })
+    : null;
   const { redMax, orangeMax } = resolveThresholds({ clientScoring: scoringData ?? undefined });
   const scoringProfile = scoringData?.scoringProfile ?? null;
 

@@ -152,10 +152,10 @@ export default function CoachClientsListPage() {
                     </td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex justify-end gap-1">
-                        <Button asChild variant="secondary" size="sm">
+                        <Button asChild variant="secondary">
                           <Link href={`/coach/clients/${c.id}/progress`}>Progress</Link>
                         </Button>
-                        <Button asChild variant="primary" size="sm">
+                        <Button asChild variant="primary">
                           <Link href={`/coach/clients/${c.id}`}>Check-ins</Link>
                         </Button>
                       </div>

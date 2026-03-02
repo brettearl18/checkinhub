@@ -59,7 +59,7 @@ export async function GET(
       currency: inv.currency ?? "aud",
       created: inv.created ? new Date(inv.created * 1000).toISOString() : null,
       dueDate: inv.due_date ? new Date(inv.due_date * 1000).toISOString() : null,
-      paid: inv.paid ?? false,
+      paid: inv.status === "paid",
       invoicePdf: inv.invoice_pdf ?? null,
       hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
     }));

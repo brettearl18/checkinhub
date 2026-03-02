@@ -194,7 +194,7 @@ export default function CoachCheckInsPage() {
                   ? "No check-ins awaiting feedback."
                   : "No completed check-ins yet."}
               </p>
-              <Button asChild variant="primary" size="sm" className="mt-2">
+              <Button asChild variant="primary" className="mt-2">
                 <Link href="/coach/clients">View clients</Link>
               </Button>
             </div>

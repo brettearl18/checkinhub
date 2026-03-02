@@ -83,7 +83,9 @@ export async function GET(
 
   const score = (responseData.score as number) ?? 0;
   const scoringSnap = await db.collection("clientScoring").doc(clientId).get();
-  const clientScoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const clientScoringData = scoringSnap.exists
+    ? (scoringSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number }; scoringProfile?: string })
+    : null;
   const formThresholds = formSnap.exists ? (formSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number } })?.thresholds : undefined;
   const { redMax, orangeMax } = resolveThresholds({
     formThresholds: formThresholds ?? undefined,
@@ -106,6 +108,8 @@ export async function GET(
     coachRespondedAt: toDate((responseData as { coachRespondedAt?: unknown }).coachRespondedAt),
     reviewedByCoach: !!(responseData as { reviewedByCoach?: boolean }).reviewedByCoach,
     reviewedAt: toDate((responseData as { reviewedAt?: unknown }).reviewedAt),
+    readByClient: !!(responseData as { readByClient?: boolean }).readByClient,
+    readByClientAt: toDate((responseData as { readByClientAt?: unknown }).readByClientAt),
   };
 
   return NextResponse.json({ response, form, questions });

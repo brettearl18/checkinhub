@@ -185,7 +185,7 @@ export default function CoachClientSettingsPage() {
             paymentStatus: data.paymentStatus ?? null,
             firstPaymentAt: data.firstPaymentAt ?? null,
             mealPlanLinks: Array.isArray(data.mealPlanLinks)
-              ? data.mealPlanLinks.map((l) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
+              ? data.mealPlanLinks.map((l: { label?: string; url?: string }) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
               : [],
           });
         }
@@ -377,7 +377,7 @@ export default function CoachClientSettingsPage() {
             Configure program settings and profile for this client.
           </p>
         </div>
-        <Button asChild variant="secondary" size="sm">
+        <Button asChild variant="secondary">
           <Link href={`/coach/clients/${clientId}/progress`}>Progress</Link>
         </Button>
       </div>
@@ -638,7 +638,6 @@ export default function CoachClientSettingsPage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  size="sm"
                   disabled={selectedPredefinedMealPlan === ""}
                   onClick={() => {
                     const idx = parseInt(selectedPredefinedMealPlan, 10);
@@ -705,7 +704,6 @@ export default function CoachClientSettingsPage() {
               <Button
                 type="button"
                 variant="secondary"
-                size="sm"
                 onClick={() => {
                   const url = newMealPlanUrl.trim();
                   if (!url) return;
@@ -877,7 +875,6 @@ export default function CoachClientSettingsPage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      size="sm"
                       disabled={updatePriceLoading || !changePriceId}
                       onClick={async () => {
                         if (!changePriceId) return;
@@ -937,7 +934,6 @@ export default function CoachClientSettingsPage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    size="sm"
                     disabled={billingAction !== "idle"}
                     onClick={async () => {
                       setBillingError(null);
@@ -975,7 +971,6 @@ export default function CoachClientSettingsPage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    size="sm"
                     disabled={billingAction !== "idle"}
                     onClick={async () => {
                       setBillingError(null);
@@ -1007,7 +1002,6 @@ export default function CoachClientSettingsPage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    size="sm"
                     disabled={billingAction !== "idle"}
                     onClick={async () => {
                       if (!confirm("Cancel this subscription? By default it will cancel at the end of the current billing period. Confirm?")) return;
@@ -1070,7 +1064,6 @@ export default function CoachClientSettingsPage() {
                         <Button
                           type="button"
                           variant="secondary"
-                          size="sm"
                           disabled={billingHistoryLoading}
                           onClick={async () => {
                             if (!clientId) return;
@@ -1136,7 +1129,6 @@ export default function CoachClientSettingsPage() {
                                           <Button
                                             type="button"
                                             variant="secondary"
-                                            size="sm"
                                             disabled={retryingInvoiceId !== null}
                                             onClick={async () => {
                                               if (!clientId) return;

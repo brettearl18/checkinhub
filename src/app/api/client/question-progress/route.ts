@@ -33,7 +33,9 @@ export async function GET(request: Request) {
     .get();
 
   const scoringSnap = await db.collection("clientScoring").doc(clientId).get();
-  const clientScoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const clientScoringData = scoringSnap.exists
+    ? (scoringSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number }; scoringProfile?: string })
+    : null;
   const { redMax: trafficLightRedMax, orangeMax: trafficLightOrangeMax } = resolveThresholds({
     clientScoring: clientScoringData ?? undefined,
   });
@@ -106,7 +108,7 @@ export async function GET(request: Request) {
     const formQIds = questionIdsByForm.get(row.formId) ?? [];
     const scoringQuestions = formQIds
       .map((id) => questionDocs.get(id))
-      .filter((q) => q != null) as { id: string; text: string; type?: string; options?: unknown; questionWeight?: number; yesNoWeight?: number; yesIsPositive?: boolean }[];
+      .filter((q) => q != null) as { id: string; text: string; type?: string; options?: string[] | Array<{ text: string; weight?: number }>; questionWeight?: number; yesNoWeight?: number; yesIsPositive?: boolean }[];
     const scores = getPerQuestionScores(row.responses, scoringQuestions);
     for (const [qid, score] of Object.entries(scores)) {
       if (!grid[qid]) grid[qid] = {};

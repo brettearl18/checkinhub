@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
@@ -27,6 +28,8 @@ export default function ClientViewResponsePage() {
     band: "red" | "orange" | "green" | null;
     message: string | null;
     submittedAt: string | null;
+    readByClient?: boolean;
+    readByClientAt?: string | null;
   } | null>(null);
   const [questions, setQuestions] = useState<Array<{ id: string; text: string }>>([]);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -39,6 +42,7 @@ export default function ClientViewResponsePage() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [acknowledging, setAcknowledging] = useState(false);
 
   const WHERE_LABELS: Record<string, string> = {
     whatsapp: "WhatsApp",
@@ -48,42 +52,46 @@ export default function ClientViewResponsePage() {
     other: "Other",
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetchWithAuth(`/api/client/responses/${responseId}`);
-        if (res.status === 401) {
-          if (!cancelled) setAuthError(true);
-          return;
-        }
-        if (!res.ok) {
-          if (!cancelled) setError("Could not load response.");
-          return;
-        }
-        const data = await res.json();
-        if (!cancelled) {
-          setResponse(data.response ?? null);
-          setQuestions(Array.isArray(data.questions) ? data.questions : []);
-          setFeedback(Array.isArray(data.feedback) ? data.feedback : []);
-          setReviewDetails(data.reviewDetails ?? null);
-        }
-      } catch {
-        if (!cancelled) setError("Could not load response.");
-      } finally {
-        if (!cancelled) setLoading(false);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/client/responses/${responseId}`);
+      if (res.status === 401) {
+        setAuthError(true);
+        return;
       }
-    })();
-    return () => { cancelled = true; };
+      if (!res.ok) {
+        setError("Could not load response.");
+        return;
+      }
+      const data = await res.json();
+      setResponse(data.response ?? null);
+      setQuestions(Array.isArray(data.questions) ? data.questions : []);
+      setFeedback(Array.isArray(data.feedback) ? data.feedback : []);
+      setReviewDetails(data.reviewDetails ?? null);
+    } catch {
+      setError("Could not load response.");
+    } finally {
+      setLoading(false);
+    }
   }, [fetchWithAuth, responseId]);
 
-  // Mark as read when the client views this response
   useEffect(() => {
-    if (!response || loading) return;
-    fetchWithAuth(`/api/client/responses/${responseId}/read`, { method: "POST" }).catch(() => {});
-  }, [response, loading, responseId, fetchWithAuth]);
+    loadData();
+  }, [loadData]);
+
+  const hasCoachContent = feedback.length > 0 || reviewDetails != null;
+
+  const handleAcknowledgeFeedback = async () => {
+    setAcknowledging(true);
+    try {
+      const res = await fetchWithAuth(`/api/client/responses/${responseId}/read`, { method: "POST" });
+      if (res.ok) await loadData();
+    } finally {
+      setAcknowledging(false);
+    }
+  };
 
   const byId = Object.fromEntries(questions.map((q) => [q.id, q]));
   const feedbackByQuestion = (qId: string | null) =>
@@ -141,6 +149,41 @@ export default function ClientViewResponsePage() {
                   {response.message && <p className="mt-0.5 text-sm opacity-90">{response.message}</p>}
                 </div>
               </div>
+            </Card>
+          )}
+
+          {/* Acknowledgment: client has read coach feedback (auto-logged on open; optional check button) */}
+          {(response.readByClient || hasCoachContent) && (
+            <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+              {response.readByClient ? (
+                <p className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]" role="status">
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300" aria-hidden>
+                    ✓
+                  </span>
+                  <span>
+                    <span className="font-medium text-[var(--color-text)]">You read this feedback</span>
+                    {response.readByClientAt && (
+                      <> on {formatDateTimeDisplay(response.readByClientAt)}</>
+                    )}
+                    .
+                  </span>
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    Let your coach know you&apos;ve read their feedback.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    onClick={handleAcknowledgeFeedback}
+                    disabled={acknowledging}
+                    className="inline-flex items-center gap-2"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded border-2 border-current" aria-hidden>✓</span>
+                    {acknowledging ? "Saving…" : "I've read the coach feedback"}
+                  </Button>
+                </div>
+              )}
             </Card>
           )}
 

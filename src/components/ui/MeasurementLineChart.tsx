@@ -78,7 +78,7 @@ export function MeasurementLineChart({
               borderRadius: "var(--radius-md)",
             }}
             labelStyle={{ color: "var(--color-text)" }}
-            formatter={(value: number) => [`${value} ${unit}`, ""]}
+            formatter={(value: number | undefined) => [`${value ?? 0} ${unit}`, ""]}
             labelFormatter={(label) => (label ? formatDateDisplay(label) : "")}
           />
           <Area

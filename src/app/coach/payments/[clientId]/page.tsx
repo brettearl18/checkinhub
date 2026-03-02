@@ -172,7 +172,6 @@ export default function CoachPaymentHistoryPage() {
                               <Button
                                 type="button"
                                 variant="secondary"
-                                size="sm"
                                 disabled={retryingInvoiceId !== null}
                                 onClick={async () => {
                                   if (!clientId) return;

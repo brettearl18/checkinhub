@@ -246,7 +246,7 @@ export default function ClientPortalPage() {
                 : "A quick reflection to keep your momentum going."}
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Button asChild variant="primary" size="default">
+              <Button asChild variant="primary">
                 <Link href="/client/check-in/new">New check-in</Link>
               </Button>
               {openAssignments.length > 0 && (
@@ -351,7 +351,7 @@ export default function ClientPortalPage() {
         {!authError && error && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
             <p className="text-sm text-[var(--color-error)]" role="alert">{error}</p>
-            <Button variant="ghost" size="sm" onClick={loadData}>Retry</Button>
+            <Button variant="ghost" onClick={loadData}>Retry</Button>
           </div>
         )}
         {!authError && loading && (

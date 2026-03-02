@@ -84,7 +84,9 @@ export async function POST(request: Request) {
 
   const formData = formSnap.exists ? formSnap.data() : null;
   const scoringSnap = await db.collection("clientScoring").doc(clientId).get();
-  const clientScoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const clientScoringData = scoringSnap.exists
+    ? (scoringSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number }; scoringProfile?: string })
+    : null;
   const { redMax, orangeMax } = resolveThresholds({
     formThresholds: formData?.thresholds as { redMax?: number; orangeMax?: number } | undefined,
     clientScoring: clientScoringData ?? undefined,

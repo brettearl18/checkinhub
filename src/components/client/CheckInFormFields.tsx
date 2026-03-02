@@ -126,7 +126,7 @@ export function QuestionBlock({
       {q.type === "boolean" && (
         <div className="flex gap-3">
           {["Yes", "No"].map((opt) => {
-            const current = answers[q.id];
+            const current = answers[q.id] as string | number | string[] | boolean | undefined;
             const selected =
               current === "Yes" || current === "yes" || current === true
                 ? "Yes"

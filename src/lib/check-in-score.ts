@@ -56,7 +56,8 @@ export function computeScore(
         }
       }
     } else if (q.type === "yes_no" || q.type === "boolean") {
-      const yes = r.answer === true || r.answer === "yes" || r.answer === "Yes" || r.answer === 1;
+      const a = r.answer as string | number | string[] | boolean;
+      const yes = a === true || a === "yes" || a === "Yes" || a === 1;
       const yesVal = q.yesNoWeight != null ? q.yesNoWeight : 80;
       const noVal = q.yesNoWeight != null ? 100 - q.yesNoWeight : 30;
       points = q.yesIsPositive !== false ? (yes ? yesVal : noVal) : (yes ? 100 - yesVal : 100 - noVal);
@@ -109,7 +110,8 @@ export function getPerQuestionScores(
         }
       }
     } else if (q.type === "yes_no" || q.type === "boolean") {
-      const yes = r.answer === true || r.answer === "yes" || r.answer === "Yes" || r.answer === 1;
+      const a = r.answer as string | number | string[] | boolean;
+      const yes = a === true || a === "yes" || a === "Yes" || a === 1;
       const yesVal = q.yesNoWeight != null ? q.yesNoWeight : 80;
       const noVal = q.yesNoWeight != null ? 100 - q.yesNoWeight : 30;
       points = q.yesIsPositive !== false ? (yes ? yesVal : noVal) : (yes ? 100 - yesVal : 100 - noVal);

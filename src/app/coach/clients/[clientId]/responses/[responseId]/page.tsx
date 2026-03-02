@@ -32,6 +32,8 @@ interface ResponseData {
   submittedAt: string | null;
   coachResponded?: boolean;
   reviewedByCoach?: boolean;
+  readByClient?: boolean;
+  readByClientAt?: string | null;
 }
 
 interface FeedbackItem {
@@ -229,6 +231,15 @@ export default function CoachViewResponsePage() {
                 Your client is waiting for your feedback…
               </p>
             </div>
+          )}
+          {(response.coachResponded || response.reviewedByCoach) && (
+            <p className="text-sm text-[var(--color-text-muted)]" role="status">
+              {response.readByClient && response.readByClientAt ? (
+                <>Client read this feedback on {formatDateTimeDisplay(response.readByClientAt)}.</>
+              ) : (
+                <>Client has not yet acknowledged reading this feedback.</>
+              )}
+            </p>
           )}
           {totalSlots > 0 && (
             <p className="text-sm text-[var(--color-text-muted)]">

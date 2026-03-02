@@ -194,7 +194,7 @@ export default function CoachDashboardPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-[var(--color-text)]">Check-ins</h2>
-            <Button asChild variant="primary" size="sm">
+            <Button asChild variant="primary">
               <Link href="/coach/check-ins">
                 View {overview.needsResponse}
                 {overview.needsResponse === 1 ? " check-in" : " check-ins"} to review →

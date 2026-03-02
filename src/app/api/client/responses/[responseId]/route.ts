@@ -88,7 +88,9 @@ export async function GET(
 
   const score = (responseData.score as number) ?? 0;
   const scoringSnap = await db.collection("clientScoring").doc(respClientId).get();
-  const clientScoringData = scoringSnap.exists ? scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string } : null;
+  const clientScoringData = scoringSnap.exists
+    ? (scoringSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number }; scoringProfile?: string })
+    : null;
   const formThresholds = formSnap.exists ? (formSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number } })?.thresholds : undefined;
   const { redMax, orangeMax } = resolveThresholds({
     formThresholds: formThresholds ?? undefined,
@@ -107,6 +109,7 @@ export async function GET(
     message,
     submittedAt: toDate(responseData.submittedAt) ?? toDate(responseData.createdAt),
     readByClient: (responseData as { readByClient?: boolean }).readByClient === true,
+    readByClientAt: toDate((responseData as { readByClientAt?: unknown }).readByClientAt),
   };
 
   const reviewedByCoach = (responseData as { reviewedByCoach?: boolean }).reviewedByCoach === true;
@@ -185,7 +188,9 @@ export async function PATCH(
   const score = computeScore(responses, questions);
 
   const scoringSnap = await db.collection("clientScoring").doc(clientId).get();
-  const clientScoringData = scoringSnap.exists ? (scoringSnap.data() as { thresholds?: unknown; scoringProfile?: string }) : null;
+  const clientScoringData = scoringSnap.exists
+    ? (scoringSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number }; scoringProfile?: string })
+    : null;
   const formThresholds = formSnap.exists ? (formSnap.data() as { thresholds?: { redMax?: number; orangeMax?: number } })?.thresholds : undefined;
   const { redMax, orangeMax } = resolveThresholds({
     formThresholds: formThresholds ?? undefined,

@@ -34,7 +34,7 @@ async function getSubscriptionId(
     const sub = list.data?.find(
       (s) => s.status === "active" || s.status === "past_due" || s.status === "trialing"
     );
-    subscriptionId = sub?.id ?? null;
+    subscriptionId = sub?.id ?? undefined;
   }
   if (!subscriptionId) {
     return { error: "No active subscription found for this customer", status: 404 };

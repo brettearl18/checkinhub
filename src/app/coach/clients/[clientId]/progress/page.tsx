@@ -205,7 +205,7 @@ export default function CoachClientProgressPage() {
             Question-level progress over time
           </p>
         </div>
-        <Button asChild variant="secondary" size="sm">
+        <Button asChild variant="secondary">
           <Link href={clientId ? `/coach/clients/${clientId}/settings` : "#"}>
             Settings
           </Link>

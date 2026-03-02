@@ -32,7 +32,7 @@ async function getSubscriptionId(
       limit: 5,
     });
     const sub = list.data?.find((s) => s.status === "paused" || s.status === "active");
-    subscriptionId = sub?.id ?? null;
+    subscriptionId = sub?.id ?? undefined;
   }
   if (!subscriptionId) {
     return { error: "No subscription found to resume", status: 404 };

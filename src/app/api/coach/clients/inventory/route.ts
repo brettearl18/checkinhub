@@ -179,7 +179,7 @@ export async function GET(request: Request) {
       const trendCompleted = assignments.filter((a) => a.completedAt != null).length;
       const trendPct = trendTotal > 0 ? Math.round((trendCompleted / trendTotal) * 100) : 0;
 
-      const progressDots = responses.slice(0, 5).map((r) => {
+      const progressDots: ("green" | "red" | "orange" | "empty")[] = responses.slice(0, 5).map((r) => {
         if (r.score >= 70) return "green";
         if (r.score >= 40) return "orange";
         return "red";

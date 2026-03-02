@@ -53,7 +53,7 @@ export async function POST(
     if (invoice.customer !== stripeCustomerId) {
       return NextResponse.json({ error: "Invoice does not belong to this client" }, { status: 403 });
     }
-    if (invoice.paid) {
+    if (invoice.status === "paid") {
       return NextResponse.json({ error: "Invoice is already paid" }, { status: 400 });
     }
     await stripe.invoices.pay(invoiceId);
