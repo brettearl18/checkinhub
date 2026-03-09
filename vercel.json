@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/check-in-reminders/open",
+      "schedule": "0 2 * * 5"
+    },
+    {
+      "path": "/api/cron/check-in-reminders/closing",
+      "schedule": "0 9 * * 1"
+    }
+  ]
+}

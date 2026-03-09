@@ -117,7 +117,7 @@ export async function GET(request: Request) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-    const assignmentsByClient = new Map<string, { dueDate: number; completedAt: number | null; status: string }[]>();
+    const assignmentsByClient = new Map<string, { dueDate: number; completedAt: number | null; status: string; formTitle?: string }[]>();
     const responsesByClient = new Map<string, { submittedAt: number; score: number }[]>();
 
     for (let i = 0; i < clientIds.length; i += 30) {
@@ -137,6 +137,7 @@ export async function GET(request: Request) {
           dueDate: due,
           completedAt: completed,
           status: (data.status as string) ?? "pending",
+          formTitle: typeof data.formTitle === "string" ? data.formTitle : undefined,
         });
       }
 
@@ -191,6 +192,9 @@ export async function GET(request: Request) {
       const weightLossKg =
         weight != null ? Math.round((weight.lastKg - weight.firstKg) * 10) / 10 : null;
 
+      const allocatedFormTitles = [...new Set(assignments.map((a) => a.formTitle).filter(Boolean))] as string[];
+      const allocatedForms = allocatedFormTitles.length > 0 ? allocatedFormTitles.join(", ") : null;
+
       return {
         id: c.id,
         firstName: c.firstName,
@@ -211,6 +215,7 @@ export async function GET(request: Request) {
         avgCheckInPct: trendPct,
         progressDots,
         weeks,
+        allocatedForms,
       };
     });
 

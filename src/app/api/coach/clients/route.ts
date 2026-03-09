@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb, getAdminAuth, isAdminConfigured } from "@/lib/firebase-admin";
+import { sendEmail } from "@/lib/email-service";
 import { SCORING_PROFILES, DEFAULT_PROFILE } from "@/lib/scoring-utils";
 import { Timestamp } from "firebase-admin/firestore";
 import crypto from "crypto";
@@ -178,6 +179,32 @@ export async function POST(request: Request) {
         updatedAt: ts,
       });
 
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+      const loginUrl = baseUrl ? `${baseUrl.replace(/\/$/, "")}/sign-in` : "/sign-in";
+      const coachSnap = await db.collection("users").doc(coachId).get();
+      const coachData = coachSnap.exists ? (coachSnap.data() as { firstName?: string; lastName?: string }) : null;
+      const coachName = coachData
+        ? [coachData.firstName, coachData.lastName].filter(Boolean).join(" ").trim() || "Your coach"
+        : "Your coach";
+      await sendEmail({
+        to: email.trim().toLowerCase(),
+        subject: "Your CheckinHUB login details",
+        html: `
+          <p>Hi ${firstName},</p>
+          <p>${coachName} has set up your CheckinHUB account. Here are your login details:</p>
+          <ul>
+            <li><strong>Login URL:</strong> <a href="${loginUrl}">${loginUrl}</a></li>
+            <li><strong>Email:</strong> ${email.trim().toLowerCase()}</li>
+            <li><strong>Password:</strong> (the password your coach shared with you)</li>
+          </ul>
+          <p>Use the link above to sign in and complete your check-ins.</p>
+          <p>Best,<br>CheckinHUB</p>
+        `.trim(),
+        text: `Hi ${firstName},\n\n${coachName} has set up your CheckinHUB account.\n\nLogin URL: ${loginUrl}\nEmail: ${email.trim().toLowerCase()}\nPassword: (the password your coach shared with you)\n\nBest,\nCheckinHUB`,
+      });
+
       return NextResponse.json({ clientId: uid, createdWithPassword: true });
     } else {
       const clientId = `client-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
@@ -219,6 +246,24 @@ export async function POST(request: Request) {
         (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
       const invitePath = `/client-onboarding?token=${encodeURIComponent(onboardingToken)}&email=${encodeURIComponent(email.trim().toLowerCase())}`;
       const inviteLink = baseUrl ? `${baseUrl.replace(/\/$/, "")}${invitePath}` : invitePath;
+
+      const coachSnap = await db.collection("users").doc(coachId).get();
+      const coachData = coachSnap.exists ? (coachSnap.data() as { firstName?: string; lastName?: string }) : null;
+      const coachName = coachData
+        ? [coachData.firstName, coachData.lastName].filter(Boolean).join(" ").trim() || "Your coach"
+        : "Your coach";
+      await sendEmail({
+        to: email.trim().toLowerCase(),
+        subject: "Complete your CheckinHUB onboarding",
+        html: `
+          <p>Hi ${firstName},</p>
+          <p>${coachName} has invited you to join CheckinHUB. Click the link below to set your password and get started (link expires in 7 days):</p>
+          <p><a href="${inviteLink}" style="display:inline-block;background:#c9a227;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:600;">Complete onboarding</a></p>
+          <p><a href="${inviteLink}">${inviteLink}</a></p>
+          <p>Best,<br>CheckinHUB</p>
+        `.trim(),
+        text: `Hi ${firstName},\n\n${coachName} has invited you to join CheckinHUB. Complete your onboarding (link expires in 7 days):\n\n${inviteLink}\n\nBest,\nCheckinHUB`,
+      });
 
       return NextResponse.json({
         clientId,

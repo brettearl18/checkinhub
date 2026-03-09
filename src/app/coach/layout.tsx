@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { href: "/coach/gallery", label: "Gallery" },
   { href: "/coach/forms", label: "Forms" },
   { href: "/coach/questions", label: "Questions" },
+  { href: "/coach/settings", label: "Settings" },
 ] as const;
 
 export default function CoachLayout({

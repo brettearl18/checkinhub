@@ -52,11 +52,23 @@ In the Vercel project: **Settings → Environment Variables**. Add these for **P
 | `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API keys | Use live key for production. |
 | `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks | Create an endpoint pointing to `https://your-domain.com/api/webhooks/stripe` and use the signing secret. |
 
-### Cron (optional – check-in reminders)
+### Mailgun (emails)
+
+| Variable | Notes |
+|----------|--------|
+| `MAILGUN_API_KEY` | Mailgun API key (private) |
+| `MAILGUN_DOMAIN` | Sending domain (e.g. `mg.yourdomain.com`) |
+| `MAILGUN_FROM_EMAIL` | From address (e.g. `noreply@mg.yourdomain.com`) |
+| `MAILGUN_FROM_NAME` | From display name (e.g. `CheckinHUB`) |
+| `MAILGUN_TEST_EMAIL` | Optional: redirect all emails to this address and prefix subject with `[TEST]` |
+
+### Cron (check-in reminders)
 
 | Variable | Example | Notes |
 |----------|---------|--------|
-| `CRON_SECRET` | Random string you generate | Required if you call `/api/cron/check-in-reminders`; pass it in the `Authorization` header so only your cron job can trigger it. |
+| `CRON_SECRET` | Random string you generate | Required for Vercel Cron; Vercel sends it as `Authorization: Bearer <CRON_SECRET>`. |
+
+The project’s `vercel.json` defines two crons: **Friday 02:00 UTC** (10am Perth) → open reminder; **Monday 09:00 UTC** (5pm Perth) → closing reminder. No extra scheduler needed once `CRON_SECRET` is set.
 
 ---
 
@@ -87,7 +99,7 @@ Without this, sign-in and redirects will be blocked.
 
 - **Stripe webhooks:** In Stripe, create a webhook for production with URL `https://checkinhub-alpha.vercel.app/api/webhooks/stripe` and set `STRIPE_WEBHOOK_SECRET` to the signing secret.
 - **Custom domain (optional):** In Vercel → Project → **Settings → Domains**, add your domain and follow DNS instructions.
-- **Cron:** If you use Vercel Cron (Pro plan), add a `vercel.json` schedule for `/api/cron/check-in-reminders`. Otherwise call that URL from an external cron (e.g. cron-job.org) with `Authorization: Bearer <CRON_SECRET>`.
+- **Cron:** `vercel.json` already has two cron paths: `/api/cron/check-in-reminders/open` and `/api/cron/check-in-reminders/closing`. Set `CRON_SECRET` in Vercel so the cron runs (Vercel Cron is available on Pro plan).
 
 ---
 

@@ -19,6 +19,7 @@ interface ClientRow {
   weightLossKg: number | null;
   trendPct: number;
   avgCheckInPct?: number;
+  allocatedForms?: string | null;
 }
 
 function paymentLabel(paymentStatus: string | null): string {
@@ -102,6 +103,7 @@ export default function CoachClientsListPage() {
                   <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Name</th>
                   <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Email</th>
                   <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Status</th>
+                  <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Check-in form</th>
                   <th className="px-3 py-2 text-right font-medium text-[var(--color-text)]">Weeks</th>
                   <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Payment</th>
                   <th className="px-3 py-2 text-right font-medium text-[var(--color-text)]">Weight Δ</th>
@@ -125,6 +127,9 @@ export default function CoachClientsListPage() {
                     </td>
                     <td className="px-3 py-2">
                       <span className="capitalize text-[var(--color-text-secondary)]">{c.status}</span>
+                    </td>
+                    <td className="px-3 py-2 text-[var(--color-text-secondary)] max-w-[200px] truncate" title={c.allocatedForms ?? undefined}>
+                      {c.allocatedForms ?? "—"}
                     </td>
                     <td className="px-3 py-2 text-right text-[var(--color-text-secondary)] tabular-nums">
                       {c.programWeeks != null ? c.programWeeks : "—"}

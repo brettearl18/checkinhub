@@ -112,6 +112,7 @@ export default function CoachClientSettingsPage() {
   const [newMealPlanLabel, setNewMealPlanLabel] = useState("");
   const [newMealPlanUrl, setNewMealPlanUrl] = useState("");
   const [selectedPredefinedMealPlan, setSelectedPredefinedMealPlan] = useState<string>("");
+  const [sendMealPlanEmail, setSendMealPlanEmail] = useState(false);
   const [billingHistoryInvoices, setBillingHistoryInvoices] = useState<{
     id: string;
     number: string | null;
@@ -349,6 +350,7 @@ export default function CoachClientSettingsPage() {
           packageMonths: form.packageMonths ?? undefined,
           packageFreeWeeks: form.packageFreeWeeks,
           mealPlanLinks: form.mealPlanLinks,
+          ...(sendMealPlanEmail ? { sendMealPlanEmail: true } : {}),
         }),
       });
       if (res.status === 401) {
@@ -630,6 +632,19 @@ export default function CoachClientSettingsPage() {
             <p className="text-sm text-[var(--color-text-muted)] mb-4">
               Add links (name + URL) and they’re added to this client’s list. The client sees them on their dashboard. Click &quot;Save settings&quot; when done.
             </p>
+
+            {/* Option to email client when saving meal plan */}
+            {form.mealPlanLinks.length > 0 && (
+              <label className="mb-4 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={sendMealPlanEmail}
+                  onChange={(e) => setSendMealPlanEmail(e.target.checked)}
+                  className="rounded border-[var(--color-border)]"
+                />
+                <span className="text-sm text-[var(--color-text)]">Email client about meal plan when I save</span>
+              </label>
+            )}
 
             {/* Assigned list – shown first */}
             <div className="mb-4">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { sendEmail } from "@/lib/email-service";
 import { resolveThresholds, SCORING_PROFILES, type ScoringProfileId } from "@/lib/scoring-utils";
 
 function toIso(v: unknown): string | null {
@@ -262,6 +263,37 @@ export async function PATCH(
   }
 
   await db.collection("clients").doc(clientId).update(clientUpdate);
+
+  const sendMealPlanEmail = body.sendMealPlanEmail === true && body.mealPlanLinks !== undefined;
+  const newMealPlanLinks = Array.isArray(body.mealPlanLinks)
+    ? (body.mealPlanLinks as { label?: string; url?: string }[]).filter((l) => l?.url)
+    : [];
+  if (sendMealPlanEmail && newMealPlanLinks.length > 0) {
+    const clientData = snap.data() as { email?: string; firstName?: string };
+    const toEmail = clientData?.email?.trim();
+    if (toEmail) {
+      const firstName = clientData.firstName?.trim() || "there";
+      const planLabel = newMealPlanLinks[0]?.label || "Meal plan";
+      const planUrl = newMealPlanLinks[0]?.url || "";
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+      const clientPortal = baseUrl ? `${baseUrl.replace(/\/$/, "")}/client` : "/client";
+      await sendEmail({
+        to: toEmail,
+        subject: "Your meal plan has been updated",
+        html: `
+          <p>Hi ${firstName},</p>
+          <p>Your coach has updated your meal plan.</p>
+          <p><strong>${planLabel}</strong></p>
+          <p><a href="${planUrl}" style="display:inline-block;background:#c9a227;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:600;">View meal plan</a></p>
+          <p><a href="${planUrl}">${planUrl}</a></p>
+          ${newMealPlanLinks.length > 1 ? `<p>You have ${newMealPlanLinks.length} meal plan links in your portal.</p>` : ""}
+          <p><a href="${clientPortal}">Open your CheckinHUB portal</a></p>
+          <p>Best,<br>CheckinHUB</p>
+        `.trim(),
+        text: `Hi ${firstName},\n\nYour coach has updated your meal plan: ${planLabel}\n${planUrl}\n\nBest,\nCheckinHUB`,
+      });
+    }
+  }
 
   const redMax = typeof body.trafficLightRedMax === "number" ? body.trafficLightRedMax : undefined;
   const orangeMax = typeof body.trafficLightOrangeMax === "number" ? body.trafficLightOrangeMax : undefined;

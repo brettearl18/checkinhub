@@ -39,7 +39,6 @@ export default function CoachDashboardPage() {
   const [authError, setAuthError] = useState(false);
   const [inventorySearch, setInventorySearch] = useState("");
   const [inventorySort, setInventorySort] = useState<"name" | "lastCheckIn" | "overdue">("name");
-
   const coachName = identity?.firstName
     ? identity.firstName
     : (user?.displayName ?? "").split(" ")[0] || null;
@@ -213,6 +212,17 @@ export default function CoachDashboardPage() {
             onSortChange={setInventorySort}
             compactTitle
           />
+
+          {/* Email settings link */}
+          <Link href="/coach/settings">
+            <Card className="p-5 border-[var(--color-border)] bg-[var(--color-bg-elevated)] transition-shadow hover:shadow-sm hover:border-[var(--color-primary-muted)] cursor-pointer">
+              <h2 className="text-base font-semibold text-[var(--color-text)] mb-1">Email</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                Test Mailgun and preview reminder emails (check-in open / closing). Configure in Settings.
+              </p>
+              <p className="mt-2 text-sm font-medium text-[var(--color-primary)]">Open email settings →</p>
+            </Card>
+          </Link>
         </>
       )}
     </div>

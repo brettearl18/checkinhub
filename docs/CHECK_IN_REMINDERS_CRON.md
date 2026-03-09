@@ -13,39 +13,32 @@ Notifications are created in the `notifications` collection with `userId` = the 
 
 ## Cron API
 
-**Endpoint:** `POST /api/cron/check-in-reminders`
+**Endpoints:**
+
+- **GET** `/api/cron/check-in-reminders/open` – Check-in open (Friday 10am Perth). Used by Vercel Cron.
+- **GET** `/api/cron/check-in-reminders/closing` – Closing reminder (Monday 5pm Perth). Used by Vercel Cron.
+- **GET** `/api/cron/check-in-reminders?type=open|closing` – Same logic, type in query (manual/custom cron).
+- **POST** `/api/cron/check-in-reminders` – Body `{ "type": "open" }` or `{ "type": "closing" }` (manual/custom cron).
 
 **Auth:** Request must include the shared secret:
 
-- Header: `Authorization: Bearer <CRON_SECRET>`, or  
+- Header: `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sets this automatically when `CRON_SECRET` is set in env), or  
 - Header: `x-cron-secret: <CRON_SECRET>`
 
-**Body:**
+- **`open`** – Run on **Friday 10am Perth**. Finds assignments with `reflectionWeekStart` = next Monday (Perth) and status in `pending` / `active` / `overdue` / `started`; creates one in-app notification, sends push (if enabled), and **sends email** per client (title: "Check In is now Open").
+- **`closing`** – Run on **Monday 5pm Perth**. Same week logic for this Monday; creates in-app notification, push, and **email** per client (closing reminder).
 
-```json
-{ "type": "open" }
-```
+**Response:** `{ "ok": true, "type": "open" | "closing", "weekStart": "YYYY-MM-DD", "sent": number, "pushSent": number, "emailSent": number }` (or `{ "ok": true, "sent": 0, "message": "..." }` when DB not configured).
 
-or
+## Setting up the cron (Vercel)
 
-```json
-{ "type": "closing" }
-```
+1. **Environment:** In Vercel project settings, set `CRON_SECRET` to a long random string. Vercel Cron will send it as `Authorization: Bearer <CRON_SECRET>` on each request.
 
-- **`open`** – Run on **Friday 10am Perth**. Finds assignments with `reflectionWeekStart` = next Monday (Perth) and status in `pending` / `active` / `overdue` / `started`; creates one notification per client (title: "Check In is now Open").
-- **`closing`** – Run on **Monday 5pm Perth**. Finds assignments with `reflectionWeekStart` = this Monday (Perth) and status not completed; creates one notification per client.
+2. **Schedule:** Defined in `vercel.json`:
+   - **Friday 10:00 Perth** → `0 2 * * 5` (02:00 UTC) → `/api/cron/check-in-reminders/open`
+   - **Monday 17:00 Perth** → `0 9 * * 1` (09:00 UTC) → `/api/cron/check-in-reminders/closing`
 
-**Response:** `{ "ok": true, "type": "open" | "closing", "weekStart": "YYYY-MM-DD", "sent": number }`
-
-## Setting up the cron
-
-1. **Environment:** Set `CRON_SECRET` to a long random string (e.g. in Vercel/Cloud Run env).
-
-2. **Scheduler:** Call the endpoint at the right **Perth** times:
-   - **Friday 9:00** Perth → e.g. cron `0 1 * * 5` UTC (Friday 01:00 UTC = 09:00 Perth in standard time; adjust for DST if needed – Perth does not use DST, so it’s always UTC+8).
-   - **Monday 17:00** Perth → e.g. cron `0 9 * * 1` UTC (Monday 09:00 UTC = 17:00 Perth).
-
-   Use a cron service (Vercel Cron, Google Cloud Scheduler, etc.) that sends a POST with body `{"type":"open"}` or `{"type":"closing"}` and the `Authorization: Bearer <CRON_SECRET>` header.
+   After deploy, Vercel will trigger these GET requests automatically. No external scheduler needed.
 
 3. **Firestore:** Ensure the composite index for `check_in_assignments` on `(reflectionWeekStart, status)` is deployed (see `firestore.indexes.json`).
 
