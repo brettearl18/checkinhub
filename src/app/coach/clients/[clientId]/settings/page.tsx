@@ -128,6 +128,8 @@ export default function CoachClientSettingsPage() {
   const [billingHistoryLoading, setBillingHistoryLoading] = useState(false);
   const [paymentHistoryExpanded, setPaymentHistoryExpanded] = useState(false);
   const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderMessage, setReminderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [allocationForms, setAllocationForms] = useState<{ id: string; title?: string }[]>([]);
   const [allocationAssignments, setAllocationAssignments] = useState<{ id: string; formTitle: string; formId: string; status: string; reflectionWeekStart: string | null; responseId: string | null }[]>([]);
   const [assignFormId, setAssignFormId] = useState("");
@@ -456,6 +458,52 @@ export default function CoachClientSettingsPage() {
                 </select>
               </div>
             </div>
+          </Card>
+
+          {/* Send check-in reminder email */}
+          <Card className="p-6">
+            <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Check-in reminder email</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
+              Send this client an email reminding them to complete their open check-in (e.g. if they’re late). The email goes to the address in Profile above.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={reminderLoading || !form.email?.trim()}
+              onClick={async () => {
+                setReminderMessage(null);
+                setReminderLoading(true);
+                try {
+                  const res = await fetchWithAuth(`/api/coach/clients/${clientId}/send-check-in-reminder`, {
+                    method: "POST",
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (res.status === 401) {
+                    setAuthError(true);
+                    return;
+                  }
+                  if (res.ok) {
+                    setReminderMessage({ type: "success", text: "Reminder email sent." });
+                  } else {
+                    setReminderMessage({ type: "error", text: (data.error as string) || "Failed to send" });
+                  }
+                } catch {
+                  setReminderMessage({ type: "error", text: "Request failed" });
+                } finally {
+                  setReminderLoading(false);
+                }
+              }}
+            >
+              {reminderLoading ? "Sending…" : "Send reminder email"}
+            </Button>
+            {reminderMessage && (
+              <p
+                className={`mt-3 text-sm ${reminderMessage.type === "success" ? "text-green-600 dark:text-green-400" : "text-[var(--color-error)]"}`}
+                role="alert"
+              >
+                {reminderMessage.text}
+              </p>
+            )}
           </Card>
 
           {/* Check-in allocation */}

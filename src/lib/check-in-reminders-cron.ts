@@ -65,6 +65,27 @@ export function buildReminderEmailContent(
   return { subject, html, text };
 }
 
+/** Build subject, html, and text for a manual "you're late" reminder (coach-triggered). coachName e.g. "Coach Silvi". */
+export function buildManualReminderEmailContent(
+  firstName: string,
+  appUrl: string,
+  coachName: string = "Coach Silvi"
+): { subject: string; html: string; text: string } {
+  const loginUrl = `${appUrl.replace(/\/$/, "")}${ACTION_URL}`;
+  const subject = "Quick reminder – your check-in is waiting 😊";
+  const bodyCopy = "Just a friendly nudge – you’ve got an open check-in waiting. Whenever you get a chance, log in and complete it; I’d love to see how you’re going.";
+  const message = "Just a friendly nudge – you've got an open check-in waiting. Whenever you get a chance, log in and complete it; I'd love to see how you're going.";
+  const html = `
+    <p>Hi ${firstName},</p>
+    <p>${bodyCopy}</p>
+    <p><a href="${loginUrl}" style="display:inline-block;background:#c9a227;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:600;">Complete your check-in</a></p>
+    <p><a href="${loginUrl}">${loginUrl}</a></p>
+    <p>Best,<br>${coachName}</p>
+  `.trim();
+  const text = `Hi ${firstName},\n\n${message}\n\n${loginUrl}\n\nBest,\n${coachName}`;
+  return { subject, html, text };
+}
+
 export type RunRemindersResult =
   | { ok: true; type: ReminderType; weekStart: string; sent: number; pushSent: number; emailSent: number }
   | { ok: true; sent: number; message: string };
