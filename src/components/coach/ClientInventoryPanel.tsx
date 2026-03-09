@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { formatDateDisplay } from "@/lib/format-date";
 
@@ -46,6 +47,8 @@ function formatLastCheckIn(iso: string | null, overdueCount: number): string {
   return formatDateDisplay(iso);
 }
 
+export type RemindResult = { clientId: string; type: "success" | "error"; text: string } | null;
+
 interface ClientInventoryPanelProps {
   stats: InventoryStats | null;
   clients: InventoryClient[];
@@ -56,6 +59,10 @@ interface ClientInventoryPanelProps {
   onSortChange: (value: "name" | "lastCheckIn" | "overdue") => void;
   /** If true, show compact header (e.g. when embedded on dashboard). */
   compactTitle?: boolean;
+  /** Send check-in reminder email. When provided, a Remind button is shown per row. */
+  onSendReminder?: (clientId: string) => void;
+  remindLoadingId?: string | null;
+  remindResult?: RemindResult;
 }
 
 export function ClientInventoryPanel({
@@ -67,6 +74,9 @@ export function ClientInventoryPanel({
   sort,
   onSortChange,
   compactTitle,
+  onSendReminder,
+  remindLoadingId,
+  remindResult,
 }: ClientInventoryPanelProps) {
   const filtered = clients.filter((c) => {
     const q = search.toLowerCase().trim();
@@ -268,7 +278,25 @@ export function ClientInventoryPanel({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {onSendReminder && (
+                          <>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="!py-1 !text-xs"
+                              disabled={remindLoadingId === c.id || !c.email?.trim()}
+                              onClick={() => onSendReminder(c.id)}
+                            >
+                              {remindLoadingId === c.id ? "Sending…" : "Remind"}
+                            </Button>
+                            {remindResult?.clientId === c.id && (
+                              <span className={`text-xs ${remindResult.type === "success" ? "text-green-600 dark:text-green-400" : "text-[var(--color-error)]"}`}>
+                                {remindResult.text}
+                              </span>
+                            )}
+                          </>
+                        )}
                         <Link
                           href={`/coach/clients/${c.id}/progress`}
                           className="text-sm text-[var(--color-primary)] hover:underline"

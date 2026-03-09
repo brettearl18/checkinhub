@@ -36,10 +36,12 @@ export default function CoachClientsListPage() {
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     setAuthError(false);
+    setLoadError(null);
     try {
       const res = await fetchWithAuth("/api/coach/clients/inventory");
       if (res.status === 401) {
@@ -50,6 +52,8 @@ export default function CoachClientsListPage() {
         const data = await res.json();
         setClients(Array.isArray(data.clients) ? data.clients : []);
       }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to load clients.");
     } finally {
       setLoading(false);
     }
@@ -82,7 +86,16 @@ export default function CoachClientsListPage() {
 
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
 
-      {!loading && clients.length === 0 && (
+      {loadError && (
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-4 py-3 text-sm text-[var(--color-error)]">
+          <p>{loadError}</p>
+          <Button type="button" variant="secondary" className="mt-2" onClick={load}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {!loading && !loadError && clients.length === 0 && (
         <EmptyState
           title="No clients yet"
           description="Add your first client to get started."
@@ -91,7 +104,7 @@ export default function CoachClientsListPage() {
         />
       )}
 
-      {!loading && clients.length > 0 && (
+      {!loading && !loadError && clients.length > 0 && (
         <>
           <p className="text-sm text-[var(--color-text-muted)]">
             {clients.length} client{clients.length !== 1 ? "s" : ""}

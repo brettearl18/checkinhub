@@ -8,25 +8,34 @@ export function useApiClient() {
 
   const fetchWithAuth = useCallback(
     async (url: string, options: RequestInit = {}, retried = false): Promise<Response> => {
-      const token = await getToken(retried);
-      const res = await fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-      });
-      if (res.status === 401 && !retried) {
-        const tokenRefresh = await getToken(true);
-        return fetch(url, {
+      try {
+        const token = await getToken(retried);
+        const res = await fetch(url, {
           ...options,
           headers: {
             ...options.headers,
-            Authorization: tokenRefresh ? `Bearer ${tokenRefresh}` : "",
+            Authorization: token ? `Bearer ${token}` : "",
           },
         });
+        if (res.status === 401 && !retried) {
+          const tokenRefresh = await getToken(true);
+          return fetch(url, {
+            ...options,
+            headers: {
+              ...options.headers,
+              Authorization: tokenRefresh ? `Bearer ${tokenRefresh}` : "",
+            },
+          });
+        }
+        return res;
+      } catch (err) {
+        if (err instanceof TypeError && err.message === "Failed to fetch") {
+          throw new Error(
+            "Network error. Check your connection and that the app is running (e.g. npm run dev)."
+          );
+        }
+        throw err;
       }
-      return res;
     },
     [getToken]
   );

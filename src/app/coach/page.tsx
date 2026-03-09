@@ -39,6 +39,9 @@ export default function CoachDashboardPage() {
   const [authError, setAuthError] = useState(false);
   const [inventorySearch, setInventorySearch] = useState("");
   const [inventorySort, setInventorySort] = useState<"name" | "lastCheckIn" | "overdue">("name");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [remindLoadingId, setRemindLoadingId] = useState<string | null>(null);
+  const [remindResult, setRemindResult] = useState<{ clientId: string; type: "success" | "error"; text: string } | null>(null);
   const coachName = identity?.firstName
     ? identity.firstName
     : (user?.displayName ?? "").split(" ")[0] || null;
@@ -49,6 +52,7 @@ export default function CoachDashboardPage() {
     setLoading(true);
     setInventoryLoading(true);
     setAuthError(false);
+    setLoadError(null);
     try {
       const [overviewRes, inventoryRes] = await Promise.all([
         fetchWithAuth("/api/coach/dashboard"),
@@ -80,6 +84,8 @@ export default function CoachDashboardPage() {
         setInventoryStats(data.stats ?? null);
         setInventoryClients(Array.isArray(data.clients) ? data.clients : []);
       }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to load dashboard.");
     } finally {
       setLoading(false);
       setInventoryLoading(false);
@@ -119,7 +125,16 @@ export default function CoachDashboardPage() {
 
       {loading && <DashboardSkeleton />}
 
-      {!loading && overview && (
+      {loadError && (
+        <div className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-4 py-3 text-sm text-[var(--color-error)]">
+          <p>{loadError}</p>
+          <Button type="button" variant="secondary" className="mt-2" onClick={load}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {!loading && !loadError && overview && (
         <>
           {/* KPI cards – match reference labels */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -211,6 +226,31 @@ export default function CoachDashboardPage() {
             sort={inventorySort}
             onSortChange={setInventorySort}
             compactTitle
+            onSendReminder={async (clientId) => {
+              setRemindResult(null);
+              setRemindLoadingId(clientId);
+              try {
+                const res = await fetchWithAuth(`/api/coach/clients/${clientId}/send-check-in-reminder`, {
+                  method: "POST",
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.status === 401) {
+                  setAuthError(true);
+                  return;
+                }
+                if (res.ok) {
+                  setRemindResult({ clientId, type: "success", text: "Sent" });
+                } else {
+                  setRemindResult({ clientId, type: "error", text: (data.error as string) || "Failed" });
+                }
+              } catch {
+                setRemindResult({ clientId, type: "error", text: "Failed" });
+              } finally {
+                setRemindLoadingId(null);
+              }
+            }}
+            remindLoadingId={remindLoadingId}
+            remindResult={remindResult}
           />
 
           {/* Email settings link */}
