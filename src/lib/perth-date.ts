@@ -10,6 +10,22 @@ export function todayPerth(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: PERTH_TZ });
 }
 
+/** Format a Date as YYYY-MM-DD in Perth timezone (avoids UTC date shift). */
+function toPerthDateString(d: Date): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: PERTH_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  return `${year}-${month}-${day}`;
+}
+
 /** Next Monday in Perth (YYYY-MM-DD). Used for "check-in open" Friday run: week starting next Monday. */
 export function nextMondayPerth(): string {
   const now = new Date();
@@ -18,18 +34,19 @@ export function nextMondayPerth(): string {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    weekday: "short",
   });
   const parts = formatter.formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
-  const year = parseInt(get("year"), 10);
-  const month = parseInt(get("month"), 10) - 1;
-  const day = parseInt(get("day"), 10);
-  const perthDate = new Date(year, month, day);
-  const dayOfWeek = perthDate.getDay();
-  const daysUntilNextMonday = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : 8 - dayOfWeek;
-  const nextMonday = new Date(perthDate);
-  nextMonday.setDate(perthDate.getDate() + daysUntilNextMonday);
-  return nextMonday.toISOString().slice(0, 10);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const y = get("year");
+  const m = get("month");
+  const d = get("day");
+  const weekday = get("weekday");
+  const dayNum = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday) + 1;
+  const daysUntilNextMonday = dayNum === 1 ? 0 : dayNum === 7 ? 1 : 8 - dayNum;
+  const perthNoon = new Date(`${y}-${m}-${d}T12:00:00+08:00`);
+  const nextMondayTime = perthNoon.getTime() + daysUntilNextMonday * 24 * 60 * 60 * 1000;
+  return toPerthDateString(new Date(nextMondayTime));
 }
 
 /**
@@ -57,16 +74,17 @@ export function thisMondayPerth(): string {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    weekday: "short",
   });
   const parts = formatter.formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
-  const year = parseInt(get("year"), 10);
-  const month = parseInt(get("month"), 10) - 1;
-  const day = parseInt(get("day"), 10);
-  const perthDate = new Date(year, month, day);
-  const dayOfWeek = perthDate.getDay();
-  const daysBackToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const thisMonday = new Date(perthDate);
-  thisMonday.setDate(perthDate.getDate() - daysBackToMonday);
-  return thisMonday.toISOString().slice(0, 10);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const y = get("year");
+  const m = get("month");
+  const d = get("day");
+  const weekday = get("weekday");
+  const daysBackToMonday =
+    weekday === "Sun" ? 6 : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday);
+  const perthNoon = new Date(`${y}-${m}-${d}T12:00:00+08:00`);
+  const thisMondayTime = perthNoon.getTime() - daysBackToMonday * 24 * 60 * 60 * 1000;
+  return toPerthDateString(new Date(thisMondayTime));
 }

@@ -22,18 +22,18 @@ function getFridayOfWeek(mondayYyyyMmDd: string): string {
 }
 
 function getWeekDays(mondayYyyyMmDd: string): { dayLabel: string; date: string; display: string }[] {
-  const [y, m, d] = mondayYyyyMmDd.split("-").map(Number);
-  const monday = new Date(y, m - 1, d);
+  const monday = new Date(mondayYyyyMmDd + "T12:00:00Z");
   const days: { dayLabel: string; date: string; display: string }[] = [];
   for (let i = 0; i < 7; i++) {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + i);
-    const dateStr = toLocalDateString(date);
-    const dayOfMonth = date.getDate();
+    const date = new Date(monday.getTime() + i * 24 * 60 * 60 * 1000);
+    const y = date.getUTCFullYear();
+    const mo = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const dateStr = `${y}-${mo}-${day}`;
     days.push({
       dayLabel: DAY_LABELS[i],
       date: dateStr,
-      display: `${DAY_LABELS[i]} ${dayOfMonth}`,
+      display: `${DAY_LABELS[i]} ${date.getUTCDate()}`,
     });
   }
   return days;
