@@ -300,18 +300,13 @@ export default function ClientPortalPage() {
             </p>
             <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
               {openAssignments.length > 0
-                ? "Complete your open check-in below, or start a new one from the week picker."
+                ? "Choose which week you're filling in—you can catch up or do this week."
                 : "A quick reflection to keep your momentum going."}
             </p>
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-5">
               <Button asChild variant="primary">
-                <Link href="/client/check-in/new">New check-in</Link>
+                <Link href="/client/check-in/new">Fill in a check-in</Link>
               </Button>
-              {openAssignments.length > 0 && (
-                <span className="flex items-center text-sm text-[var(--color-text-muted)]">
-                  or open one from the list below
-                </span>
-              )}
             </div>
           </div>
         </Card>
@@ -456,7 +451,7 @@ export default function ClientPortalPage() {
         </section>
       )}
 
-      {/* Resume list or empty state */}
+      {/* Error / loading / empty – no long list of check-ins; week picker is the entry point */}
       <section className="mt-6">
         {authError && <AuthErrorRetry onRetry={loadData} />}
         {!authError && error && (
@@ -472,33 +467,11 @@ export default function ClientPortalPage() {
         )}
         {!authError && !loading && assignments.length === 0 && (
           <EmptyState
-            title="No check-ins to resume"
-            description="Start a new check-in when you're ready—each one helps you stay on track."
+            title="No check-ins to do"
+            description="When your coach assigns check-ins, use the button above to choose a week and fill one in."
             actionLabel="New check-in"
             actionHref="/client/check-in/new"
           />
-        )}
-        {!authError && !loading && assignments.length > 0 && (
-          <ul className="space-y-2">
-            {assignments.map((a) => (
-              <li key={a.id}>
-                <Link
-                  href={`/client/check-in/${a.id}`}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-4 py-4 text-left transition-colors hover:border-[var(--color-primary-muted)] hover:bg-[var(--color-primary-subtle)]/50"
-                >
-                  <div>
-                    <span className="font-medium text-[var(--color-text)]">{a.formTitle}</span>
-                    {a.reflectionWeekStart && (
-                      <span className="ml-2 text-sm text-[var(--color-text-muted)]">
-                        Week of {a.reflectionWeekStart}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-sm font-medium text-[var(--color-primary)]">Resume →</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
         )}
       </section>
 

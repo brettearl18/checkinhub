@@ -81,18 +81,15 @@ export default function NewCheckInPage() {
     d.setUTCDate(d.getUTCDate() + 7);
     return d.toISOString().slice(0, 10);
   })();
+  const previousMonday = (() => {
+    const d = new Date(thisMonday + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() - 7);
+    return d.toISOString().slice(0, 10);
+  })();
+  // Only show 1 week before, this week, and 1 week ahead (no long list of past weeks)
+  const threeWeekWindow = useMemo(() => [nextMonday, thisMonday, previousMonday] as const, [nextMonday, thisMonday, previousMonday]);
   const weeksWithAssignments = useMemo(() => {
-    const openStarts = new Set<string>();
-    assignments.forEach((a) => {
-      if (a.reflectionWeekStart < thisMonday || isWeekOpenPerth(a.reflectionWeekStart)) {
-        openStarts.add(a.reflectionWeekStart);
-      }
-    });
-    if (openStarts.size === 0) {
-      const weekSet = new Set(assignments.map((a) => a.reflectionWeekStart));
-      return weekOptions.filter((w) => weekSet.has(w.reflectionWeekStart));
-    }
-    const sorted = Array.from(openStarts).sort().reverse();
+    const sorted = [...threeWeekWindow].sort().reverse();
     return sorted.map((monday) => {
       const [y, m, d] = monday.split("-").map(Number);
       const mon = new Date(y, m - 1, d);
@@ -113,7 +110,7 @@ export default function NewCheckInPage() {
         isNextWeek,
       };
     });
-  }, [assignments, weekOptions, thisMonday, nextMonday]);
+  }, [threeWeekWindow, thisMonday, nextMonday]);
 
   const openWeeks = weekOptions.filter(
     (w) => w.reflectionWeekStart < thisMondayPerth() || isWeekOpenPerth(w.reflectionWeekStart)
