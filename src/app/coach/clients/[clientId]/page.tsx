@@ -307,7 +307,9 @@ export default function CoachClientCheckInsPage() {
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">
                         {row.reflectionWeekStart ? formatDateDisplay(row.reflectionWeekStart) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-[var(--color-text)]">{row.status}</td>
+                      <td className="px-4 py-3 text-[var(--color-text)]">
+                        {row.status === "skipped" ? "Missed" : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                      </td>
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">
                         <span className="text-xs">{dateLabel}: </span>
                         {displayDate}

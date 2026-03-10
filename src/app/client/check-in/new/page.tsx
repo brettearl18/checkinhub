@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -50,10 +50,19 @@ interface FormItem {
   category?: string;
 }
 
+interface AssignmentItem {
+  id: string;
+  formId: string;
+  formTitle: string;
+  reflectionWeekStart: string;
+  status: string;
+}
+
 export default function NewCheckInPage() {
   const router = useRouter();
   const { fetchWithAuth } = useApiClient();
   const [step, setStep] = useState<"form" | "week">("form");
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [forms, setForms] = useState<FormItem[]>([]);
   const [selectedForm, setSelectedForm] = useState<FormItem | null>(null);
   const [completedWeeks, setCompletedWeeks] = useState<string[]>([]);
@@ -61,9 +70,50 @@ export default function NewCheckInPage() {
   const [loadingForms, setLoadingForms] = useState(true);
   const [loadingWeeks, setLoadingWeeks] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [markingMissed, setMarkingMissed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promptMissed, setPromptMissed] = useState<{ week: string; assignmentId: string; previousCount: number } | null>(null);
 
   const weekOptions = getWeekOptions();
+  const thisMonday = thisMondayPerth();
+  const nextMonday = (() => {
+    const d = new Date(thisMonday + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 7);
+    return d.toISOString().slice(0, 10);
+  })();
+  const weeksWithAssignments = useMemo(() => {
+    const openStarts = new Set<string>();
+    assignments.forEach((a) => {
+      if (a.reflectionWeekStart < thisMonday || isWeekOpenPerth(a.reflectionWeekStart)) {
+        openStarts.add(a.reflectionWeekStart);
+      }
+    });
+    if (openStarts.size === 0) {
+      const weekSet = new Set(assignments.map((a) => a.reflectionWeekStart));
+      return weekOptions.filter((w) => weekSet.has(w.reflectionWeekStart));
+    }
+    const sorted = Array.from(openStarts).sort().reverse();
+    return sorted.map((monday) => {
+      const [y, m, d] = monday.split("-").map(Number);
+      const mon = new Date(y, m - 1, d);
+      const sun = new Date(mon);
+      sun.setDate(sun.getDate() + 6);
+      const sundayStr = toLocalDateString(sun);
+      const isThisWeek = monday === thisMonday;
+      const isNextWeek = monday === nextMonday;
+      const label = isThisWeek
+        ? `This week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
+        : isNextWeek
+          ? `Next week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
+          : `${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)}`;
+      return {
+        label,
+        reflectionWeekStart: monday,
+        isThisWeek,
+        isNextWeek,
+      };
+    });
+  }, [assignments, weekOptions, thisMonday, nextMonday]);
 
   const openWeeks = weekOptions.filter(
     (w) => w.reflectionWeekStart < thisMondayPerth() || isWeekOpenPerth(w.reflectionWeekStart)
@@ -71,7 +121,7 @@ export default function NewCheckInPage() {
   const allOpenWeeksDone =
     openWeeks.length > 0 && openWeeks.every((w) => completedWeeks.includes(w.reflectionWeekStart));
 
-  // Only show forms this client has been assigned (from their check-in assignments).
+  // Load assignments; derive forms; if single form, go straight to week step.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -83,9 +133,10 @@ export default function NewCheckInPage() {
           return;
         }
         const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+        const list: AssignmentItem[] = Array.isArray(data) ? data : [];
+        if (!cancelled) setAssignments(list);
         const byFormId = new Map<string, FormItem>();
-        list.forEach((a: { formId: string; formTitle?: string }) => {
+        list.forEach((a: AssignmentItem) => {
           if (a.formId && !byFormId.has(a.formId)) {
             byFormId.set(a.formId, {
               id: a.formId,
@@ -95,7 +146,14 @@ export default function NewCheckInPage() {
             });
           }
         });
-        if (!cancelled) setForms(Array.from(byFormId.values()));
+        const formList = Array.from(byFormId.values());
+        if (!cancelled) {
+          setForms(formList);
+          if (formList.length === 1) {
+            setSelectedForm(formList[0]!);
+            setStep("week");
+          }
+        }
       } finally {
         if (!cancelled) setLoadingForms(false);
       }
@@ -126,9 +184,31 @@ export default function NewCheckInPage() {
     return () => { cancelled = true; };
   }, [step, selectedForm, fetchWithAuth]);
 
+  const getAssignmentIdForWeek = (reflectionWeekStart: string): string | null => {
+    const a = assignments.find(
+      (x) =>
+        x.reflectionWeekStart === reflectionWeekStart &&
+        (!selectedForm || x.formId === selectedForm.id)
+    );
+    return a?.id ?? null;
+  };
+
+  const previousPendingCount = (selectedWeek: string) =>
+    assignments.filter((a) => a.reflectionWeekStart < selectedWeek).length;
+
   const handleSelectWeek = async (reflectionWeekStart: string) => {
+    if (completedWeeks.includes(reflectionWeekStart)) return;
+    const assignmentId = getAssignmentIdForWeek(reflectionWeekStart);
+    if (assignmentId) {
+      const previousCount = previousPendingCount(reflectionWeekStart);
+      if (previousCount > 0) {
+        setPromptMissed({ week: reflectionWeekStart, assignmentId, previousCount });
+        return;
+      }
+      router.push(`/client/check-in/${assignmentId}`);
+      return;
+    }
     if (!selectedForm) return;
-    if (completedWeeks.includes(reflectionWeekStart)) return; // no second check-in for completed weeks
     setResolving(true);
     setError(null);
     try {
@@ -156,6 +236,37 @@ export default function NewCheckInPage() {
     } finally {
       setResolving(false);
     }
+  };
+
+  const handleConfirmMarkMissed = async () => {
+    if (!promptMissed) return;
+    const { week, assignmentId } = promptMissed;
+    setMarkingMissed(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth("/api/check-in/mark-weeks-missed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ beforeReflectionWeekStart: week }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(typeof body?.error === "string" ? body.error : "Could not mark weeks as missed.");
+        return;
+      }
+      setPromptMissed(null);
+      router.push(`/client/check-in/${assignmentId}`);
+    } catch {
+      setError("Could not mark weeks as missed.");
+    } finally {
+      setMarkingMissed(false);
+    }
+  };
+
+  const handleSkipMarkMissed = () => {
+    if (!promptMissed) return;
+    router.push(`/client/check-in/${promptMissed.assignmentId}`);
+    setPromptMissed(null);
   };
 
   return (
@@ -232,7 +343,7 @@ export default function NewCheckInPage() {
           </Card>
           <Card className="p-6">
             <h2 className="text-lg font-medium text-[var(--color-text)]">
-              Choose week
+              Which week are you filling in?
             </h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">
               Select the week you&apos;re checking in for. Past weeks are always available; this week and next week open Friday 9am Perth so you review the week that&apos;s just passed.
@@ -250,11 +361,11 @@ export default function NewCheckInPage() {
             {!loadingWeeks && (
               <div className="mt-4">
                 <WeekCalendar
-                  weeks={weekOptions}
+                  weeks={weeksWithAssignments.length > 0 ? weeksWithAssignments : weekOptions}
                   completedWeekStarts={completedWeeks}
                   inProgressWeekStarts={inProgressWeeks}
                   onSelectWeek={handleSelectWeek}
-                  resolving={resolving}
+                  resolving={resolving || markingMissed}
                 />
               </div>
             )}
@@ -265,6 +376,37 @@ export default function NewCheckInPage() {
             )}
           </Card>
         </>
+      )}
+
+      {promptMissed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="mark-missed-title">
+          <Card className="w-full max-w-md p-6">
+            <h2 id="mark-missed-title" className="text-lg font-semibold text-[var(--color-text)]">
+              Previous weeks not completed
+            </h2>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              You have {promptMissed.previousCount} previous week{promptMissed.previousCount !== 1 ? "s" : ""} that aren&apos;t completed. Do you want to mark {promptMissed.previousCount === 1 ? "it" : "them"} as missed? They&apos;ll be removed from your to-do list.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleConfirmMarkMissed}
+                disabled={markingMissed}
+              >
+                {markingMissed ? "Marking…" : `Mark ${promptMissed.previousCount} as missed`}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSkipMarkMissed}
+                disabled={markingMissed}
+              >
+                No, just this week
+              </Button>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

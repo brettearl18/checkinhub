@@ -36,6 +36,8 @@ export default function CheckInFormPage() {
     band: "red" | "orange" | "green";
     message: string;
   } | null>(null);
+  const [markingMissed, setMarkingMissed] = useState(false);
+  const [markedMissed, setMarkedMissed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -164,6 +166,26 @@ export default function CheckInFormPage() {
     }
   };
 
+  const handleMarkMissed = async () => {
+    if (!window.confirm("Mark this week’s check-in as missed? It will be removed from your to-do list.")) return;
+    setMarkingMissed(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/check-in/${assignmentId}/mark-missed`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(typeof body?.error === "string" ? body.error : "Could not mark as missed.");
+        return;
+      }
+      setMarkedMissed(true);
+      router.push("/client");
+    } catch {
+      setError("Could not mark as missed.");
+    } finally {
+      setMarkingMissed(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -251,19 +273,44 @@ export default function CheckInFormPage() {
     );
   }
 
+  if (assignment.status === "skipped") {
+    return (
+      <div className="space-y-6">
+        <Card className="p-6">
+          <p className="text-[var(--color-text-secondary)]">
+            You marked this week’s check-in as missed.
+          </p>
+          <Button asChild variant="secondary">
+            <Link href="/client">Back to dashboard</Link>
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   const totalSteps = questions.length + 1;
   const isSubmitStep = currentStep >= questions.length;
   const currentQuestion = !isSubmitStep ? questions[currentStep] : null;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-[var(--color-text)]">
           {assignment.formTitle}
         </h1>
-        <Button asChild variant="ghost">
-          <Link href="/client">Cancel</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleMarkMissed}
+            disabled={markingMissed}
+            className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:underline disabled:opacity-50"
+          >
+            {markingMissed ? "Marking…" : "Mark as missed"}
+          </button>
+          <Button asChild variant="ghost">
+            <Link href="/client">Cancel</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Progress */}

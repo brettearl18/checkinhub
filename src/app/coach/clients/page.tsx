@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+
+function formatDateDisplay(iso: string): string {
+  const d = new Date(iso + "T12:00:00Z");
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
 interface ClientRow {
   id: string;
@@ -37,6 +42,32 @@ export default function CoachClientsListPage() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [forms, setForms] = useState<{ id: string; title?: string }[]>([]);
+  const [bulkFormId, setBulkFormId] = useState("");
+  const [bulkWeek, setBulkWeek] = useState("");
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  const bulkWeekOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [];
+    const today = new Date();
+    for (let i = -2; i <= 1; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + 7 * i);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const m = new Date(d);
+      m.setDate(diff);
+      const monday = m.toISOString().slice(0, 10);
+      const [y, mo, dayNum] = monday.split("-").map(Number);
+      const end = new Date(y, mo - 1, dayNum);
+      end.setDate(end.getDate() + 6);
+      const endStr = end.toISOString().slice(0, 10);
+      options.push({ value: monday, label: `${formatDateDisplay(monday)} – ${formatDateDisplay(endStr)}` });
+    }
+    return options;
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -62,6 +93,47 @@ export default function CoachClientsListPage() {
   useEffect(() => {
     load();
   }, [fetchWithAuth]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/coach/forms");
+        if (res.ok) {
+          const data = await res.json();
+          setForms(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        // non-fatal
+      }
+    })();
+  }, [fetchWithAuth]);
+
+  const applyBulkRecurring = async () => {
+    if (!bulkFormId || !bulkWeek) return;
+    setBulkApplying(true);
+    setBulkResult(null);
+    try {
+      const res = await fetchWithAuth("/api/coach/assignments/bulk-recurring", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formId: bulkFormId, reflectionWeekStart: bulkWeek }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBulkResult({ type: "error", text: data.error ?? "Failed to apply to all clients." });
+        return;
+      }
+      setBulkResult({
+        type: "success",
+        text: `Created ${data.created ?? 0} assignments for ${data.clientsProcessed ?? 0} clients.${(data.errors?.length ?? 0) > 0 ? ` ${data.errors.length} client(s) had errors.` : ""}`,
+      });
+      setBulkFormId("");
+      setBulkWeek("");
+      load();
+    } finally {
+      setBulkApplying(false);
+    }
+  };
 
   if (authError) {
     return <AuthErrorRetry onRetry={load} />;
@@ -106,6 +178,58 @@ export default function CoachClientsListPage() {
 
       {!loading && !loadError && clients.length > 0 && (
         <>
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+            <button
+              type="button"
+              onClick={() => setBulkOpen((o) => !o)}
+              className="flex w-full items-center justify-between text-left text-sm font-medium text-[var(--color-text)]"
+            >
+              Assign recurring check-in to all profiles
+              <span className="text-[var(--color-text-muted)]">{bulkOpen ? "▼" : "▶"}</span>
+            </button>
+            {bulkOpen && (
+              <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-[var(--color-border)] pt-4">
+                <div className="min-w-[200px]">
+                  <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">Form</label>
+                  <select
+                    value={bulkFormId}
+                    onChange={(e) => setBulkFormId(e.target.value)}
+                    className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                  >
+                    <option value="">Select form</option>
+                    {forms.map((f) => (
+                      <option key={f.id} value={f.id}>{f.title ?? f.id}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-[220px]">
+                  <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">First week</label>
+                  <select
+                    value={bulkWeek}
+                    onChange={(e) => setBulkWeek(e.target.value)}
+                    className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                  >
+                    <option value="">Select week</option>
+                    {bulkWeekOptions.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  type="button"
+                  onClick={applyBulkRecurring}
+                  disabled={!bulkFormId || !bulkWeek || bulkApplying}
+                >
+                  {bulkApplying ? "Applying…" : `Apply to all ${clients.length} clients`}
+                </Button>
+                {bulkResult && (
+                  <p className={`text-sm ${bulkResult.type === "success" ? "text-[var(--color-success)]" : "text-[var(--color-error)]"}`} role="alert">
+                    {bulkResult.text}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
           <p className="text-sm text-[var(--color-text-muted)]">
             {clients.length} client{clients.length !== 1 ? "s" : ""}
           </p>

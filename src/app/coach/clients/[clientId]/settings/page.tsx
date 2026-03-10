@@ -134,6 +134,7 @@ export default function CoachClientSettingsPage() {
   const [allocationAssignments, setAllocationAssignments] = useState<{ id: string; formTitle: string; formId: string; status: string; reflectionWeekStart: string | null; responseId: string | null }[]>([]);
   const [assignFormId, setAssignFormId] = useState("");
   const [assignWeek, setAssignWeek] = useState("");
+  const [assignRecurring, setAssignRecurring] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
@@ -239,25 +240,38 @@ export default function CoachClientSettingsPage() {
       const res = await fetchWithAuth(`/api/coach/clients/${clientId}/assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ formId: assignFormId, reflectionWeekStart: assignWeek }),
+        body: JSON.stringify({
+          formId: assignFormId,
+          reflectionWeekStart: assignWeek,
+          recurring: assignRecurring,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setAssignError(data.message ?? "Failed to assign check-in.");
+        setAssignError(data.error ?? "Failed to assign check-in.");
         return;
       }
       setAssignError(null);
-      const newRow = {
-        id: data.assignmentId ?? "",
-        formTitle: allocationForms.find((f) => f.id === assignFormId)?.title ?? "Check-in",
-        formId: assignFormId,
-        status: "pending",
-        reflectionWeekStart: assignWeek,
-        responseId: null,
-      };
-      setAllocationAssignments((prev) => [newRow, ...prev]);
+      if (assignRecurring && Array.isArray(data.assignmentIds)) {
+        const checkInsRes = await fetchWithAuth(`/api/coach/clients/${clientId}/check-ins`);
+        if (checkInsRes.ok) {
+          const list = await checkInsRes.json();
+          setAllocationAssignments(Array.isArray(list) ? list : []);
+        }
+      } else {
+        const newRow = {
+          id: data.assignmentId ?? "",
+          formTitle: allocationForms.find((f) => f.id === assignFormId)?.title ?? "Check-in",
+          formId: assignFormId,
+          status: "pending",
+          reflectionWeekStart: assignWeek,
+          responseId: null,
+        };
+        setAllocationAssignments((prev) => [newRow, ...prev]);
+      }
       setAssignFormId("");
       setAssignWeek("");
+      setAssignRecurring(false);
     } finally {
       setAssigning(false);
     }
@@ -539,12 +553,27 @@ export default function CoachClientSettingsPage() {
                   ))}
                 </select>
               </div>
+              <label className="flex items-center gap-2 text-sm text-[var(--color-text)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={assignRecurring}
+                  onChange={(e) => setAssignRecurring(e.target.checked)}
+                  className="rounded border-[var(--color-border)]"
+                />
+                Repeat every week (1 year)
+              </label>
               <Button
                 type="button"
                 onClick={() => handleAssignCheckIn()}
                 disabled={!assignFormId || !assignWeek || assigning}
               >
-                {assigning ? "Assigning…" : "Assign check-in"}
+                {assigning
+                  ? assignRecurring
+                    ? "Assigning 52 weeks…"
+                    : "Assigning…"
+                  : assignRecurring
+                    ? "Assign check-in (52 weeks)"
+                    : "Assign check-in"}
               </Button>
             </div>
             {assignError && (
