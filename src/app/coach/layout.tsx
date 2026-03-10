@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/coach/messages", label: "Messages" },
   { href: "/coach/notifications", label: "Notifications" },
   { href: "/coach/payments", label: "Payment" },
+  { href: "/coach/important-links", label: "Important Links" },
   { href: "/coach/gallery", label: "Gallery" },
   { href: "/coach/forms", label: "Forms" },
   { href: "/coach/questions", label: "Questions" },
