@@ -134,7 +134,7 @@ export default function CoachPaymentHistoryPage() {
                 <table className="w-full min-w-[500px] text-sm">
                   <thead>
                     <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                      <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Date</th>
+                      <th className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg-elevated)] px-4 py-3 text-left font-medium text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">Date</th>
                       <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Invoice</th>
                       <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">Status</th>
                       <th className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">Amount</th>
@@ -143,8 +143,8 @@ export default function CoachPaymentHistoryPage() {
                   </thead>
                   <tbody>
                     {data.invoices.map((inv) => (
-                      <tr key={inv.id} className="border-b border-[var(--color-border)] last:border-0">
-                        <td className="px-4 py-3 text-[var(--color-text-muted)]">
+                      <tr key={inv.id} className="group border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-bg-elevated)]">
+                        <td className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] px-4 py-3 text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-bg-elevated)]">
                           {inv.created ? formatDateDisplay(inv.created) : "—"}
                         </td>
                         <td className="px-4 py-3 text-[var(--color-text)] font-mono">

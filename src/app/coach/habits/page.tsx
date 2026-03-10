@@ -83,7 +83,7 @@ export default function CoachHabitsOverviewPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                  <th className="px-3 py-2.5 text-left font-medium text-[var(--color-text)]">Client</th>
+                  <th className="sticky left-0 z-10 min-w-[100px] bg-[var(--color-bg-elevated)] px-3 py-2.5 text-left font-medium text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">Client</th>
                   {HABIT_COLUMNS.map((col) => (
                     <th key={col.id} colSpan={2} className="px-3 py-2.5 text-center font-medium text-[var(--color-text)]">
                       {col.label}
@@ -92,7 +92,7 @@ export default function CoachHabitsOverviewPage() {
                   <th className="px-3 py-2.5 text-right font-medium text-[var(--color-text)]">Actions</th>
                 </tr>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-                  <th className="px-3 py-1.5 text-left text-xs font-medium text-[var(--color-text-muted)]" />
+                  <th className="sticky left-0 z-10 min-w-[100px] bg-[var(--color-bg)] px-3 py-1.5 text-left text-xs font-medium text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]" />
                   {HABIT_COLUMNS.map((col) => (
                     <Fragment key={col.id}>
                       <th className="px-2 py-1.5 text-center text-xs font-medium text-[var(--color-text-muted)]">
@@ -110,9 +110,9 @@ export default function CoachHabitsOverviewPage() {
                 {clients.map((c) => (
                   <tr
                     key={c.clientId}
-                    className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]"
+                    className="group border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]"
                   >
-                    <td className="px-3 py-2.5">
+                    <td className="sticky left-0 z-10 min-w-[100px] bg-[var(--color-bg)] px-3 py-2.5 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-bg-elevated)]">
                       <span className="font-medium text-[var(--color-text)]">
                         {c.firstName} {c.lastName}
                       </span>

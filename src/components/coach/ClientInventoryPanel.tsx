@@ -184,7 +184,7 @@ export function ClientInventoryPanel({
             <table className="w-full min-w-[800px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                  <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">NAME</th>
+                  <th className="sticky left-0 z-10 min-w-[140px] bg-[var(--color-bg-elevated)] px-4 py-3 text-left font-medium text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">NAME</th>
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">STATUS</th>
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">PROGRESS</th>
                   <th className="px-4 py-3 text-left font-medium text-[var(--color-text-muted)]">TREND</th>
@@ -198,9 +198,9 @@ export function ClientInventoryPanel({
                 {sorted.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-b border-[var(--color-border)] hover:bg-[var(--color-primary-subtle)]/30"
+                    className="group border-b border-[var(--color-border)] hover:bg-[var(--color-primary-subtle)]/30"
                   >
-                    <td className="px-4 py-3">
+                    <td className="sticky left-0 z-10 min-w-[140px] bg-[var(--color-bg)] px-4 py-3 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-primary-subtle)]/30">
                       <div className="flex items-center gap-2">
                         <span
                           className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-muted)] text-sm font-medium text-[var(--color-text)]"
@@ -208,7 +208,7 @@ export function ClientInventoryPanel({
                         >
                           {initial(c.firstName)}
                         </span>
-                        <div>
+                        <div className="min-w-0">
                           <span className="font-medium text-[var(--color-text)]">
                             {c.firstName} {c.lastName}
                           </span>

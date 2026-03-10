@@ -141,7 +141,7 @@ export default function CoachMessagesPage() {
                   <button
                     type="button"
                     onClick={() => setSelected(c.conversationId)}
-                    className={`w-full px-4 py-3 text-left hover:bg-[var(--color-primary-subtle)] ${selected === c.conversationId ? "bg-[var(--color-primary-subtle)]" : ""}`}
+                    className={`flex min-h-[48px] w-full flex-col justify-center px-4 py-3 text-left hover:bg-[var(--color-primary-subtle)] touch-manipulation ${selected === c.conversationId ? "bg-[var(--color-primary-subtle)]" : ""}`}
                   >
                     <p className="font-medium text-[var(--color-text)]">{c.clientName}</p>
                     <p className="truncate text-sm text-[var(--color-text-muted)]">{c.lastMessage.content || "No messages"}</p>

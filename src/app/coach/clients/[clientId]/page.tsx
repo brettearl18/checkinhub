@@ -282,10 +282,10 @@ export default function CoachClientCheckInsPage() {
       {!loading && list.length > 0 && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[360px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-                  <th className="px-4 py-3 font-medium text-[var(--color-text)]">Form</th>
+                  <th className="sticky left-0 z-10 min-w-[120px] bg-[var(--color-bg)] px-4 py-3 font-medium text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">Form</th>
                   <th className="px-4 py-3 font-medium text-[var(--color-text)]">Week</th>
                   <th className="px-4 py-3 font-medium text-[var(--color-text)]">Status</th>
                   <th className="px-4 py-3 font-medium text-[var(--color-text)]">Date</th>
@@ -302,8 +302,8 @@ export default function CoachClientCheckInsPage() {
                       : "—";
                   const dateLabel = isCompleted ? "Completed" : "Due";
                   return (
-                    <tr key={row.id} className="border-b border-[var(--color-border)]">
-                      <td className="px-4 py-3 text-[var(--color-text)]">{row.formTitle}</td>
+                    <tr key={row.id} className="group border-b border-[var(--color-border)] hover:bg-[var(--color-bg-elevated)]">
+                      <td className="sticky left-0 z-10 min-w-[120px] bg-[var(--color-bg)] px-4 py-3 text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-bg-elevated)]">{row.formTitle}</td>
                       <td className="px-4 py-3 text-[var(--color-text-muted)]">
                         {row.reflectionWeekStart ? formatDateDisplay(row.reflectionWeekStart) : "—"}
                       </td>

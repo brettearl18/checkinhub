@@ -203,7 +203,7 @@ export default function CoachCheckInsPage() {
               <table className="w-full min-w-[420px] text-xs">
                 <thead>
                   <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                    <th className="px-3 py-1.5 text-left font-medium text-[var(--color-text-muted)]">Client</th>
+                    <th className="sticky left-0 z-10 min-w-[100px] bg-[var(--color-bg-elevated)] px-3 py-1.5 text-left font-medium text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">Client</th>
                     <th className="px-3 py-1.5 text-left font-medium text-[var(--color-text-muted)]">Form</th>
                     <th className="px-3 py-1.5 text-left font-medium text-[var(--color-text-muted)]">Time</th>
                     <th className="px-3 py-1.5 text-right font-medium text-[var(--color-text-muted)]">Score</th>
@@ -214,9 +214,9 @@ export default function CoachCheckInsPage() {
                   {list.map((r) => (
                     <tr
                       key={r.responseId}
-                      className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-primary-subtle)]/40"
+                      className="group border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-primary-subtle)]/40"
                     >
-                      <td className="px-3 py-1.5 font-medium text-[var(--color-text)]">
+                      <td className="sticky left-0 z-10 min-w-[100px] bg-[var(--color-bg)] px-3 py-1.5 font-medium text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-primary-subtle)]/40">
                         {r.clientName}
                       </td>
                       <td className="px-3 py-1.5 text-[var(--color-text-muted)] truncate max-w-[140px]">

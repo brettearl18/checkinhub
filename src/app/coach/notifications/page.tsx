@@ -93,18 +93,18 @@ export default function CoachNotificationsPage() {
                       <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatDateTimeDisplay(n.createdAt)}</p>
                     )}
                   </div>
-                  <div className="flex flex-shrink-0 gap-2">
+                  <div className="flex flex-shrink-0 items-center gap-1">
                     {!n.isRead && (
                       <button
                         type="button"
                         onClick={() => markRead(n.id)}
-                        className="text-sm text-[var(--color-primary)] hover:underline"
+                        className="touch-manipulation py-2 px-2 -my-1 text-sm text-[var(--color-primary)] hover:underline"
                       >
                         Mark read
                       </button>
                     )}
                     {n.actionUrl && (
-                      <Link href={n.actionUrl} className="text-sm text-[var(--color-primary)] hover:underline" onClick={() => markRead(n.id)}>
+                      <Link href={n.actionUrl} className="touch-manipulation py-2 px-2 -my-1 inline-block text-sm text-[var(--color-primary)] hover:underline" onClick={() => markRead(n.id)}>
                         View
                       </Link>
                     )}

@@ -1216,7 +1216,7 @@ export default function CoachClientSettingsPage() {
                           <table className="w-full min-w-[500px] text-sm">
                             <thead>
                               <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                                <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Date</th>
+                                <th className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg-elevated)] px-3 py-2 text-left font-medium text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">Date</th>
                                 <th className="px-3 py-2 text-right font-medium text-[var(--color-text)]">Amount</th>
                                 <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Status</th>
                                 <th className="px-3 py-2 text-right font-medium text-[var(--color-text)]">Invoice</th>
@@ -1226,8 +1226,8 @@ export default function CoachClientSettingsPage() {
                               {[...billingHistoryInvoices]
                                 .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""))
                                 .map((inv) => (
-                                  <tr key={inv.id} className="border-b border-[var(--color-border)] last:border-b-0">
-                                    <td className="px-3 py-2 text-[var(--color-text-muted)]">
+                                  <tr key={inv.id} className="group border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]">
+                                    <td className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-bg-elevated)]">
                                       {inv.created ? formatDateDisplay(inv.created) : "—"}
                                     </td>
                                     <td className="px-3 py-2 text-right tabular-nums text-[var(--color-text)]">

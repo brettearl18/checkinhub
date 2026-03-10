@@ -113,7 +113,7 @@ export default function CoachClientsListPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                  <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Name</th>
+                  <th className="sticky left-0 z-10 min-w-[120px] bg-[var(--color-bg-elevated)] px-3 py-2 text-left font-medium text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">Name</th>
                   <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Email</th>
                   <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Status</th>
                   <th className="px-3 py-2 text-left font-medium text-[var(--color-text)]">Check-in form</th>
@@ -128,9 +128,9 @@ export default function CoachClientsListPage() {
                 {clients.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]"
+                    className="group border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]"
                   >
-                    <td className="px-3 py-2">
+                    <td className="sticky left-0 z-10 min-w-[120px] bg-[var(--color-bg)] px-3 py-2 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-bg-elevated)]">
                       <span className="font-medium text-[var(--color-text)]">
                         {c.firstName} {c.lastName}
                       </span>

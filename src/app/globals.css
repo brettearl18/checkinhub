@@ -54,3 +54,8 @@
 .safe-area-inset-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Smoother horizontal scroll on touch devices */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}

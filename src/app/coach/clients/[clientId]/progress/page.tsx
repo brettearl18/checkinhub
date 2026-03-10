@@ -404,7 +404,7 @@ export default function CoachClientProgressPage() {
               <table className="w-full min-w-[600px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                    <th className="px-3 py-2 text-left font-medium text-[var(--color-text-muted)]">
+                    <th className="sticky left-0 z-10 min-w-[120px] bg-[var(--color-bg-elevated)] px-3 py-2 text-left font-medium text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
                       Question
                     </th>
                     {questionProgress.weeks.map((w) => (
@@ -421,9 +421,9 @@ export default function CoachClientProgressPage() {
                   {questionProgress.questions.map((q) => (
                     <tr
                       key={q.id}
-                      className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]/50"
+                      className="group border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]/50"
                     >
-                      <td className="px-3 py-2 text-[var(--color-text)] max-w-[200px] truncate" title={q.text}>
+                      <td className="sticky left-0 z-10 min-w-[120px] max-w-[200px] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)] truncate shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-bg-elevated)]/50" title={q.text}>
                         {q.text}
                       </td>
                       {questionProgress.weeks.map((w) => {
@@ -490,14 +490,14 @@ export default function CoachClientProgressPage() {
                 <table className="w-full min-w-[200px] text-sm">
                   <thead>
                     <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
-                      <th className="pb-2 pr-4">Date</th>
+                      <th className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] pb-2 pr-4 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">Date</th>
                       <th className="pb-2">Value</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trendPoints.map((p, i) => (
-                      <tr key={`${p.date}-${i}-${p.value}`} className="border-b border-[var(--color-border)]">
-                        <td className="py-1.5 pr-4 text-[var(--color-text)]">{formatDateDisplay(p.date)}</td>
+                      <tr key={`${p.date}-${i}-${p.value}`} className="group border-b border-[var(--color-border)]">
+                        <td className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] py-1.5 pr-4 text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">{formatDateDisplay(p.date)}</td>
                         <td className="py-1.5 text-[var(--color-text)]">
                           {p.value}
                           {trendTab === "bodyWeight" ? " kg" : " cm"}
