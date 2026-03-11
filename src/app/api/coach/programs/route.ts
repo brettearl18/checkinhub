@@ -45,10 +45,12 @@ function dayToBlocks(day: { exercises?: unknown[]; blocks?: unknown[] }): Progra
   const normalized = blocks.map(normalizeBlock).filter((b): b is ProgramBlock => b != null);
   if (normalized.length > 0) return normalized;
   const exercises = Array.isArray(day.exercises) ? day.exercises : [];
-  return exercises.map((ex, i) => {
-    const e = normalizeEx(ex, i);
-    return e ? { type: "straight_sets" as const, restSeconds: undefined, exercises: [e] } : null;
-  }).filter((b): b is ProgramBlock => b != null);
+  const result: ProgramBlock[] = [];
+  for (let i = 0; i < exercises.length; i++) {
+    const e = normalizeEx(exercises[i], i);
+    if (e) result.push({ type: "straight_sets", restSeconds: undefined, exercises: [e] });
+  }
+  return result;
 }
 
 function normalizeWeeks(weeks: unknown): ProgramWeek[] {
