@@ -26,6 +26,19 @@ interface FormOption {
   title?: string;
 }
 
+interface ProgramOption {
+  id: string;
+  name: string;
+}
+
+interface ClientProgramAssignment {
+  programId: string;
+  programName: string;
+  startDate: string;
+  currentWeek: number;
+  status: string;
+}
+
 // Monday YYYY-MM-DD for a given date
 function getMonday(d: Date): string {
   const day = d.getDay();
@@ -68,17 +81,43 @@ export default function CoachClientCheckInsPage() {
   const [assignWeek, setAssignWeek] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [programAssignment, setProgramAssignment] = useState<ClientProgramAssignment | null>(null);
+  const [programAssignOpen, setProgramAssignOpen] = useState(false);
+  const [programs, setPrograms] = useState<ProgramOption[]>([]);
+  const [assignProgramId, setAssignProgramId] = useState("");
+  const [assignProgramStartDate, setAssignProgramStartDate] = useState("");
+  const [assigningProgram, setAssigningProgram] = useState(false);
+  const [assignProgramError, setAssignProgramError] = useState<string | null>(null);
+  const [diagnosticResult, setDiagnosticResult] = useState<{
+    idsQueried: string[];
+    assignmentCountByClientId: Record<string, number>;
+    totalAssignments: number;
+    suggestion: string | null;
+  } | null>(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [completedList, setCompletedList] = useState<Array<{ id: string; clientId: string; formTitle: string; completedAt: string | null; reflectionWeekStart: string | null }> | null>(null);
+  const [completedListLoading, setCompletedListLoading] = useState(false);
 
   const weekOptions = useMemo(() => getWeekOptions(2), []);
+
+  function getNextMonday(): string {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  }
 
   const load = async () => {
     setLoading(true);
     setAuthError(false);
     setError(null);
     try {
-      const [clientsRes, checkInsRes] = await Promise.all([
+      const [clientsRes, checkInsRes, programRes] = await Promise.all([
         fetchWithAuth("/api/coach/clients"),
         fetchWithAuth(`/api/coach/clients/${clientId}/check-ins`),
+        fetchWithAuth(`/api/coach/clients/${clientId}/program`),
       ]);
       if (clientsRes.status === 401 || checkInsRes.status === 401) {
         setAuthError(true);
@@ -98,6 +137,22 @@ export default function CoachClientCheckInsPage() {
         const data = await checkInsRes.json();
         setList(Array.isArray(data) ? data : []);
       }
+      if (programRes.ok) {
+        const prog = await programRes.json();
+        if (prog && prog.programId) {
+          setProgramAssignment({
+            programId: prog.programId,
+            programName: prog.programName ?? "",
+            startDate: prog.startDate ?? "",
+            currentWeek: prog.currentWeek ?? 1,
+            status: prog.status ?? "active",
+          });
+        } else {
+          setProgramAssignment(null);
+        }
+      } else {
+        setProgramAssignment(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -106,6 +161,24 @@ export default function CoachClientCheckInsPage() {
   useEffect(() => {
     load();
   }, [fetchWithAuth, clientId]);
+
+  useEffect(() => {
+    if (!programAssignOpen) return;
+    setAssignProgramError(null);
+    setAssignProgramStartDate(getNextMonday());
+    setAssignProgramId(programAssignment?.programId ?? "");
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/coach/programs");
+        if (res.ok) {
+          const list = await res.json();
+          setPrograms(Array.isArray(list) ? list.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })) : []);
+        }
+      } catch {
+        setPrograms([]);
+      }
+    })();
+  }, [programAssignOpen, programAssignment?.programId, fetchWithAuth]);
 
   useEffect(() => {
     if (!assignOpen) return;
@@ -180,6 +253,34 @@ export default function CoachClientCheckInsPage() {
     }
   };
 
+  const handleAssignProgram = async () => {
+    if (!assignProgramId || !assignProgramStartDate) return;
+    setAssigningProgram(true);
+    setAssignProgramError(null);
+    try {
+      const res = await fetchWithAuth(`/api/coach/clients/${clientId}/program`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ programId: assignProgramId, startDate: assignProgramStartDate }),
+      });
+      if (res.status === 401) {
+        setAuthError(true);
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAssignProgramError(data.error ?? "Failed to assign program.");
+        return;
+      }
+      setProgramAssignOpen(false);
+      await load();
+    } catch {
+      setAssignProgramError("Failed to assign program.");
+    } finally {
+      setAssigningProgram(false);
+    }
+  };
+
   const pendingCount = list.filter((r) => ["pending", "overdue", "started"].includes(r.status)).length;
 
   if (authError) {
@@ -207,9 +308,67 @@ export default function CoachClientCheckInsPage() {
           <Button asChild variant="secondary">
             <Link href={`/coach/clients/${clientId}/settings`}>Settings</Link>
           </Button>
+          <Button variant="secondary" onClick={() => setProgramAssignOpen(true)}>
+            {programAssignment ? "Change program" : "Assign program"}
+          </Button>
           <Button onClick={() => setAssignOpen(true)}>Assign check-in</Button>
         </div>
       </div>
+
+      {programAssignment && (
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold text-[var(--color-text)]">Program</h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            {programAssignment.programName} · Started {formatDateDisplay(programAssignment.startDate)} · Week {programAssignment.currentWeek}
+            {programAssignment.status !== "active" ? ` · ${programAssignment.status}` : ""}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button asChild variant="secondary" className="text-sm min-h-0 py-1.5">
+              <Link href={`/coach/clients/${clientId}/program`}>View program</Link>
+            </Button>
+            <Button variant="ghost" className="text-sm min-h-0 py-1.5" onClick={() => setProgramAssignOpen(true)}>
+              Change program
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {programAssignOpen && (
+        <Card className="p-4 max-w-md space-y-4">
+          <h2 className="text-lg font-medium text-[var(--color-text)]">Assign program</h2>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Program</label>
+            <select
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)]"
+              value={assignProgramId}
+              onChange={(e) => setAssignProgramId(e.target.value)}
+            >
+              <option value="">Select program</option>
+              {programs.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Start date (Week 1 Monday)</label>
+            <input
+              type="date"
+              className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)]"
+              value={assignProgramStartDate}
+              onChange={(e) => setAssignProgramStartDate(e.target.value)}
+            />
+          </div>
+          {assignProgramError && <p className="text-sm text-[var(--color-error)]" role="alert">{assignProgramError}</p>}
+          <div className="flex gap-2">
+            <Button onClick={handleAssignProgram} disabled={!assignProgramId || !assignProgramStartDate || assigningProgram}>
+              {assigningProgram ? "Assigning…" : "Assign"}
+            </Button>
+            <Button variant="secondary" onClick={() => setProgramAssignOpen(false)} disabled={assigningProgram}>
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {assignOpen && (
         <Card className="p-4 max-w-md space-y-4">
@@ -252,22 +411,174 @@ export default function CoachClientCheckInsPage() {
       )}
 
       {pendingCount > 0 && (
-        <Card className="p-4 flex items-center justify-between">
+        <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-[var(--color-text-secondary)]">
             {pendingCount} pending check-in{pendingCount !== 1 ? "s" : ""}.
           </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={async () => {
+                setDiagnosticLoading(true);
+                setDiagnosticResult(null);
+                try {
+                  const res = await fetchWithAuth(`/api/coach/clients/${clientId}/check-ins/diagnostic`);
+                  const data = await res.json().catch(() => ({}));
+                  if (res.ok) {
+                    setDiagnosticResult({
+                      idsQueried: data.idsQueried ?? [],
+                      assignmentCountByClientId: data.assignmentCountByClientId ?? {},
+                      totalAssignments: data.totalAssignments ?? 0,
+                      suggestion: data.suggestion ?? null,
+                    });
+                  } else {
+                    setDiagnosticResult({ idsQueried: [], assignmentCountByClientId: {}, totalAssignments: 0, suggestion: data.error ?? "Diagnostic failed." });
+                  }
+                } catch {
+                  setDiagnosticResult({ idsQueried: [], assignmentCountByClientId: {}, totalAssignments: 0, suggestion: "Request failed." });
+                } finally {
+                  setDiagnosticLoading(false);
+                }
+              }}
+              disabled={diagnosticLoading}
+            >
+              {diagnosticLoading ? "Checking…" : "Troubleshoot check-ins"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleDeletePending}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : "Delete pending"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {pendingCount === 0 && (
+        <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm text-[var(--color-text-secondary)]">
+            Completed check-ins not showing?
+          </span>
           <Button
+            type="button"
             variant="secondary"
-            onClick={handleDeletePending}
-            disabled={deleting}
+            disabled={diagnosticLoading}
+            onClick={async () => {
+              setDiagnosticLoading(true);
+              setDiagnosticResult(null);
+              try {
+                const res = await fetchWithAuth(`/api/coach/clients/${clientId}/check-ins/diagnostic`);
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) {
+                  setDiagnosticResult({
+                    idsQueried: data.idsQueried ?? [],
+                    assignmentCountByClientId: data.assignmentCountByClientId ?? {},
+                    totalAssignments: data.totalAssignments ?? 0,
+                    suggestion: data.suggestion ?? null,
+                  });
+                } else {
+                  setDiagnosticResult({ idsQueried: [], assignmentCountByClientId: {}, totalAssignments: 0, suggestion: data.error ?? "Diagnostic failed." });
+                }
+              } catch {
+                setDiagnosticResult({ idsQueried: [], assignmentCountByClientId: {}, totalAssignments: 0, suggestion: "Request failed." });
+              } finally {
+                setDiagnosticLoading(false);
+              }
+            }}
           >
-            {deleting ? "Deleting…" : "Delete pending"}
+            {diagnosticLoading ? "Checking…" : "Troubleshoot check-ins"}
           </Button>
         </Card>
       )}
 
       {error && (
         <p className="text-sm text-[var(--color-error)]" role="alert">{error}</p>
+      )}
+
+      {diagnosticResult && (
+        <Card className="p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">Check-ins diagnostic</h3>
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            IDs queried: {diagnosticResult.idsQueried.join(", ") || "—"}. Counts:{" "}
+            {Object.entries(diagnosticResult.assignmentCountByClientId)
+              .map(([id, count]) => `${id.slice(0, 8)}…=${count}`)
+              .join(", ") || "0"}
+            . Total: {diagnosticResult.totalAssignments}.
+          </p>
+          {diagnosticResult.suggestion && (
+            <p className="text-sm text-[var(--color-text-secondary)]">{diagnosticResult.suggestion}</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={completedListLoading}
+              onClick={async () => {
+                setCompletedListLoading(true);
+                setCompletedList(null);
+                try {
+                  const res = await fetchWithAuth(`/api/coach/clients/${clientId}/check-ins/completed-list`);
+                  const data = await res.json().catch(() => ({}));
+                  if (res.ok && Array.isArray(data.completed)) {
+                    setCompletedList(data.completed);
+                  } else {
+                    setCompletedList([]);
+                  }
+                } catch {
+                  setCompletedList([]);
+                } finally {
+                  setCompletedListLoading(false);
+                }
+              }}
+            >
+              {completedListLoading ? "Loading…" : "List completed in DB"}
+            </Button>
+            {diagnosticResult.suggestion?.includes("repair") && (
+              <Button
+                type="button"
+                variant="primary"
+                disabled={repairLoading}
+                onClick={async () => {
+                  setRepairLoading(true);
+                  try {
+                    const res = await fetchWithAuth(`/api/coach/clients/${clientId}/check-ins/repair`, { method: "POST" });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                      setDiagnosticResult(null);
+                      setCompletedList(null);
+                      await load();
+                    } else {
+                      setDiagnosticResult((prev) => prev ? { ...prev, suggestion: (prev.suggestion ?? "") + " Repair failed: " + (data.error ?? "Unknown") } : null);
+                    }
+                  } finally {
+                    setRepairLoading(false);
+                  }
+                }}
+              >
+                {repairLoading ? "Fixing…" : "Fix link (set authUid)"}
+              </Button>
+            )}
+            <Button type="button" variant="ghost" className="text-sm" onClick={() => { setDiagnosticResult(null); setCompletedList(null); }}>
+              Dismiss
+            </Button>
+          </div>
+          {completedList && (
+            <div className="border border-[var(--color-border)] rounded p-3 bg-[var(--color-bg-elevated)]">
+              <h4 className="text-sm font-medium text-[var(--color-text)] mb-2">
+                Completed check-ins in Firebase ({completedList.length})
+              </h4>
+              <ul className="text-sm text-[var(--color-text-secondary)] space-y-1 max-h-60 overflow-y-auto">
+                {completedList.map((row) => (
+                  <li key={row.id}>
+                    {row.formTitle} — week {row.reflectionWeekStart ?? "—"} — completed {row.completedAt ? formatDateDisplay(row.completedAt) : "—"} (clientId: {row.clientId.slice(0, 8)}…)
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
       )}
 
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}

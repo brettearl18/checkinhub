@@ -17,6 +17,8 @@ const NAV_LINKS = [
   { href: "/coach/important-links", label: "Important Links" },
   { href: "/coach/gallery", label: "Gallery" },
   { href: "/coach/forms", label: "Forms" },
+  { href: "/coach/exercises", label: "Exercise library" },
+  { href: "/coach/programs", label: "Programs" },
   { href: "/coach/questions", label: "Questions" },
   { href: "/coach/settings", label: "Settings" },
 ] as const;

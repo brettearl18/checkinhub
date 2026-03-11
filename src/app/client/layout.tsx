@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const NAV_LINKS = [
   { href: "/client", label: "Dashboard" },
+  { href: "/client/program", label: "Program" },
   { href: "/client/check-in/new", label: "New check-in" },
   { href: "/client/habits", label: "Habits" },
   { href: "/client/history", label: "History" },
@@ -22,6 +23,7 @@ const NAV_LINKS = [
 
 const BOTTOM_NAV = [
   { href: "/client", label: "Home", short: "Home" },
+  { href: "/client/program", label: "Program", short: "Workouts" },
   { href: "/client/check-in/new", label: "New check-in", short: "Check-in" },
   { href: "/client/progress", label: "Progress", short: "Progress" },
 ] as const;
