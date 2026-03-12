@@ -43,6 +43,12 @@ interface RecentResponse {
   readByClient?: boolean;
 }
 
+interface SetupStatus {
+  hasBaselineMeasurement: boolean;
+  hasProgressPhoto: boolean;
+  hasPushEnabled: boolean;
+}
+
 const QUICK_LINKS = [
   { href: "/client/history", label: "Check-in history", description: "Past check-ins & feedback", emoji: "📋" },
   { href: "/client/progress", label: "Question progress", description: "Traffic light chart by week", emoji: "📊" },
@@ -79,6 +85,7 @@ export default function ClientPortalPage() {
   const [authError, setAuthError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payLinkLoading, setPayLinkLoading] = useState(false);
+  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
 
   // Only show assignments in TO DO when the week has opened (Friday 9am Perth for this/next week).
   const openAssignments = useMemo(() => {
@@ -107,15 +114,26 @@ export default function ClientPortalPage() {
     setAuthError(false);
     setError(null);
     try {
-      const [profileRes, assignmentsRes, historyRes, imagesRes] = await Promise.all([
+      const [profileRes, assignmentsRes, historyRes, imagesRes, setupRes] = await Promise.all([
         fetchWithAuth("/api/client/profile"),
         fetchWithAuth("/api/check-in/assignments"),
         fetchWithAuth("/api/client/history"),
         fetchWithAuth("/api/client/progress-images"),
+        fetchWithAuth("/api/client/setup-status"),
       ]);
       if (profileRes.status === 401 || assignmentsRes.status === 401 || historyRes.status === 401 || imagesRes.status === 401) {
         setAuthError(true);
         return;
+      }
+      if (setupRes.ok) {
+        const s = await setupRes.json();
+        setSetupStatus({
+          hasBaselineMeasurement: s.hasBaselineMeasurement === true,
+          hasProgressPhoto: s.hasProgressPhoto === true,
+          hasPushEnabled: s.hasPushEnabled === true,
+        });
+      } else {
+        setSetupStatus(null);
       }
       if (profileRes.ok) {
         const p = await profileRes.json();
@@ -168,6 +186,10 @@ export default function ClientPortalPage() {
   const showQuote = profile?.profilePersonalization?.showQuote && profile?.profilePersonalization?.quote;
   const motivationalLine = MOTIVATIONAL_LINES[firstName ? firstName.length % MOTIVATIONAL_LINES.length : 0];
 
+  const setupIncomplete =
+    setupStatus &&
+    (!setupStatus.hasBaselineMeasurement || !setupStatus.hasProgressPhoto || !setupStatus.hasPushEnabled);
+
   return (
     <div className="min-h-[60vh]">
       {/* Hero: welcoming, motivational */}
@@ -186,6 +208,69 @@ export default function ClientPortalPage() {
           )}
         </div>
       </header>
+
+      {/* First-time setup: baseline measurements, photos, notifications */}
+      {!authError && !loading && setupIncomplete && (
+        <section className="mt-6">
+          <Card className="overflow-hidden border-2 border-[var(--color-primary-muted)] bg-gradient-to-br from-[var(--color-primary-subtle)]/80 to-[var(--color-bg-elevated)]">
+            <div className="p-5 sm:p-6">
+              <h2 className="text-lg font-semibold text-[var(--color-text)] sm:text-xl">
+                Complete your setup
+              </h2>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                Add your baseline, a photo, and turn on notifications so you don’t miss habits and check-ins.
+              </p>
+              <ul className="mt-4 space-y-3">
+                <li className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+                  <span className="text-sm font-medium text-[var(--color-text)]">
+                    Baseline measurements
+                  </span>
+                  {setupStatus!.hasBaselineMeasurement ? (
+                    <span className="text-sm text-[var(--color-success)]">✓ Done</span>
+                  ) : (
+                    <Link
+                      href="/client/measurements"
+                      className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary)]/90"
+                    >
+                      Add
+                    </Link>
+                  )}
+                </li>
+                <li className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+                  <span className="text-sm font-medium text-[var(--color-text)]">
+                    Progress photo
+                  </span>
+                  {setupStatus!.hasProgressPhoto ? (
+                    <span className="text-sm text-[var(--color-success)]">✓ Done</span>
+                  ) : (
+                    <Link
+                      href="/client/progress-photos"
+                      className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary)]/90"
+                    >
+                      Add photo
+                    </Link>
+                  )}
+                </li>
+                <li className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+                  <span className="text-sm font-medium text-[var(--color-text)]">
+                    Notifications for habits & check-ins
+                  </span>
+                  {setupStatus!.hasPushEnabled ? (
+                    <span className="text-sm text-[var(--color-success)]">✓ Enabled</span>
+                  ) : (
+                    <Link
+                      href="/client/notifications"
+                      className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary)]/90"
+                    >
+                      Enable
+                    </Link>
+                  )}
+                </li>
+              </ul>
+            </div>
+          </Card>
+        </section>
+      )}
 
       {/* Check-in to complete – always at top when there is one (started or open) */}
       {!authError && !loading && topPriorityAssignments.length > 0 && (
