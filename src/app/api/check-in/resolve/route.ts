@@ -49,6 +49,45 @@ export async function POST(request: Request) {
   }
 
   const db = getAdminDb();
+  const clientSnapForStart = await db.collection("clients").doc(clientId).get();
+  if (clientSnapForStart.exists) {
+    const clientData = clientSnapForStart.data() as { createdAt?: unknown; programStartDate?: string };
+    const toDate = (v: unknown): Date | null => {
+      if (!v) return null;
+      if (v instanceof Date) return v;
+      const t = v as { toDate?: () => Date };
+      if (typeof t.toDate === "function") return t.toDate();
+      try {
+        return new Date(String(v));
+      } catch {
+        return null;
+      }
+    };
+    const mondayOfWeek = (d: Date): string => {
+      const day = d.getUTCDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      const mon = new Date(d);
+      mon.setUTCDate(d.getUTCDate() + diff);
+      return mon.toISOString().slice(0, 10);
+    };
+    const createdAt = toDate(clientData.createdAt);
+    const programStart =
+      clientData.programStartDate && /^\d{4}-\d{2}-\d{2}/.test(clientData.programStartDate)
+        ? new Date(clientData.programStartDate + "T12:00:00Z")
+        : null;
+    let startDate: Date | null = createdAt ?? null;
+    if (programStart && startDate && programStart.getTime() > startDate.getTime()) startDate = programStart;
+    else if (programStart) startDate = programStart;
+    if (startDate) {
+      const startWeek = mondayOfWeek(startDate);
+      if (reflectionWeekStart < startWeek) {
+        return NextResponse.json(
+          { error: "You can only fill in check-ins for weeks from when you started." },
+          { status: 400 }
+        );
+      }
+    }
+  }
 
   const existing = await db
     .collection("check_in_assignments")
@@ -64,7 +103,7 @@ export async function POST(request: Request) {
 
   const formSnap = await db.collection("forms").doc(formId).get();
   const formTitle = formSnap.exists ? (formSnap.data()?.title as string) ?? "Check-in" : "Check-in";
-  const clientSnap = await db.collection("clients").doc(clientId).get();
+  const clientSnap = clientSnapForStart;
   const coachId = (clientSnap.data()?.coachId as string) ?? null;
 
   const dueDate = new Date(reflectionWeekStart);
