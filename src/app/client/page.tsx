@@ -182,6 +182,13 @@ export default function ClientPortalPage() {
     loadData();
   }, [fetchWithAuth]);
 
+  // Refetch when user returns to dashboard (e.g. after adding measurement, photo, or enabling notifications)
+  useEffect(() => {
+    const onFocus = () => loadData();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchWithAuth]);
+
   const firstName = profile?.firstName?.trim() ?? null;
   const showQuote = profile?.profilePersonalization?.showQuote && profile?.profilePersonalization?.quote;
   const motivationalLine = MOTIVATIONAL_LINES[firstName ? firstName.length % MOTIVATIONAL_LINES.length : 0];

@@ -22,11 +22,11 @@ export async function GET(request: Request) {
 
   const db = getAdminDb();
 
-  const [baselineSnap, photosSnap, pushSnap] = await Promise.all([
+  // Baseline = has at least one measurement (first measurement removes the To Do item)
+  const [measurementsSnap, photosSnap, pushSnap] = await Promise.all([
     db
       .collection("client_measurements")
       .where("clientId", "==", clientId!)
-      .where("isBaseline", "==", true)
       .limit(1)
       .get(),
     db
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   ]);
 
   return NextResponse.json({
-    hasBaselineMeasurement: !baselineSnap.empty,
+    hasBaselineMeasurement: !measurementsSnap.empty,
     hasProgressPhoto: !photosSnap.empty,
     hasPushEnabled: !pushSnap.empty,
   });

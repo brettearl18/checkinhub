@@ -104,6 +104,7 @@ export default function ClientMeasurementsPage() {
           date,
           bodyWeight: bodyWeight ? Number(bodyWeight) : undefined,
           measurements: Object.keys(measurementsNum).length ? measurementsNum : undefined,
+          isBaseline: list.length === 0, // First measurement = baseline
         }),
       });
       if (res.status === 401) {
