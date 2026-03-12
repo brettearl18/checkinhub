@@ -130,6 +130,8 @@ export default function CoachClientSettingsPage() {
   const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
   const [reminderLoading, setReminderLoading] = useState(false);
   const [reminderMessage, setReminderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [resendOnboardingLoading, setResendOnboardingLoading] = useState(false);
+  const [resendOnboardingMessage, setResendOnboardingMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [allocationForms, setAllocationForms] = useState<{ id: string; title?: string }[]>([]);
   const [allocationAssignments, setAllocationAssignments] = useState<{ id: string; formTitle: string; formId: string; status: string; reflectionWeekStart: string | null; responseId: string | null }[]>([]);
   const [assignFormId, setAssignFormId] = useState("");
@@ -427,6 +429,60 @@ export default function CoachClientSettingsPage() {
             <p className="text-sm text-green-600 dark:text-green-400" role="status">
               Settings saved.
             </p>
+          )}
+
+          {/* Resend onboarding – only when client is pending */}
+          {form.status === "pending" && (
+            <Card className="p-6 border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)]/30">
+              <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Onboarding invite</h2>
+              <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                This client hasn’t set their password yet. Resend the invite email so they can complete sign-up (new link expires in 7 days).
+              </p>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={resendOnboardingLoading}
+                onClick={async () => {
+                  setResendOnboardingMessage(null);
+                  setResendOnboardingLoading(true);
+                  try {
+                    const res = await fetchWithAuth(`/api/coach/clients/${clientId}/resend-onboarding`, {
+                      method: "POST",
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.status === 401) {
+                      setAuthError(true);
+                      return;
+                    }
+                    if (res.ok) {
+                      setResendOnboardingMessage({
+                        type: "success",
+                        text: "Onboarding email sent. They’ll get a new link (valid 7 days).",
+                      });
+                    } else {
+                      setResendOnboardingMessage({
+                        type: "error",
+                        text: (data.error as string) || "Failed to send",
+                      });
+                    }
+                  } catch {
+                    setResendOnboardingMessage({ type: "error", text: "Request failed" });
+                  } finally {
+                    setResendOnboardingLoading(false);
+                  }
+                }}
+              >
+                {resendOnboardingLoading ? "Sending…" : "Resend onboarding email"}
+              </Button>
+              {resendOnboardingMessage && (
+                <p
+                  className={`mt-3 text-sm ${resendOnboardingMessage.type === "success" ? "text-green-600 dark:text-green-400" : "text-[var(--color-error)]"}`}
+                  role="status"
+                >
+                  {resendOnboardingMessage.text}
+                </p>
+              )}
+            </Card>
           )}
 
           {/* Profile */}

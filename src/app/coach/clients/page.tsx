@@ -48,6 +48,11 @@ export default function CoachClientsListPage() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [resendState, setResendState] = useState<{ clientId: string; loading: boolean; message: string | null }>({
+    clientId: "",
+    loading: false,
+    message: null,
+  });
 
   const bulkWeekOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
@@ -293,7 +298,43 @@ export default function CoachClientsListPage() {
                       {(c.avgCheckInPct ?? c.trendPct) != null ? `${c.avgCheckInPct ?? c.trendPct}%` : "—"}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <div className="flex justify-end gap-1">
+                      <div className="flex justify-end gap-1 flex-wrap">
+                        {c.status === "pending" && (
+                          <Button
+                            variant="secondary"
+                            disabled={resendState.loading}
+                            onClick={async () => {
+                              setResendState({ clientId: c.id, loading: true, message: null });
+                              try {
+                                const res = await fetchWithAuth(`/api/coach/clients/${c.id}/resend-onboarding`, {
+                                  method: "POST",
+                                });
+                                const data = await res.json().catch(() => ({}));
+                                if (res.ok) {
+                                  setResendState({
+                                    clientId: c.id,
+                                    loading: false,
+                                    message: "Invite sent.",
+                                  });
+                                } else {
+                                  setResendState({
+                                    clientId: c.id,
+                                    loading: false,
+                                    message: (data.error as string) || "Failed",
+                                  });
+                                }
+                              } catch {
+                                setResendState({
+                                  clientId: c.id,
+                                  loading: false,
+                                  message: "Request failed",
+                                });
+                              }
+                            }}
+                          >
+                            {resendState.clientId === c.id && resendState.loading ? "Sending…" : "Resend invite"}
+                          </Button>
+                        )}
                         <Button asChild variant="secondary">
                           <Link href={`/coach/clients/${c.id}/progress`}>Progress</Link>
                         </Button>
@@ -301,6 +342,11 @@ export default function CoachClientsListPage() {
                           <Link href={`/coach/clients/${c.id}`}>Check-ins</Link>
                         </Button>
                       </div>
+                      {c.status === "pending" && resendState.clientId === c.id && resendState.message && !resendState.loading && (
+                        <p className={`mt-1 text-xs text-right ${resendState.message === "Invite sent." ? "text-green-600 dark:text-green-400" : "text-[var(--color-error)]"}`}>
+                          {resendState.message}
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ))}
