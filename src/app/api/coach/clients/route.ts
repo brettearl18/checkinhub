@@ -127,6 +127,19 @@ export async function POST(request: Request) {
   const ts = Timestamp.fromDate(now);
   const displayName = [firstName, lastName].filter(Boolean).join(" ").trim() || email;
 
+  // Full app URL for emails – env first, then request origin so the link always has a domain
+  let baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  if (!baseUrl && typeof request.url === "string") {
+    try {
+      baseUrl = new URL(request.url).origin;
+    } catch {
+      // ignore
+    }
+  }
+  baseUrl = baseUrl.replace(/\/$/, "");
+
   try {
     if (hasPassword) {
       const userRecord = await auth.createUser({
@@ -179,10 +192,7 @@ export async function POST(request: Request) {
         updatedAt: ts,
       });
 
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-      const loginUrl = baseUrl ? `${baseUrl.replace(/\/$/, "")}/sign-in` : "/sign-in";
+      const loginUrl = baseUrl ? `${baseUrl}/sign-in` : "/sign-in";
       const coachSnap = await db.collection("users").doc(coachId).get();
       const coachData = coachSnap.exists ? (coachSnap.data() as { firstName?: string; lastName?: string }) : null;
       const coachName = coachData
@@ -241,11 +251,8 @@ export async function POST(request: Request) {
         updatedAt: ts,
       });
 
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
       const invitePath = `/client-onboarding?token=${encodeURIComponent(onboardingToken)}&email=${encodeURIComponent(email.trim().toLowerCase())}`;
-      const inviteLink = baseUrl ? `${baseUrl.replace(/\/$/, "")}${invitePath}` : invitePath;
+      const inviteLink = baseUrl ? `${baseUrl}${invitePath}` : invitePath;
 
       const coachSnap = await db.collection("users").doc(coachId).get();
       const coachData = coachSnap.exists ? (coachSnap.data() as { firstName?: string; lastName?: string }) : null;

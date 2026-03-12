@@ -3,9 +3,11 @@
 import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
 
 function ClientOnboardingForm() {
   const router = useRouter();
@@ -20,6 +22,7 @@ function ClientOnboardingForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     if (!token || !email) {
@@ -76,7 +79,23 @@ function ClientOnboardingForm() {
         return;
       }
       setComplete(true);
-      setTimeout(() => router.push("/sign-in"), 2500);
+      // Sign them in and send to dashboard so they don't have to type email/password again
+      if (isFirebaseConfigured()) {
+        setSigningIn(true);
+        try {
+          const auth = getFirebaseAuth();
+          await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+          router.push("/client");
+          return;
+        } catch {
+          // Fallback: redirect to sign-in after a short delay
+          setTimeout(() => router.push("/sign-in"), 2000);
+        } finally {
+          setSigningIn(false);
+        }
+      } else {
+        setTimeout(() => router.push("/sign-in"), 2500);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -117,7 +136,7 @@ function ClientOnboardingForm() {
         <Card className="w-full max-w-md p-6">
           <h1 className="text-xl font-semibold text-[var(--color-text)]">You’re all set</h1>
           <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-            Your password has been set. Redirecting you to sign in…
+            {signingIn ? "Taking you to your dashboard…" : "Redirecting you to sign in…"}
           </p>
         </Card>
       </main>
@@ -127,9 +146,14 @@ function ClientOnboardingForm() {
   return (
     <main className="flex min-h-screen items-center justify-center p-8">
       <Card className="w-full max-w-md p-6">
-        <h1 className="text-xl font-semibold text-[var(--color-text)]">Set your password</h1>
+        <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-primary)]">
+          Welcome to CheckinHUB
+        </p>
+        <h1 className="mt-2 text-xl font-semibold text-[var(--color-text)]">
+          One more step
+        </h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Hi{clientName ? ` ${clientName}` : ""}. Choose a password to finish setting up your account.
+          Hi{clientName ? ` ${clientName}` : ""}. Your coach invited you. Choose a password and you’re in.
         </p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <Input
@@ -146,9 +170,11 @@ function ClientOnboardingForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
-            placeholder="At least 8 characters"
+            placeholder="Min 8 characters"
             autoComplete="new-password"
+            autoFocus
           />
+          <p className="-mt-2 text-xs text-[var(--color-text-muted)]">At least 8 characters</p>
           <Input
             label="Confirm password"
             type="password"
@@ -164,8 +190,8 @@ function ClientOnboardingForm() {
               {error}
             </p>
           )}
-          <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
-            {submitting ? "Setting password…" : "Set password & continue"}
+          <Button type="submit" variant="primary" className="w-full mt-2" disabled={submitting}>
+            {submitting ? "Setting up…" : "Create password & go to my dashboard"}
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-[var(--color-text-muted)]">

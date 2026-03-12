@@ -98,6 +98,10 @@ export default function CoachClientCheckInsPage() {
   const [repairLoading, setRepairLoading] = useState(false);
   const [completedList, setCompletedList] = useState<Array<{ id: string; clientId: string; formTitle: string; completedAt: string | null; reflectionWeekStart: string | null }> | null>(null);
   const [completedListLoading, setCompletedListLoading] = useState(false);
+  const [profileSummary, setProfileSummary] = useState<{
+    paymentStatus: string | null;
+    mealPlanLinksCount: number;
+  } | null>(null);
 
   const weekOptions = useMemo(() => getWeekOptions(2), []);
 
@@ -114,10 +118,11 @@ export default function CoachClientCheckInsPage() {
     setAuthError(false);
     setError(null);
     try {
-      const [clientsRes, checkInsRes, programRes] = await Promise.all([
+      const [clientsRes, checkInsRes, programRes, profileRes] = await Promise.all([
         fetchWithAuth("/api/coach/clients"),
         fetchWithAuth(`/api/coach/clients/${clientId}/check-ins`),
         fetchWithAuth(`/api/coach/clients/${clientId}/program`),
+        fetchWithAuth(`/api/coach/clients/${clientId}/profile`),
       ]);
       if (clientsRes.status === 401 || checkInsRes.status === 401) {
         setAuthError(true);
@@ -152,6 +157,15 @@ export default function CoachClientCheckInsPage() {
         }
       } else {
         setProgramAssignment(null);
+      }
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        setProfileSummary({
+          paymentStatus: profile.paymentStatus ?? null,
+          mealPlanLinksCount: Array.isArray(profile.mealPlanLinks) ? profile.mealPlanLinks.length : 0,
+        });
+      } else {
+        setProfileSummary(null);
       }
     } finally {
       setLoading(false);
@@ -314,6 +328,50 @@ export default function CoachClientCheckInsPage() {
           <Button onClick={() => setAssignOpen(true)}>Assign check-in</Button>
         </div>
       </div>
+
+      {/* Overview: check-ins, traffic lights, Stripe, meal plans – all loadable when client is set up */}
+      {!authError && !loading && (
+        <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
+            Overview
+          </h2>
+          <div className="flex flex-wrap gap-4 sm:gap-6 text-sm">
+            <span className="text-[var(--color-text-secondary)]">
+              <strong className="text-[var(--color-text)]">Check-ins:</strong> {list.length} total
+              {list.filter((r) => r.status === "completed").length > 0 && (
+                <span className="text-[var(--color-text-muted)]">
+                  {" "}({list.filter((r) => r.status === "completed").length} completed)
+                </span>
+              )}
+            </span>
+            <Link href={`/coach/clients/${clientId}/progress`} className="text-[var(--color-primary)] hover:underline">
+              <strong>Traffic lights %</strong> → Progress
+            </Link>
+            <span className="text-[var(--color-text-secondary)]">
+              <strong className="text-[var(--color-text)]">Stripe:</strong>{" "}
+              {profileSummary?.paymentStatus ? (
+                <span className={profileSummary.paymentStatus === "paid" ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}>
+                  {profileSummary.paymentStatus === "paid" ? "Paid" : profileSummary.paymentStatus}
+                </span>
+              ) : (
+                <span className="text-[var(--color-text-muted)]">Not linked</span>
+              )}
+            </span>
+            <span className="text-[var(--color-text-secondary)]">
+              <strong className="text-[var(--color-text)]">Meal plans:</strong>{" "}
+              {profileSummary && profileSummary.mealPlanLinksCount > 0 ? (
+                <span className="text-[var(--color-text)]">{profileSummary.mealPlanLinksCount} link{profileSummary.mealPlanLinksCount !== 1 ? "s" : ""}</span>
+              ) : (
+                <span className="text-[var(--color-text-muted)]">None</span>
+              )}
+              {" · "}
+              <Link href={`/coach/clients/${clientId}/settings`} className="text-[var(--color-primary)] hover:underline">
+                Settings
+              </Link>
+            </span>
+          </div>
+        </Card>
+      )}
 
       {programAssignment && (
         <Card className="p-4">
