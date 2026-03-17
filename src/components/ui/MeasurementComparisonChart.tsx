@@ -120,9 +120,9 @@ export function MeasurementComparisonChart({
             }}
             labelStyle={{ color: "var(--color-text)" }}
             labelFormatter={(label) => (label ? formatDateDisplay(label) : "")}
-            formatter={(value: number | undefined, name: string) => [
+            formatter={(value: number | undefined, name?: string) => [
               value != null ? `${value} ${unit}` : "—",
-              series.find((s) => s.dataKey === name)?.name ?? name,
+              series.find((s) => s.dataKey === name)?.name ?? name ?? "",
             ]}
           />
           <Legend
