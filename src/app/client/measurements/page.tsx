@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
+import { MeasurementComparisonChartLazy } from "@/components/ui/MeasurementComparisonChartLazy";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
 
@@ -51,9 +52,10 @@ export default function ClientMeasurementsPage() {
   const [measurements, setMeasurements] = useState<Record<string, string>>({
     waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "",
   });
-  const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number]>("bodyWeight");
+  const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number] | "arms" | "thighs">("bodyWeight");
 
   const chartData = useMemo(() => {
+    if (chartMetric === "arms" || chartMetric === "thighs") return [];
     const chronological = [...list].filter((m) => m.date).reverse();
     return chronological
       .map((m) => {
@@ -64,6 +66,21 @@ export default function ClientMeasurementsPage() {
         return { date: m.date!, value };
       })
       .filter((p): p is { date: string; value: number } => p != null);
+  }, [list, chartMetric]);
+
+  const comparisonChartData = useMemo(() => {
+    if (chartMetric !== "arms" && chartMetric !== "thighs") return [];
+    const keys = chartMetric === "arms" ? (["leftArm", "rightArm"] as const) : (["leftThigh", "rightThigh"] as const);
+    const chronological = [...list]
+      .filter((m) => m.date)
+      .sort((a, b) => (a.date!).localeCompare(b.date!));
+    return chronological
+      .map((m) => {
+        const row: Record<string, number | undefined> = { date: m.date! };
+        for (const k of keys) row[k] = m.measurements?.[k] ?? undefined;
+        return row;
+      })
+      .filter((row) => keys.some((k) => row[k] != null));
   }, [list, chartMetric]);
 
   const load = async () => {
@@ -208,6 +225,8 @@ export default function ClientMeasurementsPage() {
                 className="mb-4 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
               >
                 <option value="bodyWeight">Body weight (kg)</option>
+                <option value="arms">Arms (L &amp; R)</option>
+                <option value="thighs">Thighs (L &amp; R)</option>
                 {MEASUREMENT_KEYS.map((key) => (
                   <option key={key} value={key}>
                     {measurementLabels[key]} (cm)
@@ -215,7 +234,29 @@ export default function ClientMeasurementsPage() {
                 ))}
               </select>
             </div>
-            {chartData.length > 0 ? (
+            {chartMetric === "arms" || chartMetric === "thighs" ? (
+              comparisonChartData.length > 0 ? (
+                <MeasurementComparisonChartLazy
+                  data={comparisonChartData}
+                  unit="cm"
+                  series={
+                    chartMetric === "arms"
+                      ? [
+                          { dataKey: "leftArm", name: "L arm", color: "var(--color-primary)" },
+                          { dataKey: "rightArm", name: "R arm", color: "#0ea5e9", strokeDasharray: "6 4" },
+                        ]
+                      : [
+                          { dataKey: "leftThigh", name: "L thigh", color: "var(--color-primary)" },
+                          { dataKey: "rightThigh", name: "R thigh", color: "#0ea5e9", strokeDasharray: "6 4" },
+                        ]
+                  }
+                />
+              ) : (
+                <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                  No data yet. Add measurements to compare L &amp; R.
+                </p>
+              )
+            ) : chartData.length > 0 ? (
               <MeasurementLineChartLazy
                 data={chartData}
                 unit={chartMetric === "bodyWeight" ? "kg" : "cm"}

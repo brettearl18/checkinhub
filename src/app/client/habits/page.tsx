@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
 import { useApiClient } from "@/lib/api-client";
 import type { HabitDefinition } from "@/lib/habits";
 
@@ -13,10 +14,17 @@ interface StreakInfo {
   goalMetToday: boolean;
 }
 
+interface HabitsHistory {
+  start: string;
+  end: string;
+  byDate: Record<string, Record<string, "met" | "missed">>;
+}
+
 interface HabitsData {
   habits: HabitDefinition[];
   todayEntries: Record<string, string>;
   streaks: Record<string, StreakInfo>;
+  history?: HabitsHistory;
 }
 
 export default function ClientHabitsPage() {
@@ -25,6 +33,7 @@ export default function ClientHabitsPage() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [stripRange, setStripRange] = useState<HabitStripRange>("7d");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +50,7 @@ export default function ClientHabitsPage() {
           habits: json.habits ?? [],
           todayEntries: json.todayEntries ?? {},
           streaks: json.streaks ?? {},
+          history: json.history ?? undefined,
         });
       }
     } finally {
@@ -107,8 +117,9 @@ export default function ClientHabitsPage() {
         <p className="text-[var(--color-text-muted)]">No habits configured.</p>
       )}
       {!loading && data && data.habits.length > 0 && (
-        <ul className="space-y-6">
-          {data.habits.map((habit) => {
+        <>
+          <ul className="space-y-6">
+            {data.habits.map((habit) => {
             const selected = data.todayEntries[habit.id];
             const streak = data.streaks[habit.id] ?? { current: 0, longest: 0, goalMetToday: false };
             const busy = submitting === habit.id;
@@ -157,6 +168,37 @@ export default function ClientHabitsPage() {
             );
           })}
         </ul>
+
+          {data.history && (
+            <>
+              <section className="mt-8">
+                <div className="mb-3 flex gap-1 rounded-lg bg-[var(--color-bg)] p-1">
+                  {(["7d", "30d", "all"] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setStripRange(r)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        stripRange === r
+                          ? "bg-[var(--color-bg-elevated)] text-[var(--color-text)] shadow-sm"
+                          : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                      }`}
+                    >
+                      {r === "7d" ? "This week" : r === "30d" ? "1 month" : "All time"}
+                    </button>
+                  ))}
+                </div>
+                <HabitWeeklyStrip
+                  habits={data.habits}
+                  byDate={data.history.byDate}
+                  range={stripRange}
+                  historyStart={stripRange === "all" ? data.history.start : undefined}
+                  historyEnd={stripRange === "all" ? data.history.end : undefined}
+                />
+              </section>
+            </>
+          )}
+        </>
       )}
     </div>
   );

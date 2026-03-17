@@ -8,8 +8,8 @@ import {
   computeStreakFromEntries,
   fetchClientHabitEntries,
   todayDate,
-  HABIT_ENTRIES_COLLECTION,
 } from "@/lib/habits-streaks";
+import { isGoalMet } from "@/lib/habits";
 
 /**
  * GET /api/client/habits
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
           { current: 0, longest: 0, goalMetToday: false },
         ])
       ),
+      history: { start: today, end: today, byDate: {} as Record<string, Record<string, "met" | "missed">> },
     });
   }
 
@@ -51,9 +52,32 @@ export async function GET(request: Request) {
     streaks[h.id] = computeStreakFromEntries(h.id, entriesByDate, todayEntries);
   });
 
+  // History for dot map: last 12 weeks (84 days), per day per habit: 'met' | 'missed' | null
+  const historyDays = 84;
+  const historyEnd = new Date(today);
+  const historyStart = new Date(historyEnd);
+  historyStart.setDate(historyStart.getDate() - historyDays + 1);
+  const byDate: Record<string, Record<string, "met" | "missed">> = {};
+  for (let i = 0; i < historyDays; i++) {
+    const d = new Date(historyStart);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    byDate[dateStr] = {};
+    for (const h of HABIT_DEFINITIONS) {
+      const value = byHabit.get(h.id)?.get(dateStr);
+      if (value == null) continue;
+      byDate[dateStr][h.id] = isGoalMet(h.id, value) ? "met" : "missed";
+    }
+  }
+
   return NextResponse.json({
     habits: HABIT_DEFINITIONS,
     todayEntries,
     streaks,
+    history: {
+      start: historyStart.toISOString().slice(0, 10),
+      end: today,
+      byDate,
+    },
   });
 }

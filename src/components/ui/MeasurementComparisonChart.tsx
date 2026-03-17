@@ -7,28 +7,30 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Area,
-  AreaChart,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts";
 import { formatDateDisplay } from "@/lib/format-date";
 
-export interface ChartPoint {
-  date: string;
-  value: number;
-  label?: string;
+export interface ComparisonSeries {
+  dataKey: string;
+  name: string;
+  color: string;
+  /** e.g. "6 4" for dashed line — use for second series so L & R stay visible when values match */
+  strokeDasharray?: string;
 }
 
-interface MeasurementLineChartProps {
-  data: ChartPoint[];
+interface MeasurementComparisonChartProps {
+  /** One row per date with keys for each series (e.g. { date, leftArm: 32, rightArm: 33 }) */
+  data: Record<string, number | undefined>[];
+  series: ComparisonSeries[];
   unit: string;
-  color?: string;
   height?: number;
 }
 
-const PADDING_KG = 5;
 const PADDING_CM = 5;
 
-/** Nice tick step for a given range (e.g. 2, 5, 10). */
 function tickStep(range: number): number {
   if (range <= 0) return 1;
   if (range <= 12) return 2;
@@ -36,7 +38,6 @@ function tickStep(range: number): number {
   return 10;
 }
 
-/** Generate evenly spaced tick values for Y axis (ascending). */
 function niceTicks(domainMin: number, domainMax: number): number[] {
   const range = domainMax - domainMin;
   const step = tickStep(range);
@@ -49,44 +50,45 @@ function niceTicks(domainMin: number, domainMax: number): number[] {
   return ticks;
 }
 
-export function MeasurementLineChart({
+export function MeasurementComparisonChart({
   data,
+  series,
   unit,
-  color = "var(--color-primary)",
   height = 260,
-}: MeasurementLineChartProps) {
-  const gradientId = useId().replace(/:/g, "");
-
+}: MeasurementComparisonChartProps) {
   const { domain, ticks } = useMemo(() => {
     if (data.length === 0) return { domain: [0, 10] as [number, number], ticks: [0, 5, 10] };
-    const values = data.map((d) => d.value);
-    const dataMin = Math.min(...values);
-    const dataMax = Math.max(...values);
-    const padding = unit === "kg" ? PADDING_KG : PADDING_CM;
-    const domainMin = dataMin - padding;
-    const domainMax = dataMax + padding;
-    const domain: [number, number] = [domainMin, domainMax];
-    const tickList = niceTicks(domainMin, domainMax);
-    return { domain, ticks: tickList };
-  }, [data, unit]);
-
-  if (data.length === 0) return null;
+    let dataMin = Infinity;
+    let dataMax = -Infinity;
+    for (const row of data) {
+      for (const s of series) {
+        const v = row[s.dataKey];
+        if (typeof v === "number") {
+          dataMin = Math.min(dataMin, v);
+          dataMax = Math.max(dataMax, v);
+        }
+      }
+    }
+    if (dataMin === Infinity) return { domain: [0, 10] as [number, number], ticks: [0, 5, 10] };
+    const domainMin = dataMin - PADDING_CM;
+    const domainMax = dataMax + PADDING_CM;
+    return {
+      domain: [domainMin, domainMax] as [number, number],
+      ticks: niceTicks(domainMin, domainMax),
+    };
+  }, [data, series]);
 
   const formatDate = (d: string) => formatDateDisplay(d);
+
+  if (data.length === 0) return null;
 
   return (
     <div style={{ width: "100%", height }} className="min-h-[200px]">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
+        <LineChart
           data={data}
           margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
         >
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-              <stop offset="100%" stopColor={color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
           <CartesianGrid
             strokeDasharray="3 3"
             stroke="var(--color-border)"
@@ -107,7 +109,7 @@ export function MeasurementLineChart({
             tick={{ fontSize: 12 }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={(v) => `${v}${unit ? ` ${unit}` : ""}`}
+            tickFormatter={(v) => `${v} ${unit}`}
             width={40}
           />
           <Tooltip
@@ -117,17 +119,30 @@ export function MeasurementLineChart({
               borderRadius: "var(--radius-md)",
             }}
             labelStyle={{ color: "var(--color-text)" }}
-            formatter={(value: number | undefined) => [`${value ?? 0} ${unit}`, ""]}
             labelFormatter={(label) => (label ? formatDateDisplay(label) : "")}
+            formatter={(value: number | undefined, name: string) => [
+              value != null ? `${value} ${unit}` : "—",
+              series.find((s) => s.dataKey === name)?.name ?? name,
+            ]}
           />
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke={color}
-            strokeWidth={2}
-            fill={`url(#${gradientId})`}
+          <Legend
+            wrapperStyle={{ fontSize: 12 }}
+            formatter={(value) => series.find((s) => s.dataKey === value)?.name ?? value}
           />
-        </AreaChart>
+          {series.map((s) => (
+            <Line
+              key={s.dataKey}
+              type="monotone"
+              dataKey={s.dataKey}
+              name={s.dataKey}
+              stroke={s.color}
+              strokeWidth={2}
+              strokeDasharray={s.strokeDasharray}
+              dot={{ r: 3, fill: s.color }}
+              connectNulls
+            />
+          ))}
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );
