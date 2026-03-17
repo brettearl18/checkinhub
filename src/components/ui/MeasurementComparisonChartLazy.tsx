@@ -9,7 +9,7 @@ const MeasurementComparisonChart = dynamic(
 );
 
 interface MeasurementComparisonChartLazyProps {
-  data: Record<string, number | undefined>[];
+  data: Record<string, number | string | undefined>[];
   series: ComparisonSeries[];
   unit: string;
   height?: number;

@@ -22,8 +22,8 @@ export interface ComparisonSeries {
 }
 
 interface MeasurementComparisonChartProps {
-  /** One row per date with keys for each series (e.g. { date, leftArm: 32, rightArm: 33 }) */
-  data: Record<string, number | undefined>[];
+  /** One row per date with keys for each series (e.g. { date: "2026-01-01", leftArm: 32, rightArm: 33 }) */
+  data: Record<string, number | string | undefined>[];
   series: ComparisonSeries[];
   unit: string;
   height?: number;

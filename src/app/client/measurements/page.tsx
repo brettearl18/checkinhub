@@ -76,7 +76,7 @@ export default function ClientMeasurementsPage() {
       .sort((a, b) => (a.date!).localeCompare(b.date!));
     return chronological
       .map((m) => {
-        const row: Record<string, number | undefined> = { date: m.date! };
+        const row: Record<string, number | string | undefined> = { date: m.date! };
         for (const k of keys) row[k] = m.measurements?.[k] ?? undefined;
         return row;
       })
