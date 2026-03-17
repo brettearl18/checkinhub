@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const authResult = await requireClient(request);
   if ("error" in authResult) return authResult.error;
   const clientId = authResult.identity.clientId!;
+  const today = todayDate();
 
   if (!isAdminConfigured()) {
     return NextResponse.json({
@@ -35,7 +36,6 @@ export async function GET(request: Request) {
   }
 
   const db = getAdminDb();
-  const today = todayDate();
   const docs = await fetchClientHabitEntries(db, clientId);
   const byHabit = entriesByHabitAndDate(docs);
 
