@@ -76,6 +76,10 @@ function SignInForm() {
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-[var(--color-text-muted)]">
+          <Link href="/register" className="text-[var(--color-primary)] hover:underline">
+            Register Here
+          </Link>
+          {" · "}
           <Link href="/" className="text-[var(--color-primary)] hover:underline">
             Back to home
           </Link>

@@ -60,6 +60,9 @@ export default function HomePage() {
             <Button asChild variant="primary" className="w-full justify-center py-3 text-base font-medium">
               <Link href="/sign-in">Sign in</Link>
             </Button>
+            <Button asChild variant="secondary" className="w-full justify-center">
+              <Link href="/register">Register Here</Link>
+            </Button>
             <div className="grid grid-cols-2 gap-3 pt-1">
               <Button asChild variant="secondary" className="w-full justify-center">
                 <Link href="/client">Client portal</Link>

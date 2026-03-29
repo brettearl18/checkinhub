@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
-import { getPerQuestionScores } from "@/lib/check-in-score";
+import { getPerQuestionScores, computeScore } from "@/lib/check-in-score";
 import { resolveThresholds } from "@/lib/scoring-utils";
 import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
 
@@ -81,20 +81,61 @@ export async function GET(request: Request) {
     }
   }
 
-  const responsesByWeek: { weekKey: string; submittedAt: number; formId: string; responses: Array<{ questionId: string; answer: string | number | string[] }> }[] = [];
+  // Resolve week key from assignment reflection week so graph matches history "Week of X"
+  const assignmentIds = Array.from(
+    new Set(
+      responsesSnap.docs
+        .map((d) => (d.data().assignmentId as string) ?? "")
+        .filter(Boolean)
+    )
+  );
+  const assignmentSnaps = await Promise.all(
+    assignmentIds.map((id) => db.collection("check_in_assignments").doc(id).get())
+  );
+  const reflectionWeekByAssignment = new Map<string, string>();
+  for (const snap of assignmentSnaps) {
+    if (snap.exists) {
+      const refWeek = (snap.data() as { reflectionWeekStart?: string }).reflectionWeekStart;
+      if (refWeek && /^\d{4}-\d{2}-\d{2}$/.test(refWeek)) {
+        reflectionWeekByAssignment.set(snap.id, refWeek);
+      }
+    }
+  }
+
+  const responsesByWeek: { weekKey: string; submittedAt: number; formId: string; responses: Array<{ questionId: string; answer: string | number | string[] }>; overallScore: number | null }[] = [];
   for (const doc of responsesSnap.docs) {
     const r = doc.data();
     const submittedAt = r.submittedAt?.toDate?.() ?? r.submittedAt;
     const submittedDate = submittedAt ? new Date(submittedAt) : null;
     if (!submittedDate || Number.isNaN(submittedDate.getTime())) continue;
-    const weekKey = getMondayOf(submittedDate);
+    const assignmentId = (r.assignmentId as string) ?? "";
+    const weekKey =
+      reflectionWeekByAssignment.get(assignmentId) || getMondayOf(submittedDate);
     weekSet.add(weekKey);
     const responses = (r.responses as Array<{ questionId: string; answer: string | number | string[] }>) ?? [];
+    let overallScore: number | null = typeof r.score === "number" ? Math.round(r.score) : null;
+    if (overallScore == null && responses.length > 0) {
+      const formQIds = questionIdsByForm.get(r.formId as string) ?? [];
+      const scoringQuestions = formQIds
+        .map((id) => questionDocs.get(id))
+        .filter((q) => q != null) as {
+          id: string;
+          type?: string;
+          options?: string[] | Array<{ text: string; weight?: number }>;
+          questionWeight?: number;
+          yesNoWeight?: number;
+          yesIsPositive?: boolean;
+        }[];
+      if (scoringQuestions.length > 0) {
+        overallScore = computeScore(responses, scoringQuestions);
+      }
+    }
     responsesByWeek.push({
       weekKey,
       submittedAt: submittedDate.getTime(),
       formId: r.formId as string,
       responses,
+      overallScore,
     });
   }
 
@@ -103,6 +144,9 @@ export async function GET(request: Request) {
     const q = questionDocs.get(qid);
     return { id: qid, text: q?.text ?? qid };
   });
+
+  // Per-week overall score (same as history) so the chart matches check-in history
+  const weekOverallScore: Record<string, number> = {};
 
   for (const row of responsesByWeek) {
     const formQIds = questionIdsByForm.get(row.formId) ?? [];
@@ -113,6 +157,9 @@ export async function GET(request: Request) {
     for (const [qid, score] of Object.entries(scores)) {
       if (!grid[qid]) grid[qid] = {};
       if (grid[qid][row.weekKey] == null) grid[qid][row.weekKey] = score;
+    }
+    if (row.overallScore != null && weekOverallScore[row.weekKey] == null) {
+      weekOverallScore[row.weekKey] = row.overallScore;
     }
   }
 
@@ -125,6 +172,7 @@ export async function GET(request: Request) {
     questions: questions.map((q) => ({ id: q.id, text: q.text })),
     weeks: weekLabels,
     grid,
+    weekOverallScore,
     trafficLightRedMax,
     trafficLightOrangeMax,
   });

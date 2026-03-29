@@ -83,11 +83,11 @@ export function MeasurementComparisonChart({
   if (data.length === 0) return null;
 
   return (
-    <div style={{ width: "100%", height }} className="min-h-[200px]">
+    <div style={{ width: "100%", height }} className="min-h-[200px] overflow-visible">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={data}
-          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -110,7 +110,7 @@ export function MeasurementComparisonChart({
             axisLine={false}
             tickLine={false}
             tickFormatter={(v) => `${v} ${unit}`}
-            width={40}
+            width={48}
           />
           <Tooltip
             contentStyle={{

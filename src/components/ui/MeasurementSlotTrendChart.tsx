@@ -11,15 +11,19 @@ import {
   AreaChart,
 } from "recharts";
 import { formatDateDisplay } from "@/lib/format-date";
+import { MEASUREMENT_SLOT_COUNT } from "./measurement-slot-constants";
 
-export interface ChartPoint {
-  date: string;
-  value: number;
-  label?: string;
+export { MEASUREMENT_SLOT_COUNT };
+
+export interface SlotChartRow {
+  slot: number;
+  value: number | null;
+  date: string | null;
 }
 
-interface MeasurementLineChartProps {
-  data: ChartPoint[];
+interface MeasurementSlotTrendChartProps {
+  /** Up to 20 points, chronological order within the selected range. */
+  rows: SlotChartRow[];
   unit: string;
   color?: string;
   height?: number;
@@ -28,7 +32,6 @@ interface MeasurementLineChartProps {
 const PADDING_KG = 5;
 const PADDING_CM = 5;
 
-/** Nice tick step for a given range (e.g. 2, 5, 10). */
 function tickStep(range: number): number {
   if (range <= 0) return 1;
   if (range <= 12) return 2;
@@ -36,7 +39,6 @@ function tickStep(range: number): number {
   return 10;
 }
 
-/** Generate evenly spaced tick values for Y axis (ascending). */
 function niceTicks(domainMin: number, domainMax: number): number[] {
   const range = domainMax - domainMin;
   const step = tickStep(range);
@@ -49,17 +51,20 @@ function niceTicks(domainMin: number, domainMax: number): number[] {
   return ticks;
 }
 
-export function MeasurementLineChart({
-  data,
+/**
+ * Coach progress: fixed 20 X positions. Measurements fill slots 0,1,2… in order (not stretched by calendar gap).
+ */
+export function MeasurementSlotTrendChart({
+  rows,
   unit,
   color = "var(--color-primary)",
   height = 260,
-}: MeasurementLineChartProps) {
+}: MeasurementSlotTrendChartProps) {
   const gradientId = useId().replace(/:/g, "");
 
   const { domain, ticks } = useMemo(() => {
-    if (data.length === 0) return { domain: [0, 10] as [number, number], ticks: [0, 5, 10] };
-    const values = data.map((d) => d.value);
+    const values = rows.map((r) => r.value).filter((v): v is number => v != null);
+    if (values.length === 0) return { domain: [0, 10] as [number, number], ticks: [0, 5, 10] };
     const dataMin = Math.min(...values);
     const dataMax = Math.max(...values);
     const padding = unit === "kg" ? PADDING_KG : PADDING_CM;
@@ -68,37 +73,33 @@ export function MeasurementLineChart({
     const domain: [number, number] = [domainMin, domainMax];
     const tickList = niceTicks(domainMin, domainMax);
     return { domain, ticks: tickList };
-  }, [data, unit]);
+  }, [rows, unit]);
 
-  if (data.length === 0) return null;
-
-  const formatDate = (d: string) => formatDateDisplay(d);
+  const hasData = rows.some((r) => r.value != null);
+  if (!hasData) return null;
 
   return (
     <div style={{ width: "100%", minWidth: 200, height, minHeight: Math.max(100, height) }} className="overflow-visible">
       <ResponsiveContainer width="100%" height={height} minHeight={Math.max(100, height)}>
-        <AreaChart
-          data={data}
-          margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
-        >
+        <AreaChart data={rows} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity={0.3} />
               <stop offset="100%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="var(--color-border)"
-            vertical={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
           <XAxis
-            dataKey="date"
-            tickFormatter={formatDate}
+            type="number"
+            dataKey="slot"
+            domain={[0, MEASUREMENT_SLOT_COUNT - 1]}
+            ticks={[0, 4, 8, 12, 16, 19]}
+            tickFormatter={(s) => (Number.isInteger(s) ? `${s + 1}` : "")}
             stroke="var(--color-text-muted)"
-            tick={{ fontSize: 12 }}
+            tick={{ fontSize: 11 }}
             axisLine={{ stroke: "var(--color-border)" }}
             tickLine={false}
+            label={{ value: "Reading # (1–20)", position: "bottom", offset: 0, fill: "var(--color-text-muted)", fontSize: 11 }}
           />
           <YAxis
             domain={domain}
@@ -117,8 +118,15 @@ export function MeasurementLineChart({
               borderRadius: "var(--radius-md)",
             }}
             labelStyle={{ color: "var(--color-text)" }}
-            formatter={(value: number | undefined) => [`${value ?? 0} ${unit}`, ""]}
-            labelFormatter={(label) => (label ? formatDateDisplay(label) : "")}
+            formatter={(value: unknown) => {
+              const n = typeof value === "number" ? value : null;
+              return n != null ? [`${n} ${unit}`, "Value"] : ["—", ""];
+            }}
+            labelFormatter={(_, payload) => {
+              const row = payload?.[0]?.payload as SlotChartRow | undefined;
+              if (row?.date) return `${formatDateDisplay(row.date)} · #${row.slot + 1}`;
+              return `Slot ${row != null ? row.slot + 1 : ""}`;
+            }}
           />
           <Area
             type="monotone"
@@ -126,6 +134,9 @@ export function MeasurementLineChart({
             stroke={color}
             strokeWidth={2}
             fill={`url(#${gradientId})`}
+            connectNulls={false}
+            dot={{ r: 3, fill: "var(--color-bg-elevated)", stroke: color }}
+            activeDot={{ r: 4 }}
           />
         </AreaChart>
       </ResponsiveContainer>
