@@ -52,9 +52,6 @@ interface Measurement {
   isBaseline: boolean;
 }
 
-const BEFORE_TYPES = ["before_front", "before_side", "before_back"];
-const AFTER_TYPES = ["after_front", "after_side", "after_back"];
-
 /** All Monday dates (YYYY-MM-DD) from first through last, inclusive. */
 function allMondaysBetween(first: string, last: string): string[] {
   const out: string[] = [];
@@ -318,14 +315,28 @@ export default function ClientPortalPage() {
     })).filter((row) => row.value != null) as { date: string; value: number; label?: string }[];
   }, [measurementList]);
 
+  /** Before = oldest upload, Current = newest (timeline). Avoids before/after tags putting a newer “before” on the left. */
   const { baselinePhoto, currentPhoto } = useMemo(() => {
-    const before = progressImages.filter((img) => img.imageType && BEFORE_TYPES.includes(img.imageType));
-    const after = progressImages.filter((img) => img.imageType && AFTER_TYPES.includes(img.imageType));
-    const byDate = (a: ProgressImage, b: ProgressImage) => (a.uploadedAt || "").localeCompare(b.uploadedAt || "");
-    return {
-      baselinePhoto: before.length > 0 ? [...before].sort(byDate)[0] : null,
-      currentPhoto: after.length > 0 ? [...after].sort(byDate).pop()! : progressImages[0] ?? null,
-    };
+    if (progressImages.length === 0) {
+      return { baselinePhoto: null as ProgressImage | null, currentPhoto: null as ProgressImage | null };
+    }
+
+    const byUploadedAsc = (a: ProgressImage, b: ProgressImage) =>
+      (a.uploadedAt || "").localeCompare(b.uploadedAt || "");
+    const sortedAsc = [...progressImages].sort(byUploadedAsc);
+
+    if (sortedAsc.length === 1) {
+      return { baselinePhoto: sortedAsc[0], currentPhoto: null };
+    }
+
+    const baselinePhoto = sortedAsc[0];
+    const currentPhoto = sortedAsc[sortedAsc.length - 1];
+
+    if (baselinePhoto.id === currentPhoto.id) {
+      return { baselinePhoto, currentPhoto: null };
+    }
+
+    return { baselinePhoto, currentPhoto };
   }, [progressImages]);
 
   // Total check-in % (last 3 weeks): prefer per-week overall score so it matches history and chart
