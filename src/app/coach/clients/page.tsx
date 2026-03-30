@@ -39,6 +39,14 @@ function paymentLabel(paymentStatus: string | null): string {
 export default function CoachClientsListPage() {
   const { fetchWithAuth } = useApiClient();
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [nameFilter, setNameFilter] = useState("");
+  const [emailFilter, setEmailFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [formFilter, setFormFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [weeksFilter, setWeeksFilter] = useState("");
+  const [weightDeltaFilter, setWeightDeltaFilter] = useState("");
+  const [checkInFilter, setCheckInFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -140,6 +148,51 @@ export default function CoachClientsListPage() {
     }
   };
 
+  const filteredClients = useMemo(() => {
+    const toLower = (v: string | null | undefined) => (v ?? "").toLowerCase();
+    const nameQ = nameFilter.trim().toLowerCase();
+    const emailQ = emailFilter.trim().toLowerCase();
+    const formQ = formFilter.trim().toLowerCase();
+    const weeksQ = weeksFilter.trim();
+    const weightQ = weightDeltaFilter.trim();
+    const checkInQ = checkInFilter.trim();
+
+    return clients
+      .filter((c) => {
+        const fullName = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim().toLowerCase();
+        if (nameQ && !fullName.includes(nameQ)) return false;
+        if (emailQ && !toLower(c.email).includes(emailQ)) return false;
+        if (statusFilter !== "all" && (c.status ?? "").toLowerCase() !== statusFilter) return false;
+        if (formQ && !toLower(c.allocatedForms).includes(formQ)) return false;
+        if (paymentFilter !== "all" && (c.paymentStatus ?? "none") !== paymentFilter) return false;
+        if (weeksQ && !String(c.programWeeks ?? "").includes(weeksQ)) return false;
+        if (weightQ) {
+          const weightText = c.weightLossKg != null ? String(c.weightLossKg) : "";
+          if (!weightText.includes(weightQ)) return false;
+        }
+        if (checkInQ) {
+          const checkInVal = c.avgCheckInPct ?? c.trendPct;
+          if (!String(checkInVal ?? "").includes(checkInQ)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const aName = `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim();
+        const bName = `${b.firstName ?? ""} ${b.lastName ?? ""}`.trim();
+        return aName.localeCompare(bName, undefined, { sensitivity: "base" });
+      });
+  }, [
+    clients,
+    nameFilter,
+    emailFilter,
+    statusFilter,
+    formFilter,
+    paymentFilter,
+    weeksFilter,
+    weightDeltaFilter,
+    checkInFilter,
+  ]);
+
   if (authError) {
     return <AuthErrorRetry onRetry={load} />;
   }
@@ -236,8 +289,86 @@ export default function CoachClientsListPage() {
             )}
           </div>
           <p className="text-sm text-[var(--color-text-muted)]">
-            {clients.length} client{clients.length !== 1 ? "s" : ""}
+            {filteredClients.length} of {clients.length} client{clients.length !== 1 ? "s" : ""}
           </p>
+          <div className="grid gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 sm:grid-cols-2 lg:grid-cols-4">
+            <input
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+              placeholder="Filter name"
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+            />
+            <input
+              value={emailFilter}
+              onChange={(e) => setEmailFilter(e.target.value)}
+              placeholder="Filter email"
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="pending">Pending</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <input
+              value={formFilter}
+              onChange={(e) => setFormFilter(e.target.value)}
+              placeholder="Filter check-in form"
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+            />
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+            >
+              <option value="all">All payments</option>
+              <option value="paid">Paid</option>
+              <option value="past_due">Past due</option>
+              <option value="failed">Failed</option>
+              <option value="canceled">Canceled</option>
+              <option value="none">No payment status</option>
+            </select>
+            <input
+              value={weeksFilter}
+              onChange={(e) => setWeeksFilter(e.target.value)}
+              placeholder="Filter weeks"
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+            />
+            <input
+              value={weightDeltaFilter}
+              onChange={(e) => setWeightDeltaFilter(e.target.value)}
+              placeholder="Filter weight delta"
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+            />
+            <div className="flex gap-2">
+              <input
+                value={checkInFilter}
+                onChange={(e) => setCheckInFilter(e.target.value)}
+                placeholder="Filter check-in %"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setNameFilter("");
+                  setEmailFilter("");
+                  setStatusFilter("all");
+                  setFormFilter("");
+                  setPaymentFilter("all");
+                  setWeeksFilter("");
+                  setWeightDeltaFilter("");
+                  setCheckInFilter("");
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
           <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
@@ -254,7 +385,7 @@ export default function CoachClientsListPage() {
                 </tr>
               </thead>
               <tbody>
-                {clients.map((c) => (
+                {filteredClients.map((c) => (
                   <tr
                     key={c.id}
                     className="group border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]"
