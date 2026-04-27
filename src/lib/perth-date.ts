@@ -10,6 +10,22 @@ export function todayPerth(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: PERTH_TZ });
 }
 
+/**
+ * [start, end) UTC instants for a calendar day in Australia/Perth (YYYY-MM-DD).
+ * For querying Firestore `date` fields for “this Perth day”.
+ */
+export function getPerthDayBoundsUtc(yyyyMmDd: string): { start: Date; end: Date } {
+  const [y, m, d] = yyyyMmDd.split("-").map(Number);
+  if (!y || !m || !d) throw new Error("Invalid YYYY-MM-DD");
+  const yStr = String(y);
+  const mStr = String(m).padStart(2, "0");
+  const dStr = String(d).padStart(2, "0");
+  const start = new Date(`${yStr}-${mStr}-${dStr}T00:00:00+08:00`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+}
+
 /** Format a Date as YYYY-MM-DD in Perth timezone (avoids UTC date shift). */
 function toPerthDateString(d: Date): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {

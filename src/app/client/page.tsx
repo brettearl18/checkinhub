@@ -434,6 +434,12 @@ export default function ClientPortalPage() {
                 &ldquo;{profile?.profilePersonalization?.quote ?? ""}&rdquo;
               </p>
             )}
+            <Link
+              href="/client/profile#body-weight"
+              className="mt-3 inline-flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-subtle)]/50"
+            >
+              Log body weight
+            </Link>
           </div>
           {!loading && questionProgressSummary && (
             <div
