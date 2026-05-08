@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
+import { isClosedClientStatus } from "@/lib/client-status";
 import { Timestamp } from "firebase-admin/firestore";
 import crypto from "crypto";
 
@@ -38,6 +39,12 @@ export async function POST(
   };
   if (data.coachId !== coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (isClosedClientStatus(data.status)) {
+    return NextResponse.json(
+      { error: "Cancelled clients do not receive onboarding emails." },
+      { status: 400 }
+    );
   }
   if (data.status === "active" && data.authUid) {
     return NextResponse.json(
