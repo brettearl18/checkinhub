@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { isClosedClientStatus } from "@/lib/client-status";
 
 interface ClientOption {
   id: string;
@@ -62,7 +63,8 @@ function AssignForm() {
         }
         if (clientsRes.ok) {
           clientsRes.json().then((list: ClientOption[]) => {
-            if (!cancelled && Array.isArray(list)) setClients(list.filter((c) => c.status !== "archived"));
+            if (!cancelled && Array.isArray(list))
+              setClients(list.filter((c) => !isClosedClientStatus(c.status)));
           });
         }
       })

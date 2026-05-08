@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { isClosedClientStatus } from "@/lib/client-status";
 
 function toIso(v: unknown): string | null {
   if (!v) return null;
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
     };
   });
 
-  const nonArchived = clients.filter((c) => c.status !== "archived");
+  const nonArchived = clients.filter((c) => !isClosedClientStatus(c.status));
   const isPaidUp = (c: (typeof clients)[0]) =>
     c.paymentStatus === "paid" || (c.packageExpiresAt != null && c.packageExpiresAt !== "");
   const paidUp = nonArchived.filter(isPaidUp).length;

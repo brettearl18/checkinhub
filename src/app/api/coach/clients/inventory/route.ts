@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { isClosedClientStatus, normalizeClientStatusForApi } from "@/lib/client-status";
 
 function toDate(v: unknown): Date | null {
   if (!v) return null;
@@ -31,7 +32,8 @@ export async function GET(request: Request) {
   if ("error" in authResult) return authResult.error;
   const coachId = authResult.identity.coachId!;
   const { searchParams } = new URL(request.url);
-  const includeArchived = searchParams.get("includeArchived") === "true";
+  const includeClosed =
+    searchParams.get("includeCancelled") === "true" || searchParams.get("includeArchived") === "true";
 
   if (!isAdminConfigured()) {
     return NextResponse.json({
@@ -74,7 +76,7 @@ export async function GET(request: Request) {
             lastName: data.lastName ?? "",
             email: data.email ?? "",
             phone: data.phone ?? "",
-            status: (data.status as string) ?? "active",
+            status: normalizeClientStatusForApi((data.status as string) ?? "active"),
             programStartDate,
             programWeeks,
             paymentStatus: (data.paymentStatus as string) || null,
@@ -201,7 +203,7 @@ export async function GET(request: Request) {
         lastName: c.lastName,
         email: c.email,
         phone: c.phone ?? null,
-        status: c.status,
+        status: normalizeClientStatusForApi(c.status),
         programWeeks: c.programWeeks ?? null,
         paymentStatus: c.paymentStatus ?? null,
         lastPaymentAt: c.lastPaymentAt ?? null,
@@ -219,22 +221,22 @@ export async function GET(request: Request) {
       };
     });
 
-    const nonArchived = clients.filter((c) => (c.status as string) !== "archived");
-    const totalOverdueNonArchived = nonArchived.reduce((sum, c) => sum + c.overdueCount, 0);
-    const activeCount = nonArchived.filter((c) => c.status === "active").length;
-    const pendingCount = nonArchived.filter((c) => c.status === "pending").length;
-    const scores = nonArchived.map((c) => c.avgScore).filter((s): s is number => s != null);
+    const rosterClients = clients.filter((c) => !isClosedClientStatus(c.status as string));
+    const totalOverdueNonArchived = rosterClients.reduce((sum, c) => sum + c.overdueCount, 0);
+    const activeCount = rosterClients.filter((c) => c.status === "active").length;
+    const pendingCount = rosterClients.filter((c) => c.status === "pending").length;
+    const scores = rosterClients.map((c) => c.avgScore).filter((s): s is number => s != null);
     const avgProgress = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
 
     const stats = {
-      total: nonArchived.length,
+      total: rosterClients.length,
       active: activeCount,
       pending: pendingCount,
       overdue: totalOverdueNonArchived,
       avgProgress,
     };
 
-    const clientsOut = includeArchived ? clients : nonArchived;
+    const clientsOut = includeClosed ? clients : rosterClients;
     return NextResponse.json({ stats, clients: clientsOut });
   } catch (err) {
     console.error("[coach/clients/inventory]", err);

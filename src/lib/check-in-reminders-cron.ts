@@ -3,6 +3,7 @@ import { isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
 import { sendPushToUser } from "@/lib/push-server";
 import { nextMondayPerth, thisMondayPerth } from "@/lib/perth-date";
+import { isClosedClientStatus } from "@/lib/client-status";
 
 const RESUMABLE_STATUSES = ["pending", "active", "overdue", "started"];
 
@@ -129,7 +130,7 @@ export async function runReminders(type: ReminderType): Promise<RunRemindersResu
   for (const clientId of clientIds) {
     const clientSnap = await db.collection("clients").doc(clientId).get();
     const clientData = clientSnap.exists
-      ? (clientSnap.data() as { authUid?: string; email?: string; firstName?: string })
+      ? (clientSnap.data() as { authUid?: string; email?: string; firstName?: string; status?: string })
       : null;
     const userId = clientData?.authUid ?? (await getClientAuthUid(db, clientId));
     if (!userId) continue;
@@ -156,7 +157,7 @@ export async function runReminders(type: ReminderType): Promise<RunRemindersResu
     } catch {
       // continue; in-app notification already saved
     }
-    if (clientData?.email?.trim() && appUrl) {
+    if (!isClosedClientStatus(clientData?.status) && clientData?.email?.trim() && appUrl) {
       const firstName = clientData.firstName?.trim() || "there";
       const { subject, html, text } = buildReminderEmailContent(type, firstName, appUrl);
       const emailResult = await sendEmail({

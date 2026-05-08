@@ -3,6 +3,7 @@ import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
+import { isClosedClientStatus, normalizeClientStatusForApi, normalizeClientStatusForStorage } from "@/lib/client-status";
 import { resolveThresholds, SCORING_PROFILES, type ScoringProfileId } from "@/lib/scoring-utils";
 
 function toIso(v: unknown): string | null {
@@ -129,7 +130,7 @@ export async function GET(
     email: data.email ?? "",
     phone: data.phone ?? "",
     timezone: data.timezone ?? "",
-    status: data.status ?? "active",
+    status: normalizeClientStatusForApi(data.status ?? "active"),
     trafficLightRedMax: redMax,
     trafficLightOrangeMax: orangeMax,
     scoringProfile: scoringProfile,
@@ -224,7 +225,9 @@ export async function PATCH(
   if (body.email !== undefined) clientUpdate.email = body.email;
   if (body.phone !== undefined) clientUpdate.phone = body.phone;
   if (body.timezone !== undefined) clientUpdate.timezone = body.timezone;
-  if (body.status !== undefined) clientUpdate.status = body.status;
+  if (body.status !== undefined && typeof body.status === "string") {
+    clientUpdate.status = normalizeClientStatusForStorage(body.status);
+  }
   if (body.programStartDate !== undefined) clientUpdate.programStartDate = body.programStartDate;
   if (body.programDurationWeeks !== undefined) clientUpdate.programDurationWeeks = body.programDurationWeeks;
   if (body.coachNotes !== undefined) clientUpdate.coachNotes = body.coachNotes;
@@ -269,9 +272,9 @@ export async function PATCH(
     ? (body.mealPlanLinks as { label?: string; url?: string }[]).filter((l) => l?.url)
     : [];
   if (sendMealPlanEmail && newMealPlanLinks.length > 0) {
-    const clientData = snap.data() as { email?: string; firstName?: string };
+    const clientData = snap.data() as { email?: string; firstName?: string; status?: string };
     const toEmail = clientData?.email?.trim();
-    if (toEmail) {
+    if (toEmail && !isClosedClientStatus(clientData.status)) {
       const firstName = clientData.firstName?.trim() || "there";
       const planLabel = newMealPlanLinks[0]?.label || "Meal plan";
       const planUrl = newMealPlanLinks[0]?.url || "";

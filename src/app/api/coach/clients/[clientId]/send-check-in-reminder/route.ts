@@ -4,6 +4,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
 import { buildManualReminderEmailContent } from "@/lib/check-in-reminders-cron";
+import { isClosedClientStatus } from "@/lib/client-status";
 
 /**
  * POST /api/coach/clients/[clientId]/send-check-in-reminder
@@ -27,9 +28,15 @@ export async function POST(
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  const data = clientSnap.data() as { coachId?: string; email?: string; firstName?: string };
+  const data = clientSnap.data() as { coachId?: string; email?: string; firstName?: string; status?: string };
   if (authResult.identity.coachId && data.coachId !== authResult.identity.coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (isClosedClientStatus(data.status)) {
+    return NextResponse.json(
+      { error: "Cancelled clients do not receive reminder emails." },
+      { status: 400 }
+    );
   }
 
   const email = typeof data.email === "string" ? data.email.trim() : "";

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
+import { formatClientStatusLabel, isClosedClientStatus } from "@/lib/client-status";
 
 function formatDateDisplay(iso: string): string {
   const d = new Date(iso + "T12:00:00Z");
@@ -41,7 +42,8 @@ export default function CoachClientsListPage() {
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [nameFilter, setNameFilter] = useState("");
   const [emailFilter, setEmailFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  /** roster = active + pending (excludes cancelled); use cancelled / everyone for archived access */
+  const [statusFilter, setStatusFilter] = useState("roster");
   const [formFilter, setFormFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [weeksFilter, setWeeksFilter] = useState("");
@@ -87,7 +89,7 @@ export default function CoachClientsListPage() {
     setAuthError(false);
     setLoadError(null);
     try {
-      const res = await fetchWithAuth("/api/coach/clients/inventory");
+      const res = await fetchWithAuth("/api/coach/clients/inventory?includeCancelled=true");
       if (res.status === 401) {
         setAuthError(true);
         return;
@@ -162,7 +164,20 @@ export default function CoachClientsListPage() {
         const fullName = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim().toLowerCase();
         if (nameQ && !fullName.includes(nameQ)) return false;
         if (emailQ && !toLower(c.email).includes(emailQ)) return false;
-        if (statusFilter !== "all" && (c.status ?? "").toLowerCase() !== statusFilter) return false;
+        switch (statusFilter) {
+          case "roster":
+            if (isClosedClientStatus(c.status)) return false;
+            break;
+          case "cancelled":
+          case "inactive":
+            if (!isClosedClientStatus(c.status)) return false;
+            break;
+          case "everyone":
+          case "all":
+            break;
+          default:
+            if ((c.status ?? "").toLowerCase() !== statusFilter.toLowerCase()) return false;
+        }
         if (formQ && !toLower(c.allocatedForms).includes(formQ)) return false;
         if (paymentFilter !== "all" && (c.paymentStatus ?? "none") !== paymentFilter) return false;
         if (weeksQ && !String(c.programWeeks ?? "").includes(weeksQ)) return false;
@@ -309,10 +324,11 @@ export default function CoachClientsListPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm text-[var(--color-text)]"
             >
-              <option value="all">All statuses</option>
+              <option value="roster">Current roster (excl. cancelled)</option>
               <option value="active">Active</option>
               <option value="pending">Pending</option>
-              <option value="inactive">Inactive</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="everyone">Everyone (incl. cancelled)</option>
             </select>
             <input
               value={formFilter}
@@ -357,7 +373,7 @@ export default function CoachClientsListPage() {
                 onClick={() => {
                   setNameFilter("");
                   setEmailFilter("");
-                  setStatusFilter("all");
+                  setStatusFilter("roster");
                   setFormFilter("");
                   setPaymentFilter("all");
                   setWeeksFilter("");
@@ -399,7 +415,7 @@ export default function CoachClientsListPage() {
                       {c.email}
                     </td>
                     <td className="px-3 py-2">
-                      <span className="capitalize text-[var(--color-text-secondary)]">{c.status}</span>
+                      <span className="text-[var(--color-text-secondary)]">{formatClientStatusLabel(c.status)}</span>
                     </td>
                     <td className="px-3 py-2 text-[var(--color-text-secondary)] max-w-[200px] truncate" title={c.allocatedForms ?? undefined}>
                       {c.allocatedForms ?? "—"}

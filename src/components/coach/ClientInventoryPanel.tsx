@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { formatDateDisplay } from "@/lib/format-date";
+import { formatClientStatusLabel } from "@/lib/client-status";
 
 export interface InventoryClient {
   id: string;
@@ -213,7 +214,7 @@ export function ClientInventoryPanel({
                             {c.firstName} {c.lastName}
                           </span>
                           <span className="ml-2 inline rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                            {c.status === "active" ? "Active" : c.status || "—"}
+                            {formatClientStatusLabel(c.status)}
                           </span>
                           {c.phone && (
                             <p className="text-xs text-[var(--color-text-muted)]">{c.phone}</p>
