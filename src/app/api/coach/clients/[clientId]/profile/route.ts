@@ -46,6 +46,7 @@ export async function GET(
       nextBillingAt: null,
       firstPaymentAt: null,
       mealPlanLinks: [],
+      mealPlanJson: null as Record<string, unknown> | null,
       packagePaidAt: null as string | null,
       packageMonths: null as number | null,
       packageFreeWeeks: 0,
@@ -79,6 +80,7 @@ export async function GET(
     nextBillingAt?: unknown;
     firstPaymentAt?: unknown;
     mealPlanLinks?: { label?: string; url?: string }[];
+    mealPlanJson?: Record<string, unknown> | null;
     mealPlanName?: string;
     mealPlanUrl?: string;
     packagePaidAt?: unknown;
@@ -154,6 +156,10 @@ export async function GET(
       if (name && url) return [{ label: name, url }];
       return [];
     })(),
+    mealPlanJson:
+      data.mealPlanJson && typeof data.mealPlanJson === "object" && !Array.isArray(data.mealPlanJson)
+        ? (data.mealPlanJson as Record<string, unknown>)
+        : null,
     packagePaidAt: toIso(data.packagePaidAt) ?? null,
     packageMonths: typeof data.packageMonths === "number" ? data.packageMonths : null,
     packageFreeWeeks: typeof data.packageFreeWeeks === "number" ? data.packageFreeWeeks : 0,
@@ -254,6 +260,11 @@ export async function PATCH(
             url: String((l as { url?: string }).url ?? ""),
           }))
       : [];
+  }
+  if (body.mealPlanJson !== undefined) {
+    const raw = body.mealPlanJson;
+    clientUpdate.mealPlanJson =
+      raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null;
   }
 
   if (body.checkInFrequency !== undefined || body.communicationPreference !== undefined) {

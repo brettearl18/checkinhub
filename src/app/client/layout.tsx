@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: "/client/notifications", label: "Notifications" },
   { href: "/client/messages", label: "Messages" },
   { href: "/client/measurements", label: "Measurements" },
+  { href: "/client/profile/meal-plan", label: "Meal plan" },
   { href: "/client/goals", label: "Goals" },
   { href: "/client/progress-photos", label: "Photos" },
   { href: "/client/profile", label: "Profile" },

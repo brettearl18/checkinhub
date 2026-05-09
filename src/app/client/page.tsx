@@ -29,6 +29,7 @@ interface Profile {
   profilePersonalization?: { showQuote?: boolean; quote?: string | null };
   paymentStatus: string | null;
   mealPlanLinks: { label: string; url: string }[];
+  mealPlanJson?: Record<string, unknown> | null;
 }
 
 interface ProgressImage {
@@ -207,6 +208,10 @@ export default function ClientPortalPage() {
           ...p,
           paymentStatus: p.paymentStatus ?? null,
           mealPlanLinks: Array.isArray(p.mealPlanLinks) ? p.mealPlanLinks : [],
+          mealPlanJson:
+            p.mealPlanJson && typeof p.mealPlanJson === "object" && !Array.isArray(p.mealPlanJson)
+              ? p.mealPlanJson
+              : null,
         });
       }
       if (assignmentsRes.ok) {
@@ -752,6 +757,11 @@ export default function ClientPortalPage() {
                 <p className="text-sm text-[var(--color-text-muted)]">
                   No meal plan assigned. Your coach can add one in your settings.
                 </p>
+              )}
+              {profile?.mealPlanJson && (
+                <Link href="/client/profile/meal-plan" className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline">
+                  Open in-app meal plan →
+                </Link>
               )}
             </Card>
           </div>

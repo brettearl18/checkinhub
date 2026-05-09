@@ -20,6 +20,7 @@ export async function GET(request: Request) {
       profilePersonalization: { quote: null, showQuote: false, colorTheme: "#daa450", icon: null },
       paymentStatus: null,
       mealPlanLinks: [],
+      mealPlanJson: null,
     });
   }
 
@@ -54,6 +55,10 @@ export async function GET(request: Request) {
     },
     paymentStatus: (data.paymentStatus as string) || null,
     mealPlanLinks,
+    mealPlanJson:
+      data.mealPlanJson && typeof data.mealPlanJson === "object" && !Array.isArray(data.mealPlanJson)
+        ? (data.mealPlanJson as Record<string, unknown>)
+        : null,
   };
   return NextResponse.json(profile);
 }

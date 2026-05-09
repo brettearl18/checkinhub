@@ -26,6 +26,7 @@ interface Profile {
   timezone: string;
   profile: Record<string, unknown>;
   profilePersonalization: { quote: string | null; showQuote: boolean; colorTheme: string; icon: string | null };
+  mealPlanJson?: Record<string, unknown> | null;
 }
 
 interface CoachReview {
@@ -299,6 +300,24 @@ export default function ClientProfilePage() {
           </Link>{" "}
           — optional tape measurements and full history.
         </p>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="text-lg font-medium text-[var(--color-text)] mb-3">Nutrition plan</h2>
+        <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+          {profile?.mealPlanJson
+            ? "Your coach has uploaded a personalised plan you can read here."
+            : "No in-app meal plan uploaded yet. Your coach can add one in client settings."}
+        </p>
+        {profile?.mealPlanJson ? (
+          <Button asChild variant="secondary">
+            <Link href="/client/profile/meal-plan">Open meal plan</Link>
+          </Button>
+        ) : (
+          <Button type="button" variant="secondary" disabled>
+            Open meal plan
+          </Button>
+        )}
       </Card>
 
       <Card className="p-6">

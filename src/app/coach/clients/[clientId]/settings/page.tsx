@@ -10,6 +10,7 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
 import { PREDEFINED_MEAL_PLANS } from "@/lib/meal-plan-predefined-urls";
+import { MealPlanViewer } from "@/components/client/MealPlanViewer";
 
 const SCORING_PROFILES = [
   { id: "moderate", label: "Moderate (0–60% red, 61–85% orange, 86–100% green)", redMax: 60, orangeMax: 85 },
@@ -37,6 +38,7 @@ interface ClientSettings {
   paymentStatus: string | null;
   firstPaymentAt: string | null;
   mealPlanLinks: { label: string; url: string }[];
+  mealPlanJson: Record<string, unknown> | null;
   packagePaidAt: string;
   packageMonths: number | null;
   packageFreeWeeks: number;
@@ -61,6 +63,7 @@ const DEFAULT_SETTINGS: ClientSettings = {
   paymentStatus: null,
   firstPaymentAt: null,
   mealPlanLinks: [],
+  mealPlanJson: null,
   packagePaidAt: "",
   packageMonths: null,
   packageFreeWeeks: 0,
@@ -113,6 +116,7 @@ export default function CoachClientSettingsPage() {
   const [newMealPlanUrl, setNewMealPlanUrl] = useState("");
   const [selectedPredefinedMealPlan, setSelectedPredefinedMealPlan] = useState<string>("");
   const [sendMealPlanEmail, setSendMealPlanEmail] = useState(false);
+  const [mealPlanPreviewOpen, setMealPlanPreviewOpen] = useState(false);
   const [billingHistoryInvoices, setBillingHistoryInvoices] = useState<{
     id: string;
     number: string | null;
@@ -203,6 +207,10 @@ export default function CoachClientSettingsPage() {
             mealPlanLinks: Array.isArray(data.mealPlanLinks)
               ? data.mealPlanLinks.map((l: { label?: string; url?: string }) => ({ label: l?.label ?? "", url: l?.url ?? "" }))
               : [],
+            mealPlanJson:
+              data.mealPlanJson && typeof data.mealPlanJson === "object" && !Array.isArray(data.mealPlanJson)
+                ? data.mealPlanJson
+                : null,
           });
         }
       } finally {
@@ -368,6 +376,7 @@ export default function CoachClientSettingsPage() {
           packageMonths: form.packageMonths ?? undefined,
           packageFreeWeeks: form.packageFreeWeeks,
           mealPlanLinks: form.mealPlanLinks,
+          mealPlanJson: form.mealPlanJson,
           ...(sendMealPlanEmail ? { sendMealPlanEmail: true } : {}),
         }),
       });
@@ -765,6 +774,72 @@ export default function CoachClientSettingsPage() {
             <p className="text-sm text-[var(--color-text-muted)] mb-4">
               Add links (name + URL) and they’re added to this client’s list. The client sees them on their dashboard. Click &quot;Save settings&quot; when done.
             </p>
+
+            <div className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+              <h3 className="text-sm font-medium text-[var(--color-text)]">Upload JSON plan for in-app reading</h3>
+              <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                Upload one `.json` file and the client can read it inside their profile.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={async (e) => {
+                    const input = e.currentTarget;
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const text = await file.text();
+                      const parsed = JSON.parse(text);
+                      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                        setError("Meal plan JSON must be an object.");
+                        return;
+                      }
+                      setForm((p) => ({ ...p, mealPlanJson: parsed as Record<string, unknown> }));
+                      setError(null);
+                      setSaved(false);
+                    } catch {
+                      setError("Invalid JSON file. Please upload a valid .json meal plan.");
+                    } finally {
+                      input.value = "";
+                    }
+                  }}
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+                />
+                {form.mealPlanJson && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setMealPlanPreviewOpen((o) => !o)}
+                    >
+                      {mealPlanPreviewOpen ? "Hide preview" : "Preview"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setForm((p) => ({ ...p, mealPlanJson: null }));
+                        setMealPlanPreviewOpen(false);
+                      }}
+                    >
+                      Remove uploaded JSON
+                    </Button>
+                  </>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                {form.mealPlanJson ? "JSON plan attached and ready to save." : "No JSON plan uploaded yet."}
+              </p>
+              {mealPlanPreviewOpen && form.mealPlanJson && (
+                <div className="mt-4 max-h-[min(70vh,720px)] overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
+                  <p className="mb-3 text-xs text-[var(--color-text-muted)]">
+                    Client view (same as /client/profile/meal-plan after you save)
+                  </p>
+                  <MealPlanViewer plan={form.mealPlanJson} />
+                </div>
+              )}
+            </div>
 
             {/* Option to email client when saving meal plan */}
             {form.mealPlanLinks.length > 0 && (
