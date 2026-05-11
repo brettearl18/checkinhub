@@ -117,6 +117,9 @@ export default function CoachClientSettingsPage() {
   const [selectedPredefinedMealPlan, setSelectedPredefinedMealPlan] = useState<string>("");
   const [sendMealPlanEmail, setSendMealPlanEmail] = useState(false);
   const [mealPlanPreviewOpen, setMealPlanPreviewOpen] = useState(false);
+  const [mealPlanJsonEditOpen, setMealPlanJsonEditOpen] = useState(false);
+  const [mealPlanJsonDraft, setMealPlanJsonDraft] = useState("");
+  const [mealPlanJsonEditError, setMealPlanJsonEditError] = useState<string | null>(null);
   const [billingHistoryInvoices, setBillingHistoryInvoices] = useState<{
     id: string;
     number: string | null;
@@ -796,6 +799,8 @@ export default function CoachClientSettingsPage() {
                         return;
                       }
                       setForm((p) => ({ ...p, mealPlanJson: parsed as Record<string, unknown> }));
+                      setMealPlanJsonDraft(JSON.stringify(parsed, null, 2));
+                      setMealPlanJsonEditError(null);
                       setError(null);
                       setSaved(false);
                     } catch {
@@ -815,22 +820,103 @@ export default function CoachClientSettingsPage() {
                     >
                       {mealPlanPreviewOpen ? "Hide preview" : "Preview"}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        setForm((p) => ({ ...p, mealPlanJson: null }));
-                        setMealPlanPreviewOpen(false);
-                      }}
-                    >
-                      Remove uploaded JSON
-                    </Button>
                   </>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    if (mealPlanJsonEditOpen) {
+                      setMealPlanJsonEditOpen(false);
+                      setMealPlanJsonEditError(null);
+                      return;
+                    }
+                    setMealPlanJsonDraft(
+                      form.mealPlanJson
+                        ? JSON.stringify(form.mealPlanJson, null, 2)
+                        : "{\n  \n}"
+                    );
+                    setMealPlanJsonEditError(null);
+                    setMealPlanJsonEditOpen(true);
+                  }}
+                >
+                  {mealPlanJsonEditOpen ? "Hide JSON editor" : "Edit JSON"}
+                </Button>
+                {form.mealPlanJson && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setForm((p) => ({ ...p, mealPlanJson: null }));
+                      setMealPlanPreviewOpen(false);
+                      setMealPlanJsonEditOpen(false);
+                      setMealPlanJsonDraft("");
+                      setMealPlanJsonEditError(null);
+                    }}
+                  >
+                    Remove uploaded JSON
+                  </Button>
                 )}
               </div>
               <p className="mt-2 text-xs text-[var(--color-text-muted)]">
                 {form.mealPlanJson ? "JSON plan attached and ready to save." : "No JSON plan uploaded yet."}
               </p>
+              {mealPlanJsonEditOpen && (
+                <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3">
+                  <p className="mb-2 text-xs text-[var(--color-text-muted)]">
+                    Edit the raw JSON below, then Apply. Save settings still sends it to Firestore.
+                  </p>
+                  <textarea
+                    value={mealPlanJsonDraft}
+                    onChange={(e) => {
+                      setMealPlanJsonDraft(e.target.value);
+                      setMealPlanJsonEditError(null);
+                    }}
+                    spellCheck={false}
+                    className="mb-3 h-[min(40vh,320px)] w-full resize-y rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs text-[var(--color-text)]"
+                    aria-label="Meal plan JSON"
+                  />
+                  {mealPlanJsonEditError && (
+                    <p className="mb-2 text-sm text-[var(--color-error)]">{mealPlanJsonEditError}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={() => {
+                        try {
+                          const parsed = JSON.parse(mealPlanJsonDraft.trim() || "{}");
+                          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                            setMealPlanJsonEditError("Meal plan must be a JSON object (not an array).");
+                            return;
+                          }
+                          setForm((p) => ({ ...p, mealPlanJson: parsed as Record<string, unknown> }));
+                          setMealPlanJsonDraft(JSON.stringify(parsed, null, 2));
+                          setMealPlanJsonEditError(null);
+                          setError(null);
+                          setSaved(false);
+                        } catch {
+                          setMealPlanJsonEditError("Invalid JSON. Fix syntax errors and try again.");
+                        }
+                      }}
+                    >
+                      Apply changes
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setMealPlanJsonDraft(
+                          form.mealPlanJson ? JSON.stringify(form.mealPlanJson, null, 2) : "{\n  \n}"
+                        );
+                        setMealPlanJsonEditError(null);
+                      }}
+                    >
+                      Reset to last applied
+                    </Button>
+                  </div>
+                </div>
+              )}
               {mealPlanPreviewOpen && form.mealPlanJson && (
                 <div className="mt-4 max-h-[min(70vh,720px)] overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
                   <p className="mb-3 text-xs text-[var(--color-text-muted)]">

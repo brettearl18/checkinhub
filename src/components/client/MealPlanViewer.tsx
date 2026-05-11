@@ -26,6 +26,21 @@ function renderValue(v: unknown): string {
   return JSON.stringify(v);
 }
 
+function nonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+/** Ordered labels for `weightGuidance` JSON keys (camelCase). */
+const WEIGHT_GUIDANCE_FIELDS: { key: string; label: string }[] = [
+  { key: "proteins", label: "Proteins" },
+  { key: "eggWhites", label: "Egg whites" },
+  { key: "grains", label: "Grains" },
+  { key: "tinnedFoods", label: "Tinned foods" },
+  { key: "vegetables", label: "Vegetables" },
+  { key: "fruit", label: "Fruit" },
+  { key: "oilsAndSpreads", label: "Oils and spreads" },
+];
+
 function MacroGrid({ obj }: { obj: AnyObj }) {
   const entries = Object.entries(obj);
   if (!entries.length) return null;
@@ -47,6 +62,12 @@ export function MealPlanViewer({ plan }: { plan: AnyObj }) {
   const notes = typeof plan.notes === "string" ? plan.notes : null;
 
   const dailyTargets = asObj(plan.dailyTargets);
+  const weightGuidance = asObj(plan.weightGuidance);
+  const hasWeightGuidanceSection =
+    weightGuidance != null &&
+    (nonEmptyString(weightGuidance.defaultRule) ||
+      WEIGHT_GUIDANCE_FIELDS.some(({ key }) => nonEmptyString(weightGuidance[key])));
+
   const mealSchedule = asObj(plan.mealSchedule);
   const mealBreakdown = asList(mealSchedule?.breakdown);
   const mealRules = asList(plan.mealRules).filter((x): x is string => typeof x === "string");
@@ -66,6 +87,38 @@ export function MealPlanViewer({ plan }: { plan: AnyObj }) {
         <Card className="p-6">
           <h2 className="mb-3 text-lg font-medium text-[var(--color-text)]">Daily targets</h2>
           <MacroGrid obj={dailyTargets} />
+        </Card>
+      )}
+
+      {hasWeightGuidanceSection && weightGuidance && (
+        <Card className="p-6">
+          <h2 className="mb-3 text-lg font-medium text-[var(--color-text)]">Weight guidance</h2>
+          {nonEmptyString(weightGuidance.defaultRule) && (
+            <p
+              className={`text-sm leading-relaxed text-[var(--color-text-secondary)] ${
+                WEIGHT_GUIDANCE_FIELDS.some(({ key }) => nonEmptyString(weightGuidance[key])) ? "mb-4" : ""
+              }`}
+            >
+              {String(weightGuidance.defaultRule).trim()}
+            </p>
+          )}
+          {WEIGHT_GUIDANCE_FIELDS.some(({ key }) => nonEmptyString(weightGuidance[key])) && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {WEIGHT_GUIDANCE_FIELDS.map(({ key, label }) => {
+                const text = weightGuidance[key];
+                if (!nonEmptyString(text)) return null;
+                return (
+                  <div
+                    key={key}
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
+                  >
+                    <p className="text-xs font-medium text-[var(--color-text-muted)]">{label}</p>
+                    <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{text.trim()}</p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       )}
 
@@ -137,13 +190,28 @@ export function MealPlanViewer({ plan }: { plan: AnyObj }) {
                 {ingredients.length > 0 && (
                   <div className="mt-4">
                     <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Ingredients</p>
-                    <ul className="space-y-1 text-sm text-[var(--color-text-secondary)]">
-                      {ingredients.map((ing, idx) => (
-                        <li key={idx}>
-                          {renderValue(ing.item)} - {renderValue(ing.qty)} {renderValue(ing.unit)}
-                          {ing.note ? ` (${String(ing.note)})` : ""}
-                        </li>
-                      ))}
+                    <ul className="space-y-2 text-sm text-[var(--color-text-secondary)]">
+                      {ingredients.map((ing, idx) => {
+                        const notePart = ing.note != null && String(ing.note).trim() ? ` (${String(ing.note).trim()})` : "";
+                        const showWeightType = nonEmptyString(ing.weightType);
+                        return (
+                          <li key={idx} className="leading-snug">
+                            <div>
+                              <span className="text-[var(--color-text)]">{renderValue(ing.item)}</span>
+                              <span className="text-[var(--color-text-secondary)]">
+                                {" "}
+                                — {renderValue(ing.qty)} {renderValue(ing.unit)}
+                                {notePart}
+                              </span>
+                            </div>
+                            {showWeightType && (
+                              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                                Weight: {String(ing.weightType).trim()}
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}
