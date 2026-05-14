@@ -22,6 +22,9 @@ export async function GET(request: Request) {
   const today = todayDate();
 
   if (!isAdminConfigured()) {
+    const historyEndD = new Date(today);
+    const historyStartD = new Date(historyEndD);
+    historyStartD.setDate(historyStartD.getDate() - 729);
     return NextResponse.json({
       habits: HABIT_DEFINITIONS,
       todayEntries: {} as Record<string, string>,
@@ -31,7 +34,11 @@ export async function GET(request: Request) {
           { current: 0, longest: 0, goalMetToday: false },
         ])
       ),
-      history: { start: today, end: today, byDate: {} as Record<string, Record<string, "met" | "missed">> },
+      history: {
+        start: historyStartD.toISOString().slice(0, 10),
+        end: today,
+        byDate: {} as Record<string, Record<string, "met" | "missed">>,
+      },
     });
   }
 
@@ -52,8 +59,8 @@ export async function GET(request: Request) {
     streaks[h.id] = computeStreakFromEntries(h.id, entriesByDate, todayEntries);
   });
 
-  // History for dot map: last 12 weeks (84 days), per day per habit: 'met' | 'missed' | null
-  const historyDays = 84;
+  // History for dot map: up to ~2 years (matches POST backdate limit), per day per habit: 'met' | 'missed' | null
+  const historyDays = 730;
   const historyEnd = new Date(today);
   const historyStart = new Date(historyEnd);
   historyStart.setDate(historyStart.getDate() - historyDays + 1);

@@ -14,6 +14,8 @@ export interface HabitWeeklyStripProps {
   /** Required when range === 'all' */
   historyStart?: string;
   historyEnd?: string;
+  /** When set, today and past cells are clickable (future dates stay inert). */
+  onCellClick?: (habitId: string, date: string) => void;
 }
 
 function todayString(): string {
@@ -93,7 +95,14 @@ const rangeTitles: Record<HabitStripRange, string> = {
   all: "All time",
 };
 
-export function HabitWeeklyStrip({ habits, byDate, range, historyStart, historyEnd }: HabitWeeklyStripProps) {
+export function HabitWeeklyStrip({
+  habits,
+  byDate,
+  range,
+  historyStart,
+  historyEnd,
+  onCellClick,
+}: HabitWeeklyStripProps) {
   const todayStr = todayString();
   const days = buildDays(range, todayStr, historyStart, historyEnd);
 
@@ -135,21 +144,36 @@ export function HabitWeeklyStrip({ habits, byDate, range, historyStart, historyE
                 {days.map(({ date }) => {
                   const status = byDate[date]?.[habit.id] ?? null;
                   const isToday = date === todayStr;
+                  const canLog = Boolean(onCellClick) && date <= todayStr;
+                  const title = `${date}${isToday ? " (today)" : ""}: ${status === "met" ? "Goal met" : status === "missed" ? "Logged, not met" : "No log"}`;
+                  const cellStyle = {
+                    backgroundColor:
+                      status === "met"
+                        ? "var(--color-success, #22c55e)"
+                        : status === "missed"
+                          ? "var(--color-warning, #eab308)"
+                          : "var(--color-bg)",
+                    ...(isToday && { boxShadow: "0 0 8px 2px var(--color-primary)" }),
+                  } as const;
+                  const ringClass = isToday
+                    ? "ring-2 ring-[var(--color-primary)] ring-offset-1 ring-offset-[var(--color-bg-elevated)]"
+                    : "";
+                  const baseClass = `mx-auto rounded border border-[var(--color-border)] ${cellSize} ${ringClass}`;
+
                   return (
                     <td key={date} className="border-b border-[var(--color-border)] py-2 px-0.5 text-center">
-                      <div
-                        title={`${date}${isToday ? " (today)" : ""}: ${status === "met" ? "Goal met" : status === "missed" ? "Logged, not met" : "No log"}`}
-                        className={`mx-auto rounded border border-[var(--color-border)] ${cellSize} ${isToday ? "ring-2 ring-[var(--color-primary)] ring-offset-1 ring-offset-[var(--color-bg-elevated)]" : ""}`}
-                        style={{
-                          backgroundColor:
-                            status === "met"
-                              ? "var(--color-success, #22c55e)"
-                              : status === "missed"
-                                ? "var(--color-warning, #eab308)"
-                                : "var(--color-bg)",
-                          ...(isToday && { boxShadow: "0 0 8px 2px var(--color-primary)" }),
-                        }}
-                      />
+                      {canLog ? (
+                        <button
+                          type="button"
+                          title={title}
+                          aria-label={`${habit.label}, ${title}. Log or change.`}
+                          className={`${baseClass} cursor-pointer transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2`}
+                          style={cellStyle}
+                          onClick={() => onCellClick!(habit.id, date)}
+                        />
+                      ) : (
+                        <div title={title} className={baseClass} style={cellStyle} />
+                      )}
                     </td>
                   );
                 })}

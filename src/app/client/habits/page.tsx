@@ -7,6 +7,7 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
 import { useApiClient } from "@/lib/api-client";
 import type { HabitDefinition } from "@/lib/habits";
+import { todayDate } from "@/lib/habits-streaks";
 
 interface StreakInfo {
   current: number;
@@ -34,6 +35,8 @@ export default function ClientHabitsPage() {
   const [authError, setAuthError] = useState(false);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [stripRange, setStripRange] = useState<HabitStripRange>("7d");
+  const [cellPicker, setCellPicker] = useState<{ habitId: string; date: string } | null>(null);
+  const [habitLogError, setHabitLogError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,29 +65,52 @@ export default function ClientHabitsPage() {
     load();
   }, [load]);
 
-  const logEntry = async (habitId: string, value: string) => {
+  const logEntry = async (habitId: string, value: string, entryDate?: string) => {
     if (!data) return;
+    setHabitLogError(null);
     setSubmitting(habitId);
     try {
+      const body: { habitId: string; value: string; date?: string } = { habitId, value };
+      if (entryDate) body.date = entryDate;
       const res = await fetchWithAuth("/api/client/habits/entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ habitId, value }),
+        body: JSON.stringify(body),
       });
-      if (res.ok) {
-        const json = await res.json();
-        setData((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            todayEntries: { ...prev.todayEntries, [habitId]: value },
-            streaks: {
-              ...prev.streaks,
-              [habitId]: json.streak ?? prev.streaks[habitId],
-            },
-          };
-        });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setHabitLogError(typeof json.error === "string" ? json.error : "Could not save habit");
+        return;
       }
+      const today = todayDate();
+      const loggedDate = (json.entry?.date as string | undefined) ?? entryDate ?? today;
+      setData((prev) => {
+        if (!prev) return prev;
+        const nextHistory =
+          prev.history && json.entry
+            ? {
+                ...prev.history,
+                byDate: {
+                  ...prev.history.byDate,
+                  [loggedDate]: {
+                    ...(prev.history.byDate[loggedDate] ?? {}),
+                    [habitId]: json.entry.status as "met" | "missed",
+                  },
+                },
+              }
+            : prev.history;
+        return {
+          ...prev,
+          todayEntries:
+            loggedDate === today ? { ...prev.todayEntries, [habitId]: value } : prev.todayEntries,
+          streaks: {
+            ...prev.streaks,
+            [habitId]: json.streak ?? prev.streaks[habitId],
+          },
+          history: nextHistory,
+        };
+      });
+      setCellPicker(null);
     } finally {
       setSubmitting(null);
     }
@@ -108,7 +134,8 @@ export default function ClientHabitsPage() {
         <p className="mt-2 text-sm font-medium text-[var(--color-text-secondary)]">{todayLabel}</p>
         <h1 className="mt-0.5 text-2xl font-semibold text-[var(--color-text)]">Habit tracker</h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Tap to log today. Streaks count consecutive days you hit your goal. Resets at midnight.
+          Tap a habit below for today, or open the week grid and tap any day up to today to back-date. Streaks count
+          consecutive days you hit your goal.
         </p>
       </div>
 
@@ -116,6 +143,12 @@ export default function ClientHabitsPage() {
       {!loading && data && data.habits.length === 0 && (
         <p className="text-[var(--color-text-muted)]">No habits configured.</p>
       )}
+      {!loading && data && data.habits.length > 0 && habitLogError && (
+        <p className="text-sm text-[var(--color-error)]" role="alert">
+          {habitLogError}
+        </p>
+      )}
+
       {!loading && data && data.habits.length > 0 && (
         <>
           <ul className="space-y-6">
@@ -194,12 +227,72 @@ export default function ClientHabitsPage() {
                   range={stripRange}
                   historyStart={stripRange === "all" ? data.history.start : undefined}
                   historyEnd={stripRange === "all" ? data.history.end : undefined}
+                  onCellClick={(habitId, date) => setCellPicker({ habitId, date })}
                 />
               </section>
             </>
           )}
         </>
       )}
+
+      {cellPicker && data && (() => {
+        const habit = data.habits.find((h) => h.id === cellPicker.habitId);
+        if (!habit) return null;
+        const dateLabel = new Date(`${cellPicker.date}T12:00:00`).toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const busy = submitting === habit.id;
+        const pickerIsToday = cellPicker.date === todayDate();
+        const selectedForPicker = pickerIsToday ? data.todayEntries[habit.id] : undefined;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="habit-cell-modal-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setCellPicker(null);
+            }}
+          >
+            <Card className="w-full max-w-md p-6 shadow-lg">
+              <h2 id="habit-cell-modal-title" className="text-lg font-semibold text-[var(--color-text)] mb-1">
+                {habit.label}
+              </h2>
+              <p className="text-sm text-[var(--color-text-muted)] mb-4">{dateLabel}</p>
+              <div className="flex flex-wrap gap-2">
+                {habit.options.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => logEntry(habit.id, opt.value, cellPicker.date)}
+                    className={`rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+                      selectedForPicker === opt.value
+                        ? "bg-[var(--color-primary)] text-white"
+                        : "bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary-muted)] hover:text-[var(--color-text)]"
+                    } ${busy ? "opacity-70" : ""}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                  onClick={() => setCellPicker(null)}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }
