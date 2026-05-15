@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { WeekCalendar, type WeekOption } from "@/components/client/WeekCalendar";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
+import { formatDateDdMmYyyy, toLocalDateString } from "@/lib/format-date";
 import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
 const WEEK_RANGE = { past: 2, future: 1 }; // include next week as pending (opens Friday 9am)
@@ -29,10 +29,10 @@ function getWeekOptions(): WeekOption[] {
     const sundayStr = toLocalDateString(sunday);
     const label =
       i === 0
-        ? `This week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
+        ? `This week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
         : i === 1
-          ? `Next week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
-          : `${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)}`;
+          ? `Next week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
+          : `${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)}`;
     options.push({
       label,
       reflectionWeekStart: monday,
@@ -103,10 +103,10 @@ export default function NewCheckInPage() {
         const isThisWeek = monday === thisMonday;
         const isNextWeek = monday === nextMonday;
         const label = isThisWeek
-          ? `This week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
+          ? `This week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
           : isNextWeek
-            ? `Next week (${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)})`
-            : `${formatDateDisplay(monday)} – ${formatDateDisplay(sundayStr)}`;
+            ? `Next week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
+            : `${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)}`;
         return {
           label,
           reflectionWeekStart: monday,
@@ -122,7 +122,7 @@ export default function NewCheckInPage() {
     [weekOptions, cutoff]
   );
   const openWeeks = weekOptionsFiltered.filter(
-    (w) => w.reflectionWeekStart < thisMondayPerth() || isWeekOpenPerth(w.reflectionWeekStart)
+    (w) => w.reflectionWeekStart <= thisMondayPerth() || isWeekOpenPerth(w.reflectionWeekStart)
   );
   const allOpenWeeksDone =
     openWeeks.length > 0 && openWeeks.every((w) => completedWeeks.includes(w.reflectionWeekStart));

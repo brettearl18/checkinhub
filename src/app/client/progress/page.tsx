@@ -10,6 +10,7 @@ import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLa
 import { MeasurementComparisonChartLazy } from "@/components/ui/MeasurementComparisonChartLazy";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
+import { pickBaselineAndCurrentPhoto, progressPhotoPoseLabel } from "@/lib/progress-comparison-photos";
 
 interface WeekLabel {
   key: string;
@@ -57,9 +58,6 @@ const measurementLabels: Record<string, string> = {
   leftArm: "L arm",
   rightArm: "R arm",
 };
-
-const BEFORE_TYPES = ["before_front", "before_side", "before_back"];
-const AFTER_TYPES = ["after_front", "after_side", "after_back"];
 
 /** Fixed bands for per-question grid: Good (7–10), Moderate (4–6), Needs attention (0–3). Score is 0–100. */
 function getBand(score: number): "green" | "orange" | "red" {
@@ -174,19 +172,15 @@ export default function ClientProgressPage() {
       .filter((row) => keys.some((k) => row[k] != null));
   }, [measurementList, chartMetric]);
 
-  const { baselinePhoto, currentPhoto } = useMemo(() => {
-    const before = progressImages.filter((img) => img.imageType && BEFORE_TYPES.includes(img.imageType));
-    const after = progressImages.filter((img) => img.imageType && AFTER_TYPES.includes(img.imageType));
-    const byDate = (a: ProgressImage, b: ProgressImage) => {
-      const ta = a.uploadedAt || "";
-      const tb = b.uploadedAt || "";
-      return ta.localeCompare(tb);
-    };
-    return {
-      baselinePhoto: before.length > 0 ? [...before].sort(byDate)[0] : null,
-      currentPhoto: after.length > 0 ? [...after].sort(byDate).pop()! : progressImages[0] ?? null,
-    };
-  }, [progressImages]);
+  const { baselinePhoto, currentPhoto } = useMemo(
+    () => pickBaselineAndCurrentPhoto(progressImages),
+    [progressImages]
+  );
+
+  const comparisonPoseLabel = useMemo(
+    () => progressPhotoPoseLabel(baselinePhoto?.imageType ?? currentPhoto?.imageType ?? null),
+    [baselinePhoto, currentPhoto]
+  );
 
   if (authError) {
     return <AuthErrorRetry onRetry={() => window.location.reload()} />;
@@ -408,7 +402,9 @@ export default function ClientProgressPage() {
             <Card className="p-4">
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
-                  <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-2">Baseline / First before</h3>
+                  <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-2">
+                    Baseline / First before{comparisonPoseLabel ? ` (${comparisonPoseLabel})` : ""}
+                  </h3>
                   {baselinePhoto ? (
                     <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
                       <Image
@@ -435,7 +431,9 @@ export default function ClientProgressPage() {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-2">Current</h3>
+                  <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-2">
+                    Current{comparisonPoseLabel ? ` (${comparisonPoseLabel})` : ""}
+                  </h3>
                   {currentPhoto ? (
                     <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
                       <Image

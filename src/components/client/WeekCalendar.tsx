@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
+import { formatDateDdMmYyyy, toLocalDateString } from "@/lib/format-date";
 import { isWeekOpenPerth } from "@/lib/perth-date";
 
 export interface WeekOption {
@@ -77,7 +77,7 @@ export function WeekCalendar({
           const isDisabled = done || pending || disabled || resolving;
           const days = getWeekDays(w.reflectionWeekStart);
           const sunday = days[6];
-          const weekRangeLabel = `${formatDateDisplay(w.reflectionWeekStart)} – ${formatDateDisplay(sunday.date)}`;
+          const weekRangeLabel = `${formatDateDdMmYyyy(w.reflectionWeekStart)} – ${formatDateDdMmYyyy(sunday.date)}`;
           const fridayDate = pending ? getFridayOfWeek(w.reflectionWeekStart) : null; // Friday of that week for "opens Fri 9am"
           const outstanding = !done && !pending;
 
@@ -104,7 +104,7 @@ export function WeekCalendar({
             >
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-inherit px-3 py-2">
                 <span className="font-medium text-[var(--color-text)]">
-                  {w.isThisWeek ? "This week" : w.isNextWeek ? "Next week" : "Week of " + formatDateDisplay(w.reflectionWeekStart)}
+                  {w.isThisWeek ? "This week" : w.isNextWeek ? "Next week" : "Week of " + formatDateDdMmYyyy(w.reflectionWeekStart)}
                 </span>
                 <span className="text-sm text-[var(--color-text-muted)]">{weekRangeLabel}</span>
                 {done && (
@@ -114,7 +114,7 @@ export function WeekCalendar({
                 )}
                 {pending && (
                   <span className="rounded bg-violet-400/90 px-1.5 py-0.5 text-xs font-medium text-violet-900 dark:bg-violet-600 dark:text-violet-100">
-                    Pending — opens Friday 9am Perth{fridayDate ? ` (${formatDateDisplay(fridayDate)})` : ""}
+                    Pending — opens Friday 9am Perth{fridayDate ? ` (${formatDateDdMmYyyy(fridayDate)})` : ""}
                   </span>
                 )}
                 {outstanding && inProgress && (

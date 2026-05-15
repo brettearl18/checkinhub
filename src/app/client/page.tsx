@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +11,8 @@ import { HabitWeeklyStrip } from "@/components/client/HabitWeeklyStrip";
 import { CheckInProgressChart } from "@/components/ui/CheckInProgressChart";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateTimeDisplay } from "@/lib/format-date";
+import { formatDateDdMmYyyy, formatDateTimeDisplay } from "@/lib/format-date";
+import { pickBaselineAndCurrentPhoto, progressPhotoPoseLabel } from "@/lib/progress-comparison-photos";
 import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
 interface Assignment {
@@ -104,7 +105,7 @@ const QUICK_LINKS = [
   { href: "/client/progress", label: "Question progress", description: "Traffic light chart by week", emoji: "📊" },
   { href: "/client/goals", label: "Goals", description: "Track your progress", emoji: "🎯" },
   { href: "/client/measurements", label: "Measurements", description: "Weight & measurements", emoji: "📏" },
-  { href: "/client/progress-photos", label: "Before & after photos", description: "Progress photos", emoji: "📸" },
+  { href: "/client/progress-photos", label: "Progress photos", description: "Baseline & current by pose", emoji: "📸" },
   { href: "/client/messages", label: "Messages", description: "Chat with your coach", emoji: "💬" },
   { href: "/client/profile", label: "Profile", description: "Your details & settings", emoji: "👤" },
 ] as const;
@@ -150,14 +151,46 @@ export default function ClientPortalPage() {
     habits: Array<{ id: string; label: string }>;
     history?: { start: string; end: string; byDate: Record<string, Record<string, "met" | "missed">> };
   } | null>(null);
+  const [markingMissedId, setMarkingMissedId] = useState<string | null>(null);
+  const [markMissedError, setMarkMissedError] = useState<string | null>(null);
 
-  // Only show assignments in TO DO when the week has opened (Friday 9am Perth for this/next week).
+  const markAssignmentMissed = useCallback(
+    async (assignmentId: string) => {
+      const a = assignments.find((x) => x.id === assignmentId);
+      const started = a?.status === "started";
+      const weekPhrase = a?.reflectionWeekStart
+        ? `the week of ${formatDateDdMmYyyy(a.reflectionWeekStart)}`
+        : "this check-in";
+      const msg = started
+        ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list.`
+        : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list.`;
+      if (!window.confirm(msg)) return;
+      setMarkMissedError(null);
+      setMarkingMissedId(assignmentId);
+      try {
+        const res = await fetchWithAuth(`/api/check-in/${assignmentId}/mark-missed`, { method: "POST" });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setMarkMissedError(typeof body?.error === "string" ? body.error : "Could not mark as missed.");
+          return;
+        }
+        setAssignments((prev) => prev.filter((x) => x.id !== assignmentId));
+      } catch {
+        setMarkMissedError("Could not mark as missed.");
+      } finally {
+        setMarkingMissedId(null);
+      }
+    },
+    [assignments, fetchWithAuth]
+  );
+
+  // TO DO / banner: show past weeks, this calendar week (from Monday), and future weeks only after Friday 9am Perth opens that week.
   const openAssignments = useMemo(() => {
     const thisMonday = thisMondayPerth();
     return assignments.filter(
       (a) =>
         !a.reflectionWeekStart ||
-        a.reflectionWeekStart < thisMonday ||
+        a.reflectionWeekStart <= thisMonday ||
         isWeekOpenPerth(a.reflectionWeekStart)
     );
   }, [assignments]);
@@ -177,6 +210,7 @@ export default function ClientPortalPage() {
     setLoading(true);
     setAuthError(false);
     setError(null);
+    setMarkMissedError(null);
     try {
       const [profileRes, assignmentsRes, historyRes, imagesRes, setupRes, habitsRes, qpRes, measRes] = await Promise.all([
         fetchWithAuth("/api/client/profile"),
@@ -320,29 +354,15 @@ export default function ClientPortalPage() {
     })).filter((row) => row.value != null) as { date: string; value: number; label?: string }[];
   }, [measurementList]);
 
-  /** Before = oldest upload, Current = newest (timeline). Avoids before/after tags putting a newer “before” on the left. */
-  const { baselinePhoto, currentPhoto } = useMemo(() => {
-    if (progressImages.length === 0) {
-      return { baselinePhoto: null as ProgressImage | null, currentPhoto: null as ProgressImage | null };
-    }
+  const { baselinePhoto, currentPhoto } = useMemo(
+    () => pickBaselineAndCurrentPhoto(progressImages),
+    [progressImages]
+  );
 
-    const byUploadedAsc = (a: ProgressImage, b: ProgressImage) =>
-      (a.uploadedAt || "").localeCompare(b.uploadedAt || "");
-    const sortedAsc = [...progressImages].sort(byUploadedAsc);
-
-    if (sortedAsc.length === 1) {
-      return { baselinePhoto: sortedAsc[0], currentPhoto: null };
-    }
-
-    const baselinePhoto = sortedAsc[0];
-    const currentPhoto = sortedAsc[sortedAsc.length - 1];
-
-    if (baselinePhoto.id === currentPhoto.id) {
-      return { baselinePhoto, currentPhoto: null };
-    }
-
-    return { baselinePhoto, currentPhoto };
-  }, [progressImages]);
+  const comparisonPoseLabel = useMemo(
+    () => progressPhotoPoseLabel(baselinePhoto?.imageType ?? currentPhoto?.imageType ?? null),
+    [baselinePhoto, currentPhoto]
+  );
 
   // Total check-in % (last 3 weeks): prefer per-week overall score so it matches history and chart
   const questionProgressSummary = useMemo(() => {
@@ -475,6 +495,15 @@ export default function ClientPortalPage() {
         </div>
       </header>
 
+      {!authError && !loading && markMissedError && (
+        <div
+          className="mt-4 rounded-lg border border-[var(--color-error)]/40 bg-[var(--color-error)]/10 px-3 py-2 text-sm text-[var(--color-error)]"
+          role="alert"
+        >
+          {markMissedError}
+        </div>
+      )}
+
       {/* First-time setup: baseline measurements, photos, notifications */}
       {!authError && !loading && setupIncomplete && (
         <section className="mt-4">
@@ -529,20 +558,35 @@ export default function ClientPortalPage() {
               <ul className="mt-3 space-y-2">
                 {topPriorityAssignments.slice(0, 3).map((a) => (
                   <li key={a.id}>
-                    <Link
-                      href={`/client/check-in/${a.id}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-primary-muted)] bg-[var(--color-bg)] px-3 py-2.5 text-left transition-all hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-subtle)]/50"
-                    >
-                      <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-stretch gap-2 rounded-lg border border-[var(--color-primary-muted)] bg-[var(--color-bg)] px-3 py-2.5 transition-all hover:border-[var(--color-primary)]">
+                      <Link
+                        href={`/client/check-in/${a.id}`}
+                        className="min-w-0 flex-1 text-left transition-colors hover:bg-[var(--color-primary-subtle)]/30 rounded-md -m-1 p-1"
+                      >
                         <span className="text-sm font-semibold text-[var(--color-text)]">{a.formTitle}</span>
                         {a.reflectionWeekStart && (
-                          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">Week of {a.reflectionWeekStart}</p>
+                          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                            Week of {formatDateDdMmYyyy(a.reflectionWeekStart)}
+                          </p>
                         )}
+                      </Link>
+                      <div className="flex flex-shrink-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-end">
+                        <Link
+                          href={`/client/check-in/${a.id}`}
+                          className="inline-flex items-center justify-center rounded-md bg-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90 whitespace-nowrap"
+                        >
+                          {a.status === "started" ? "Resume →" : "Start →"}
+                        </Link>
+                        <button
+                          type="button"
+                          disabled={markingMissedId === a.id}
+                          onClick={() => markAssignmentMissed(a.id)}
+                          className="inline-flex items-center justify-center rounded-md border border-[var(--color-border)] bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-60 whitespace-nowrap"
+                        >
+                          {markingMissedId === a.id ? "…" : "Mark as missed"}
+                        </button>
                       </div>
-                      <span className="flex-shrink-0 rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90">
-                        {a.status === "started" ? "Resume →" : "Start →"}
-                      </span>
-                    </Link>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -661,14 +705,22 @@ export default function ClientPortalPage() {
                 </p>
                 <ul className="space-y-1.5">
                   {openAssignments.slice(0, 3).map((a) => (
-                    <li key={a.id}>
+                    <li key={a.id} className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] pb-2 last:border-0 last:pb-0">
                       <Link
                         href={`/client/check-in/${a.id}`}
-                        className="block py-1.5 text-sm text-[var(--color-primary)] hover:underline min-h-[44px] flex items-center"
+                        className="min-w-0 flex-1 py-1.5 text-sm text-[var(--color-primary)] hover:underline min-h-[44px] flex items-center"
                       >
                         {a.formTitle}
-                        {a.reflectionWeekStart ? ` (week of ${a.reflectionWeekStart})` : ""} →
+                        {a.reflectionWeekStart ? ` (week of ${formatDateDdMmYyyy(a.reflectionWeekStart)})` : ""} →
                       </Link>
+                      <button
+                        type="button"
+                        disabled={markingMissedId === a.id}
+                        onClick={() => markAssignmentMissed(a.id)}
+                        className="flex-shrink-0 rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs font-medium text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-60 min-h-[44px]"
+                      >
+                        {markingMissedId === a.id ? "…" : "Mark missed"}
+                      </button>
                     </li>
                   ))}
                   {openAssignments.length > 3 && (
@@ -881,7 +933,9 @@ export default function ClientPortalPage() {
                           className="object-cover w-full h-full"
                         />
                       </div>
-                      <span className="text-[10px] font-medium text-[var(--color-text-muted)] py-0.5 text-center shrink-0">Before</span>
+                      <span className="text-[10px] font-medium text-[var(--color-text-muted)] py-0.5 text-center shrink-0">
+                        Before{comparisonPoseLabel ? ` (${comparisonPoseLabel})` : ""}
+                      </span>
                     </a>
                   )}
                   {currentPhoto && (
@@ -900,7 +954,9 @@ export default function ClientPortalPage() {
                           className="object-cover w-full h-full"
                         />
                       </div>
-                      <span className="text-[10px] font-medium text-[var(--color-text-muted)] py-0.5 text-center shrink-0">Current</span>
+                      <span className="text-[10px] font-medium text-[var(--color-text-muted)] py-0.5 text-center shrink-0">
+                        Current{comparisonPoseLabel ? ` (${comparisonPoseLabel})` : ""}
+                      </span>
                     </a>
                   )}
                 </div>

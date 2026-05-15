@@ -9,6 +9,25 @@ export function toLocalDateString(d: Date): string {
 }
 
 /**
+ * Display as DD/MM/YYYY (e.g. 16/03/2026). For `YYYY-MM-DD` calendar keys, splits the string so the day is never shifted by timezone.
+ */
+export function formatDateDdMmYyyy(value: string | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const s = String(value).trim();
+  const isoDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (isoDay) {
+    const [, y, mo, da] = isoDay;
+    return `${da}/${mo}/${y}`;
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/**
  * Site-wide display format: DD MMM YYYY (e.g. 01 Mar 2026).
  * Use for all user-visible dates.
  */

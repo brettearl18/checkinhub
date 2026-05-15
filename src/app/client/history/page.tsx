@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDisplay } from "@/lib/format-date";
+import { formatDateDdMmYyyy, formatDateDisplay } from "@/lib/format-date";
 
 interface HistoryItem {
   id: string;
@@ -103,7 +103,7 @@ export default function ClientHistoryPage() {
                       <span>Completed {formatDateDisplay(item.completedAt)}</span>
                     )}
                     {item.reflectionWeekStart && (
-                      <span>Week of {formatDateDisplay(item.reflectionWeekStart)}</span>
+                      <span>Week of {formatDateDdMmYyyy(item.reflectionWeekStart)}</span>
                     )}
                   </div>
                 </Link>

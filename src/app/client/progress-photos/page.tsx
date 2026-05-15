@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
+import { formatProgressImageTypeLabel } from "@/lib/progress-comparison-photos";
 
 interface ProgressImage {
   id: string;
@@ -23,9 +24,9 @@ const IMAGE_TYPES = [
   { value: "before_front", label: "Before (front)" },
   { value: "before_side", label: "Before (side)" },
   { value: "before_back", label: "Before (back)" },
-  { value: "after_front", label: "After (front)" },
-  { value: "after_side", label: "After (side)" },
-  { value: "after_back", label: "After (back)" },
+  { value: "after_front", label: "Current (front)" },
+  { value: "after_side", label: "Current (side)" },
+  { value: "after_back", label: "Current (back)" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -39,6 +40,25 @@ export default function ProgressPhotosPage() {
   const [imageType, setImageType] = useState("before_front");
   const [caption, setCaption] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** Hide before (front/side/back) once that baseline angle already exists—clients add current shots after that. */
+  const uploadTypeOptions = useMemo(() => {
+    return IMAGE_TYPES.filter((t) => {
+      if (t.value.startsWith("before_")) {
+        return !list.some((img) => img.imageType === t.value);
+      }
+      return true;
+    });
+  }, [list]);
+
+  useEffect(() => {
+    if (uploadTypeOptions.length === 0) return;
+    if (uploadTypeOptions.some((o) => o.value === imageType)) return;
+    const hasBeforeFront = list.some((img) => img.imageType === "before_front");
+    const preferred = hasBeforeFront ? "after_front" : "before_front";
+    const next = uploadTypeOptions.find((o) => o.value === preferred) ?? uploadTypeOptions[0]!;
+    setImageType(next.value);
+  }, [list, uploadTypeOptions]);
 
   const load = async () => {
     setLoading(true);
@@ -114,9 +134,9 @@ export default function ProgressPhotosPage() {
         <Link href="/client" className="text-sm text-[var(--color-primary)] hover:underline">
           ← Dashboard
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Before & after photos</h1>
+        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Progress photos</h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Upload progress photos to track your journey. Choose before/after and orientation.
+          Upload photos as you go. Each pose uses one baseline &quot;before&quot; photo, then you add &quot;current&quot; shots over time so your dashboard can compare the same angle (front, side, or back).
         </p>
       </div>
 
@@ -139,12 +159,17 @@ export default function ProgressPhotosPage() {
               onChange={(e) => setImageType(e.target.value)}
               className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)]"
             >
-              {IMAGE_TYPES.map((t) => (
+              {uploadTypeOptions.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
               ))}
             </select>
+            {uploadTypeOptions.length < IMAGE_TYPES.length && (
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                Baseline types you&apos;ve already saved are hidden here—use current (or other) for new uploads. Ask your coach if you need to replace a baseline.
+              </p>
+            )}
           </div>
           <Input
             label="Caption (optional)"
@@ -169,7 +194,7 @@ export default function ProgressPhotosPage() {
         {!loading && list.length === 0 && (
           <EmptyState
             title="No photos yet"
-            description="Upload a before or after photo using the form above."
+            description="Upload a before or current photo using the form above."
           />
         )}
         {!loading && list.length > 0 && (
@@ -188,7 +213,7 @@ export default function ProgressPhotosPage() {
                 </div>
                 <div className="p-3">
                   <p className="text-xs font-medium text-[var(--color-text-muted)]">
-                    {IMAGE_TYPES.find((t) => t.value === img.imageType)?.label ?? img.imageType ?? "Photo"}
+                    {formatProgressImageTypeLabel(img.imageType)}
                   </p>
                   {img.caption && (
                     <p className="mt-1 text-sm text-[var(--color-text)]">{img.caption}</p>

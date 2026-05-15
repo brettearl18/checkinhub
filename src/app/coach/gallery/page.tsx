@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
+import { formatProgressImageTypeLabel } from "@/lib/progress-comparison-photos";
 
 interface GalleryImage {
   id: string;
@@ -66,7 +67,7 @@ export default function CoachGalleryPage() {
           ← Dashboard
         </Link>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
-          Before & after photos
+          Progress photos
         </h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Progress photos from your clients. View by client or see all.
@@ -128,7 +129,7 @@ export default function CoachGalleryPage() {
                 <div className="p-3">
                   <p className="font-medium text-[var(--color-text)]">{img.clientName}</p>
                   <p className="text-xs text-[var(--color-text-muted)]">
-                    {img.imageType?.replace(/_/g, " ") ?? "Photo"}
+                    {formatProgressImageTypeLabel(img.imageType)}
                     {img.uploadedAt && (
                       <> · {formatDateDisplay(img.uploadedAt)}</>
                     )}

@@ -13,6 +13,7 @@ import {
   type CheckInQuestion as Question,
 } from "@/components/client/CheckInFormFields";
 import { useApiClient } from "@/lib/api-client";
+import { formatDateDdMmYyyy } from "@/lib/format-date";
 
 export default function CheckInFormPage() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function CheckInFormPage() {
   const assignmentId = params.id as string;
   const { fetchWithAuth } = useApiClient();
   const [data, setData] = useState<{
-    assignment: { id: string; formTitle: string; status: string; draftResponses?: DraftResponse[] };
+    assignment: { id: string; formTitle: string; status: string; reflectionWeekStart?: string; draftResponses?: DraftResponse[] };
     form: { id: string; title: string; questions: string[] };
     questions: Question[];
   } | null>(null);
@@ -167,7 +168,14 @@ export default function CheckInFormPage() {
   };
 
   const handleMarkMissed = async () => {
-    if (!window.confirm("Mark this week’s check-in as missed? It will be removed from your to-do list.")) return;
+    if (!data) return;
+    const rw = data.assignment.reflectionWeekStart;
+    const weekPhrase = rw ? `the week of ${formatDateDdMmYyyy(rw)}` : "this check-in";
+    const started = data.assignment.status === "started";
+    const msg = started
+      ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list.`
+      : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list.`;
+    if (!window.confirm(msg)) return;
     setMarkingMissed(true);
     setError(null);
     try {

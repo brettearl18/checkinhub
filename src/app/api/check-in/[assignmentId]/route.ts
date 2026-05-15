@@ -20,6 +20,7 @@ export async function GET(
         formId: "form-1",
         formTitle: "Weekly check-in",
         status: "pending",
+        reflectionWeekStart: "2026-02-24",
       },
       form: { id: "form-1", title: "Weekly check-in", questions: ["q1", "q2"] },
       questions: [

@@ -13,6 +13,7 @@ import type { PairedSlotChartRow } from "@/components/ui/MeasurementPairedSlotTr
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
+import { formatProgressImageTypeLabel } from "@/lib/progress-comparison-photos";
 
 interface Measurement {
   id: string;
@@ -799,7 +800,7 @@ export default function CoachClientProgressPage() {
                     </div>
                     <div className="p-2">
                       <p className="text-xs font-medium text-[var(--color-text-muted)]">
-                        {img.imageType ?? "Photo"}
+                        {formatProgressImageTypeLabel(img.imageType)}
                       </p>
                       {img.uploadedAt && (
                         <p className="text-xs text-[var(--color-text-muted)]">
