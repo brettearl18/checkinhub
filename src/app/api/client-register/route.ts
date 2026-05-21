@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 import { DEFAULT_PROFILE, SCORING_PROFILES } from "@/lib/scoring-utils";
+import { normalizeCoachCode, resolveCoachIdByShortUid } from "@/lib/coach-lookup";
 
 const MIN_PASSWORD_LENGTH = 8;
-const REGISTRATION_CODE = process.env.CLIENT_REGISTRATION_CODE ?? "VANA1118";
+const LEGACY_REGISTRATION_CODE = normalizeCoachCode(
+  process.env.CLIENT_REGISTRATION_CODE ?? "VANA1118"
+);
 
 async function emailAvailable(email: string): Promise<boolean> {
   const db = getAdminDb();
@@ -55,19 +58,29 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (inviteCode !== REGISTRATION_CODE) {
-    return NextResponse.json({ error: "Invalid registration code." }, { status: 403 });
-  }
   if (!isAdminConfigured()) {
     return NextResponse.json({ error: "Server not configured." }, { status: 503 });
   }
+
+  const db = getAdminDb();
+  const normalizedCode = normalizeCoachCode(inviteCode);
+  const coachIdFromCode = await resolveCoachIdByShortUid(db, inviteCode);
+  const isLegacyCode = normalizedCode === LEGACY_REGISTRATION_CODE;
+
+  if (!coachIdFromCode && !isLegacyCode) {
+    return NextResponse.json(
+      { error: "Invalid registration code. Use your coach's code from their dashboard." },
+      { status: 403 }
+    );
+  }
+
+  const coachId = coachIdFromCode;
 
   const available = await emailAvailable(email);
   if (!available) {
     return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
   }
 
-  const db = getAdminDb();
   const auth = getAdminAuth();
   const now = Timestamp.now();
   const displayName = `${firstName} ${lastName}`.trim() || email;
@@ -80,7 +93,9 @@ export async function POST(request: Request) {
     });
 
     const uid = userRecord.uid;
-    await auth.setCustomUserClaims(uid, { role: "client" });
+    const claims: Record<string, string> = { role: "client" };
+    if (coachId) claims.coachId = coachId;
+    await auth.setCustomUserClaims(uid, claims);
 
     await db.collection("users").doc(uid).set(
       {
@@ -98,7 +113,7 @@ export async function POST(request: Request) {
       { merge: true }
     );
 
-    await db.collection("clients").doc(uid).set({
+    const clientDoc: Record<string, unknown> = {
       firstName,
       lastName,
       email,
@@ -110,7 +125,10 @@ export async function POST(request: Request) {
       onboardingStatus: "completed",
       dailyHabitsApproved: true,
       dailyHabitsApprovedAt: now,
-    });
+      registrationCodeUsed: inviteCode,
+    };
+    if (coachId) clientDoc.coachId = coachId;
+    await db.collection("clients").doc(uid).set(clientDoc);
 
     const profileDef = SCORING_PROFILES[DEFAULT_PROFILE];
     await db.collection("clientScoring").doc(uid).set({

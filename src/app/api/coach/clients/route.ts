@@ -40,18 +40,23 @@ async function checkEmailAvailable(
   db: ReturnType<typeof getAdminDb>,
   auth: ReturnType<typeof getAdminAuth>,
   email: string
-): Promise<{ available: boolean; existingClient?: { id: string; status: string }; message?: string }> {
+): Promise<{
+  available: boolean;
+  existingClient?: { id: string; status: string; coachId: string | null };
+  message?: string;
+}> {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return { available: false, message: "Email is required." };
 
   const clientsSnap = await db.collection("clients").where("email", "==", normalized).limit(1).get();
   if (!clientsSnap.empty) {
     const doc = clientsSnap.docs[0];
-    const data = doc.data() as { status?: string };
+    const data = doc.data() as { status?: string; coachId?: string };
     const status = data?.status ?? "active";
+    const existingCoachId = typeof data.coachId === "string" ? data.coachId : null;
     return {
       available: false,
-      existingClient: { id: doc.id, status },
+      existingClient: { id: doc.id, status, coachId: existingCoachId },
       message: status === "pending" ? "An invitation has already been sent to this email. Ask them to use the link, or wait for it to expire." : "A client with this email already exists.",
     };
   }
@@ -117,8 +122,33 @@ export async function POST(request: Request) {
   const auth = getAdminAuth();
   const emailCheck = await checkEmailAvailable(db, auth, email);
   if (!emailCheck.available) {
+    const existing = emailCheck.existingClient;
+    const canViewProfile = Boolean(existing && existing.coachId === coachId);
+    const canLinkToRoster = Boolean(existing && !existing.coachId);
+    let errorMessage = emailCheck.message ?? "This email is already in use.";
+    if (existing && canLinkToRoster) {
+      errorMessage =
+        "This client already signed up in CheckinHUB but is not linked to any coach roster. Add them to your roster below.";
+    } else if (existing && !canViewProfile && !canLinkToRoster) {
+      errorMessage =
+        "A client with this email is already in CheckinHUB under a different coach account, so they will not appear in your client list.";
+    } else if (existing && canViewProfile && (existing.status === "cancelled" || existing.status === "archived")) {
+      errorMessage =
+        "This client is already on your roster but marked cancelled. Open their profile below, or show cancelled clients on the Clients page (Status filter).";
+    } else if (existing && canViewProfile && existing.status === "pending") {
+      errorMessage =
+        "An invitation was already sent to this email. Open their profile to resend the invite or finish setup.";
+    } else if (existing && canViewProfile) {
+      errorMessage = "This client is already on your roster. Open their profile below.";
+    }
     return NextResponse.json(
-      { error: emailCheck.message ?? "This email is already in use." },
+      {
+        error: errorMessage,
+        existingClientId: existing?.id ?? null,
+        canViewProfile,
+        canLinkToRoster,
+        existingStatus: existing?.status ?? null,
+      },
       { status: 409 }
     );
   }

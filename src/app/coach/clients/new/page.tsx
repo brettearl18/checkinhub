@@ -19,11 +19,40 @@ export default function CoachAddNewClientPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existingClient, setExistingClient] = useState<{
+    clientId: string;
+    canViewProfile: boolean;
+    canLinkToRoster: boolean;
+  } | null>(null);
+  const [linking, setLinking] = useState(false);
   const [success, setSuccess] = useState<{ clientId: string; inviteLink?: string | null } | null>(null);
+
+  const handleLinkToRoster = async () => {
+    if (!existingClient?.clientId) return;
+    setLinking(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(
+        `/api/coach/clients/${existingClient.clientId}/link`,
+        { method: "POST" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? "Could not add client to your roster.");
+        return;
+      }
+      router.push(`/coach/clients/${existingClient.clientId}`);
+    } catch {
+      setError("Could not add client to your roster.");
+    } finally {
+      setLinking(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setExistingClient(null);
     setSubmitting(true);
     try {
       const res = await fetchWithAuth("/api/coach/clients", {
@@ -39,7 +68,20 @@ export default function CoachAddNewClientPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError((data as { error?: string }).error ?? "Failed to create client.");
+        const body = data as {
+          error?: string;
+          existingClientId?: string | null;
+          canViewProfile?: boolean;
+          canLinkToRoster?: boolean;
+        };
+        setError(body.error ?? "Failed to create client.");
+        if (res.status === 409 && body.existingClientId) {
+          setExistingClient({
+            clientId: body.existingClientId,
+            canViewProfile: body.canViewProfile === true,
+            canLinkToRoster: body.canLinkToRoster === true,
+          });
+        }
         return;
       }
       setSuccess({
@@ -129,7 +171,11 @@ export default function CoachAddNewClientPage() {
             label="Email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setExistingClient(null);
+              setError(null);
+            }}
             required
             autoComplete="email"
           />
@@ -167,9 +213,28 @@ export default function CoachAddNewClientPage() {
           )}
 
           {error && (
-            <p className="text-sm text-[var(--color-error)]" role="alert">
-              {error}
-            </p>
+            <div
+              className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-3 py-3 text-sm text-[var(--color-error)]"
+              role="alert"
+            >
+              <p>{error}</p>
+              {existingClient?.canLinkToRoster && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="mt-3"
+                  disabled={linking}
+                  onClick={handleLinkToRoster}
+                >
+                  {linking ? "Adding…" : "Add to my roster"}
+                </Button>
+              )}
+              {existingClient?.canViewProfile && (
+                <Button asChild variant="primary" className="mt-3">
+                  <Link href={`/coach/clients/${existingClient.clientId}`}>View client profile</Link>
+                </Button>
+              )}
+            </div>
           )}
 
           <div className="flex flex-wrap gap-3">

@@ -61,7 +61,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md p-6">
         <h1 className="text-xl font-semibold text-[var(--color-text)]">Register Here</h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          New clients: enter your details and use your registration code.
+          New clients: enter your details and your coach&apos;s code from their dashboard.
         </p>
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -86,11 +86,11 @@ export default function RegisterPage() {
             minLength={8}
           />
           <Input
-            label="Registration code"
+            label="Coach code"
             value={inviteCode}
             onChange={(e) => setInviteCode(e.target.value)}
             required
-            placeholder="Enter your code"
+            placeholder="Coach code from your coach"
           />
 
           {error && (
