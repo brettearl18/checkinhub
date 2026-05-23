@@ -444,51 +444,53 @@ export default function ClientPortalPage() {
 
   return (
     <div className="min-h-[60vh]">
+      <p className="vana-section-label mb-2">Dashboard</p>
+
       {/* Hero: welcoming, motivational + check-in % highlight */}
-      <header className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[var(--color-primary-subtle)] via-[var(--color-bg-elevated)] to-[var(--color-bg)] border border-[var(--color-border)] p-4 sm:p-5">
-        <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-[var(--color-text)] sm:text-2xl">
+      <header className="vana-hero p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0 flex-1">
+            <h1 className="vana-page-title">
               {getGreeting(firstName)}
             </h1>
-            <p className="mt-1 max-w-lg text-sm text-[var(--color-text-secondary)]">
+            <p className="mt-2 max-w-lg text-sm leading-relaxed text-stone-600">
               {motivationalLine}
             </p>
             {showQuote && (
-              <p className="mt-2 text-xs italic text-[var(--color-text-muted)]">
+              <p className="mt-3 text-sm italic text-stone-500">
                 &ldquo;{profile?.profilePersonalization?.quote ?? ""}&rdquo;
               </p>
             )}
             <Link
               href="/client/profile#body-weight"
-              className="mt-3 inline-flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-subtle)]/50"
+              className="mt-4 inline-flex items-center rounded-full border border-stone-200/80 bg-[#faf7f2] px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
             >
               Log body weight
             </Link>
           </div>
           {!loading && questionProgressSummary && (
             <div
-              className={`flex-shrink-0 rounded-xl border-2 px-4 py-3 text-center ${
+              className={`flex-shrink-0 rounded-2xl border px-5 py-4 text-center shadow-sm ${
                 questionProgressSummary.band === "green"
-                  ? "border-green-500/50 bg-green-500/10"
+                  ? "border-emerald-200/80 bg-emerald-50"
                   : questionProgressSummary.band === "orange"
-                    ? "border-amber-500/50 bg-amber-500/10"
-                    : "border-red-500/50 bg-red-500/10"
+                    ? "border-amber-200/80 bg-amber-50"
+                    : "border-rose-200/80 bg-rose-50"
               }`}
             >
               <span
-                className={`block text-2xl font-bold tabular-nums sm:text-3xl ${
+                className={`font-display block text-3xl font-medium tabular-nums sm:text-4xl ${
                   questionProgressSummary.band === "green"
-                    ? "text-green-700 dark:text-green-400"
+                    ? "text-emerald-700"
                     : questionProgressSummary.band === "orange"
-                      ? "text-amber-700 dark:text-amber-400"
-                      : "text-red-700 dark:text-red-400"
+                      ? "text-amber-700"
+                      : "text-rose-700"
                 }`}
               >
                 {questionProgressSummary.pct}%
               </span>
-              <span className="mt-0.5 block text-xs font-medium text-[var(--color-text-muted)]">
-                Check-in score (last 3 weeks)
+              <span className="vana-section-label mt-1 block normal-case tracking-normal text-stone-500">
+                Check-in score · last 3 weeks
               </span>
             </div>
           )}
@@ -507,9 +509,9 @@ export default function ClientPortalPage() {
       {/* First-time setup: baseline measurements, photos, notifications */}
       {!authError && !loading && setupIncomplete && (
         <section className="mt-4">
-          <Card className="overflow-hidden border-2 border-[var(--color-primary-muted)] bg-gradient-to-br from-[var(--color-primary-subtle)]/80 to-[var(--color-bg-elevated)]">
-            <div className="p-4">
-              <h2 className="text-base font-semibold text-[var(--color-text)]">Complete your setup</h2>
+          <Card className="vana-card overflow-hidden border-2 border-[var(--color-primary-muted)]">
+            <div className="p-5">
+              <h2 className="font-display text-lg font-medium text-stone-800">Complete your setup</h2>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                 Add your baseline, a photo, and turn on notifications so you don’t miss habits and check-ins.
               </p>
@@ -547,9 +549,9 @@ export default function ClientPortalPage() {
       {/* Check-in to complete – always at top when there is one (started or open) */}
       {!authError && !loading && topPriorityAssignments.length > 0 && (
         <section className="mt-4">
-          <Card className="overflow-hidden border-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)]/50 shadow-sm">
-            <div className="p-4">
-              <h2 className="text-base font-semibold text-[var(--color-text)]">
+          <Card className="vana-card overflow-hidden border-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)]/60">
+            <div className="p-5">
+              <h2 className="font-display text-lg font-medium text-stone-800">
                 {resumeAssignments.length > 0 ? "Finish your check-in" : "You have a check-in to complete"}
               </h2>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
@@ -573,7 +575,7 @@ export default function ClientPortalPage() {
                       <div className="flex flex-shrink-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-end">
                         <Link
                           href={`/client/check-in/${a.id}`}
-                          className="inline-flex items-center justify-center rounded-md bg-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90 whitespace-nowrap"
+                          className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-primary-hover)] whitespace-nowrap"
                         >
                           {a.status === "started" ? "Resume →" : "Start →"}
                         </Link>
@@ -581,7 +583,7 @@ export default function ClientPortalPage() {
                           type="button"
                           disabled={markingMissedId === a.id}
                           onClick={() => markAssignmentMissed(a.id)}
-                          className="inline-flex items-center justify-center rounded-md border border-[var(--color-border)] bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-muted)] hover:border-[var(--color-text-muted)] hover:text-[var(--color-text)] disabled:opacity-60 whitespace-nowrap"
+                          className="inline-flex items-center justify-center rounded-full border border-stone-200/80 bg-transparent px-3 py-1.5 text-xs font-medium text-stone-500 hover:border-stone-400 hover:text-stone-700 disabled:opacity-60 whitespace-nowrap"
                         >
                           {markingMissedId === a.id ? "…" : "Mark as missed"}
                         </button>
@@ -601,9 +603,9 @@ export default function ClientPortalPage() {
       {/* Recent check-in responses – prominent, right under hero */}
       {!authError && !loading && recentResponses.length > 0 && (
         <section className="mt-4">
-          <Card className="overflow-hidden border border-[var(--color-primary-muted)] bg-gradient-to-br from-[var(--color-primary-subtle)]/80 to-[var(--color-bg-elevated)]">
-            <div className="p-4">
-              <h2 className="text-base font-semibold text-[var(--color-text)]">Your recent check-in responses</h2>
+          <Card className="vana-card overflow-hidden">
+            <div className="p-5">
+              <h2 className="font-display text-lg font-medium text-stone-800">Your recent check-in responses</h2>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">View your answers and coach feedback</p>
               <ul className="mt-3 space-y-2">
                 {recentResponses.map((r) => (
@@ -624,7 +626,7 @@ export default function ClientPortalPage() {
                           <p className="mt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">Score: {r.score}%</p>
                         )}
                       </div>
-                      <span className="flex-shrink-0 rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90">
+                      <span className="flex-shrink-0 rounded-full bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-primary-hover)]">
                         {r.responseId ? "View response →" : "View history →"}
                       </span>
                     </Link>
@@ -643,10 +645,10 @@ export default function ClientPortalPage() {
       <section className="mt-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           <div className="min-w-0 flex flex-col">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-1.5">
+            <h2 className="vana-section-label mb-2">
               Your check-in
             </h2>
-            <Card className="overflow-hidden border-[var(--color-border)] bg-[var(--color-bg-elevated)] flex-1 flex flex-col">
+            <Card className="vana-card flex-1 flex flex-col overflow-hidden">
               <div className="p-3 flex flex-col flex-1">
                 <p className="text-base font-semibold text-[var(--color-text)]">
                   {openAssignments.length > 0 ? "You have a check-in to complete" : "Start your check-in"}
@@ -663,10 +665,10 @@ export default function ClientPortalPage() {
             </Card>
           </div>
           <div className="min-w-0 flex flex-col">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-1.5">
+            <h2 className="vana-section-label mb-2">
               Habits
             </h2>
-            <Card className="overflow-hidden border-[var(--color-border)] bg-[var(--color-bg-elevated)] flex-1 flex flex-col">
+            <Card className="vana-card flex-1 flex flex-col overflow-hidden">
               <div className="p-3 flex flex-col flex-1">
                 <p className="text-base font-semibold text-[var(--color-text)]">Habit tracker</p>
                 <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
@@ -696,8 +698,8 @@ export default function ClientPortalPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* To do – only when check-ins are open (week has opened, e.g. Friday 9am Perth for this/next week) */}
             {openAssignments.length > 0 && (
-              <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+              <Card className="vana-card p-5">
+                <h3 className="vana-section-label mb-2">
                   To do
                 </h3>
                 <p className="text-sm text-[var(--color-text-secondary)] mb-2">
@@ -734,15 +736,15 @@ export default function ClientPortalPage() {
               </Card>
             )}
             {/* Payments */}
-            <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+            <Card className="vana-card p-5">
+              <h3 className="vana-section-label mb-2">
                 Payments
               </h3>
               {profile?.paymentStatus === "paid" ? (
-                <p className="text-sm text-green-600 dark:text-green-400 font-medium">Paid up</p>
+                <p className="text-sm font-medium text-emerald-700">Paid up</p>
               ) : profile?.paymentStatus === "failed" || profile?.paymentStatus === "past_due" ? (
                 <>
-                  <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">Action needed</p>
+                  <p className="text-sm font-medium text-amber-700">Action needed</p>
                   <p className="text-xs text-[var(--color-text-muted)] mt-1">
                     You have an outstanding payment. Pay securely below or contact your coach.
                   </p>
@@ -770,7 +772,7 @@ export default function ClientPortalPage() {
                   </Button>
                 </>
               ) : profile?.paymentStatus ? (
-                <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">Action needed</p>
+                <p className="text-sm font-medium text-amber-700">Action needed</p>
               ) : (
                 <p className="text-sm text-[var(--color-text-muted)]">No payment linked</p>
               )}
@@ -781,8 +783,8 @@ export default function ClientPortalPage() {
               )}
             </Card>
             {/* Meal plan */}
-            <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+            <Card className="vana-card p-5">
+              <h3 className="vana-section-label mb-2">
                 Meal plan
               </h3>
               {profile?.mealPlanLinks && profile.mealPlanLinks.length > 0 ? (
@@ -848,7 +850,7 @@ export default function ClientPortalPage() {
       {!authError && !loading && (
         <section className="mt-6">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+            <h2 className="vana-section-label">
               Your progress
             </h2>
             <Link href="/client/progress" className="text-sm font-medium text-[var(--color-primary)] hover:underline">
@@ -857,8 +859,8 @@ export default function ClientPortalPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
             {/* Check-in progress: weekly % line chart with client-specific traffic-light bands */}
-            <Card className="p-3 border-[var(--color-border)] bg-[var(--color-bg-elevated)] flex flex-col min-h-[172px]">
-              <h3 className="text-xs font-semibold text-[var(--color-text)] mb-2">Check-in progress</h3>
+            <Card className="vana-card flex flex-col min-h-[172px] p-4">
+              <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Check-in progress</h3>
               {checkInWeeklySeries.length > 0 && questionProgress ? (
                 <>
                   <div className="flex-1 min-h-[140px] w-full min-w-0">
@@ -881,8 +883,8 @@ export default function ClientPortalPage() {
             </Card>
 
             {/* Weight (compact chart) – row 1 */}
-            <Card className="p-3 border-[var(--color-border)] bg-[var(--color-bg-elevated)] flex flex-col min-h-[172px]">
-              <h3 className="text-xs font-semibold text-[var(--color-text)] mb-2">Weight</h3>
+            <Card className="vana-card flex flex-col min-h-[172px] p-4">
+              <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Weight</h3>
               {progressSnapshotChartData.length > 0 ? (
                 <div className="flex-1 min-h-[120px] w-full min-w-0">
                   <MeasurementLineChartLazy
@@ -897,8 +899,8 @@ export default function ClientPortalPage() {
             </Card>
 
             {/* Habit trackers – row 2 */}
-            <Card className="p-3 border-[var(--color-border)] bg-[var(--color-bg-elevated)] flex flex-col min-h-[140px]">
-              <h3 className="text-xs font-semibold text-[var(--color-text)] mb-2">Habits this week</h3>
+            <Card className="vana-card flex flex-col min-h-[140px] p-4">
+              <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Habits this week</h3>
               {habitsData?.history?.byDate ? (
                 <div className="scale-90 origin-top-left w-[111%] min-w-0 flex-1 min-h-0">
                   <HabitWeeklyStrip
@@ -913,8 +915,8 @@ export default function ClientPortalPage() {
             </Card>
 
             {/* Before & current photos – row 2 */}
-            <Card className="p-3 border-[var(--color-border)] bg-[var(--color-bg-elevated)] flex flex-col min-h-[140px]">
-              <h3 className="text-xs font-semibold text-[var(--color-text)] mb-2">Before & current</h3>
+            <Card className="vana-card flex flex-col min-h-[140px] p-4">
+              <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Before & current</h3>
               {baselinePhoto || currentPhoto ? (
                 <div className="flex gap-3 w-full flex-1 min-h-0">
                   {baselinePhoto && (
@@ -979,10 +981,10 @@ export default function ClientPortalPage() {
       {/* Mini photo gallery */}
       {!authError && !loading && progressImages.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
+          <h2 className="vana-section-label mb-3">
             Recent photos
           </h2>
-          <Card className="p-4 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+          <Card className="vana-card p-5">
             <div className="flex gap-3 overflow-x-auto pb-2">
               {progressImages.slice(0, 6).map((img) => (
                 <a
@@ -1012,16 +1014,16 @@ export default function ClientPortalPage() {
 
       {/* Quick links: toolkit */}
       <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
+        <h2 className="vana-section-label mb-3">
           Quick links
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {QUICK_LINKS.map(({ href, label, description, emoji }) => (
             <Link key={href} href={href}>
-              <Card className="h-full p-4 transition-all border-[var(--color-border)] bg-[var(--color-bg-elevated)] hover:border-[var(--color-primary-muted)] hover:shadow-md">
+              <Card className="vana-card h-full p-5 transition-all hover:border-[var(--color-primary-muted)] hover:shadow-md">
                 <span className="text-xl leading-none" aria-hidden>{emoji}</span>
-                <span className="mt-2 block font-medium text-[var(--color-text)]">{label}</span>
-                <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{description}</p>
+                <span className="mt-3 block font-medium text-stone-800">{label}</span>
+                <p className="mt-1 text-xs leading-relaxed text-stone-500">{description}</p>
               </Card>
             </Link>
           ))}

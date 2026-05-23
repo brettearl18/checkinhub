@@ -4,7 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { VanaBrandBar } from "@/components/client/VanaBrandBar";
 import { useAuth } from "@/contexts/AuthContext";
+
+/** Vana theme trial — entire client portal; dashboard is the primary preview surface */
+const VANA_THEME_TRIAL = true;
 
 const NAV_LINKS = [
   { href: "/client", label: "Dashboard" },
@@ -21,6 +25,8 @@ const NAV_LINKS = [
   { href: "/client/progress-photos", label: "Photos" },
   { href: "/client/profile", label: "Profile" },
 ] as const;
+
+const RECIPE_HUB_URL = "https://meals.vanahealth.com.au";
 
 const BOTTOM_NAV = [
   { href: "/client", label: "Home", short: "Home" },
@@ -50,14 +56,32 @@ function NavLink({
     <Link
       href={href}
       onClick={onClick}
-      className={`block rounded-lg px-3 py-2 text-sm font-medium min-h-[44px] flex items-center ${
+      className={`block rounded-xl px-3 py-2 text-sm font-medium min-h-[44px] flex items-center transition-colors ${
         active
-          ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
-          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
+          ? "border-l-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)] pl-[10px]"
+          : "text-stone-600 hover:bg-stone-100/80 hover:text-stone-800"
       } ${className}`}
     >
       {label}
     </Link>
+  );
+}
+
+/** Cross-app link to Vana Recipe Hub — always highlighted per THEME_DESIGN */
+function RecipeHubNavLink({ onClick, className = "" }: { onClick?: () => void; className?: string }) {
+  return (
+    <a
+      href={RECIPE_HUB_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onClick}
+      className={`mt-1 block rounded-xl border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] px-3 py-2.5 text-sm font-semibold text-[var(--color-primary)] min-h-[44px] flex items-center justify-between gap-2 transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/15 ${className}`}
+    >
+      <span>RecipeHUB</span>
+      <span className="text-[10px] font-medium uppercase tracking-wide opacity-80" aria-hidden>
+        Open ↗
+      </span>
+    </a>
   );
 }
 
@@ -98,18 +122,21 @@ export default function ClientLayout({
     href === "/client" ? pathname === "/client" : pathname?.startsWith(href);
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
+    <div
+      className="flex min-h-screen flex-col md:flex-row bg-[var(--color-bg)]"
+      {...(VANA_THEME_TRIAL ? { "data-theme": "vana" } : {})}
+    >
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-elevated)] md:w-60">
-        <div className="p-4 border-b border-[var(--color-border)]">
-          <Link href="/client" className="font-semibold text-[var(--color-text)] hover:text-[var(--color-primary)]">
-            CheckinHUB
-          </Link>
-        </div>
+      <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-stone-200/80 bg-[#faf7f2]">
+        <VanaBrandBar />
+        <p className="px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
+          Check-in portal
+        </p>
         <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
           {NAV_LINKS.map(({ href, label }) => (
             <NavLink key={href} href={href} label={label} active={isActive(href)} />
           ))}
+          <RecipeHubNavLink />
         </nav>
         <div className="border-t border-[var(--color-border)] p-3 space-y-0.5">
           <NavLink href="/privacy" label="Privacy" active={pathname === "/privacy"} />
@@ -124,22 +151,23 @@ export default function ClientLayout({
       </aside>
 
       {/* Mobile header */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)] safe-area-inset-top">
-        <Link href="/client" className="font-semibold text-[var(--color-text)]">
-          CheckinHUB
-        </Link>
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          className="rounded-lg p-2 -mr-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]"
-          aria-label="Open menu"
-        >
-          <MenuIcon />
-        </button>
+      <header className="md:hidden sticky top-0 z-30 safe-area-inset-top">
+        <VanaBrandBar />
+        <div className="flex items-center justify-between border-b border-stone-200/80 bg-[#fffdf9] px-4 py-2">
+          <span className="text-sm font-medium text-stone-600">Your portal</span>
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="rounded-full p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+            aria-label="Open menu"
+          >
+            <MenuIcon />
+          </button>
+        </div>
       </header>
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6 flex flex-col">
+      <main className="min-w-0 flex-1 overflow-auto p-4 md:p-8 pb-20 md:pb-8 flex flex-col">
         <div className="flex-1 min-h-0">
           {children}
         </div>
@@ -152,7 +180,7 @@ export default function ClientLayout({
 
       {/* Mobile bottom nav */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)] safe-area-inset-bottom"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around border-t border-stone-200/80 bg-[#fffdf9]/95 backdrop-blur-sm safe-area-inset-bottom"
         aria-label="Primary"
       >
         {BOTTOM_NAV.map(({ href, label, short }) => (
@@ -190,10 +218,10 @@ export default function ClientLayout({
             aria-hidden
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="md:hidden fixed inset-x-0 bottom-0 top-[60px] z-50 rounded-t-2xl bg-[var(--color-bg-elevated)] shadow-lg overflow-y-auto safe-area-inset-bottom">
+          <div className="md:hidden fixed inset-x-0 bottom-0 top-[108px] z-50 rounded-t-2xl bg-[#fffdf9] shadow-lg overflow-y-auto safe-area-inset-bottom">
             <div className="p-4 pb-8">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-[var(--color-text)]">Menu</h2>
+                <h2 className="font-display text-lg font-medium text-stone-800">Menu</h2>
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(false)}
@@ -213,6 +241,7 @@ export default function ClientLayout({
                     onClick={() => setDrawerOpen(false)}
                   />
                 ))}
+                <RecipeHubNavLink onClick={() => setDrawerOpen(false)} />
               </div>
               <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-0.5">
                 <NavLink

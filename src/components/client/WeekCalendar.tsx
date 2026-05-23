@@ -94,7 +94,7 @@ export function WeekCalendar({
               type="button"
               onClick={() => !isDisabled && onSelectWeek(w.reflectionWeekStart)}
               disabled={isDisabled}
-              className={`w-full rounded-[var(--radius-md)] border text-left transition-colors ${rowBg} ${
+              className={`w-full rounded-xl border text-left transition-colors ${rowBg} ${
                 isDisabled
                   ? "cursor-not-allowed opacity-90"
                   : outstanding
