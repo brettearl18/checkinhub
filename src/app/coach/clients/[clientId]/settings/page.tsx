@@ -146,6 +146,7 @@ export default function CoachClientSettingsPage() {
   const [assignRecurring, setAssignRecurring] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignmentsExpanded, setAssignmentsExpanded] = useState(false);
 
   const allocationWeekOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
@@ -648,27 +649,44 @@ export default function CoachClientSettingsPage() {
               <p className="text-sm text-[var(--color-error)] mb-4" role="alert">{assignError}</p>
             )}
             {allocationAssignments.length > 0 && (
-              <div>
-                <p className="text-sm font-medium text-[var(--color-text)] mb-2">Current assignments</p>
-                <ul className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
-                  {allocationAssignments.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="text-[var(--color-text)]">{a.formTitle}</span>
-                      <span className="text-[var(--color-text-muted)]">
-                        {a.reflectionWeekStart ? formatDateDisplay(a.reflectionWeekStart) : "—"}
-                      </span>
-                      <span className="capitalize text-[var(--color-text-muted)]">{a.status}</span>
-                      {a.responseId && (
-                        <Link
-                          href={`/coach/clients/${clientId}/responses/${a.responseId}`}
-                          className="text-[var(--color-primary)] hover:underline"
-                        >
-                          View response
-                        </Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+              <div className="border-t border-[var(--color-border)] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setAssignmentsExpanded((e) => !e)}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg py-1 text-left hover:bg-[var(--color-bg)]"
+                  aria-expanded={assignmentsExpanded}
+                >
+                  <span className="text-sm font-medium text-[var(--color-text)]">
+                    Current assignments
+                    <span className="ml-2 font-normal text-[var(--color-text-muted)]">
+                      ({allocationAssignments.length} check-in{allocationAssignments.length !== 1 ? "s" : ""})
+                    </span>
+                  </span>
+                  <span className="text-[var(--color-text-muted)]" aria-hidden>
+                    {assignmentsExpanded ? "▼" : "▶"}
+                  </span>
+                </button>
+                {assignmentsExpanded && (
+                  <ul className="mt-2 max-h-64 divide-y divide-[var(--color-border)] overflow-y-auto rounded-md border border-[var(--color-border)]">
+                    {allocationAssignments.map((a) => (
+                      <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <span className="text-[var(--color-text)]">{a.formTitle}</span>
+                        <span className="text-[var(--color-text-muted)]">
+                          {a.reflectionWeekStart ? formatDateDisplay(a.reflectionWeekStart) : "—"}
+                        </span>
+                        <span className="capitalize text-[var(--color-text-muted)]">{a.status}</span>
+                        {a.responseId && (
+                          <Link
+                            href={`/coach/clients/${clientId}/responses/${a.responseId}`}
+                            className="text-[var(--color-primary)] hover:underline"
+                          >
+                            View response
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <p className="mt-2 text-xs text-[var(--color-text-muted)]">
                   <Link href={`/coach/clients/${clientId}`} className="text-[var(--color-primary)] hover:underline">
                     Manage all check-ins →
