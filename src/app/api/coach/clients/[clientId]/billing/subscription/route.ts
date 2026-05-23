@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { getStripe } from "@/lib/stripe-server";
+import { deriveStripeSubscriptionAccountStatus } from "@/lib/stripe-subscription-status";
 
 /**
  * GET /api/coach/clients/[clientId]/billing/subscription
@@ -77,10 +78,14 @@ export async function GET(
     const label = productName ? `${productName} – ${priceStr}` : priceStr;
 
     const currentPeriodEnd = subscription.current_period_end as number | undefined;
+    const accountStatus = deriveStripeSubscriptionAccountStatus(sub);
+    const cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end);
     return NextResponse.json({
       subscription: {
         id: subscription.id as string,
         status: subscription.status as string,
+        accountStatus,
+        cancelAtPeriodEnd,
         currentPeriodEnd: currentPeriodEnd != null
           ? new Date(currentPeriodEnd * 1000).toISOString()
           : null,

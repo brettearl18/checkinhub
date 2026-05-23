@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -36,6 +36,7 @@ interface ClientSettings {
   coachNotes: string;
   stripeCustomerId: string | null;
   paymentStatus: string | null;
+  stripeSubscriptionStatus: string | null;
   firstPaymentAt: string | null;
   mealPlanLinks: { label: string; url: string }[];
   mealPlanJson: Record<string, unknown> | null;
@@ -61,6 +62,7 @@ const DEFAULT_SETTINGS: ClientSettings = {
   coachNotes: "",
   stripeCustomerId: null,
   paymentStatus: null,
+  stripeSubscriptionStatus: null,
   firstPaymentAt: null,
   mealPlanLinks: [],
   mealPlanJson: null,
@@ -107,7 +109,11 @@ export default function CoachClientSettingsPage() {
   const [billingAction, setBillingAction] = useState<"idle" | "pause" | "resume" | "cancel">("idle");
   const [billingError, setBillingError] = useState<string | null>(null);
   const [pauseResumeOn, setPauseResumeOn] = useState<string>("");
-  const [subscription, setSubscription] = useState<{ currentPrice: { id: string; label: string } } | null>(null);
+  const [subscription, setSubscription] = useState<{
+    currentPrice: { id: string; label: string };
+    accountStatus?: "active" | "paused" | "cancelled";
+    cancelAtPeriodEnd?: boolean;
+  } | null>(null);
   const [prices, setPrices] = useState<{ id: string; label: string }[]>([]);
   const [changePriceId, setChangePriceId] = useState<string>("");
   const [updatePriceLoading, setUpdatePriceLoading] = useState(false);
@@ -168,6 +174,50 @@ export default function CoachClientSettingsPage() {
     return options;
   }, []);
 
+  const refreshBillingFromStripe = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      const [profileRes, subRes] = await Promise.all([
+        fetchWithAuth(`/api/coach/clients/${clientId}/profile`),
+        fetchWithAuth(`/api/coach/clients/${clientId}/billing/subscription`),
+      ]);
+      if (profileRes.ok) {
+        const p = await profileRes.json();
+        setForm((f) => ({
+          ...f,
+          paymentStatus: p.paymentStatus ?? null,
+          stripeSubscriptionStatus: p.stripeSubscriptionStatus ?? null,
+        }));
+      }
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        setSubscription(subData.subscription ?? null);
+      } else {
+        setSubscription(null);
+      }
+    } catch {
+      // ignore refresh errors
+    }
+  }, [clientId, fetchWithAuth]);
+
+  const handleSyncBilling = useCallback(async () => {
+    setBillingError(null);
+    setSyncBillingLoading(true);
+    try {
+      const res = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/sync`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        await refreshBillingFromStripe();
+      } else {
+        setBillingError((data && data.error) || "Sync failed");
+      }
+    } catch {
+      setBillingError("Sync failed");
+    } finally {
+      setSyncBillingLoading(false);
+    }
+  }, [clientId, fetchWithAuth, refreshBillingFromStripe]);
+
   useEffect(() => {
     if (!clientId) return;
     (async () => {
@@ -204,6 +254,7 @@ export default function CoachClientSettingsPage() {
             coachNotes: data.coachNotes ?? "",
             stripeCustomerId: data.stripeCustomerId ?? null,
             paymentStatus: data.paymentStatus ?? null,
+            stripeSubscriptionStatus: data.stripeSubscriptionStatus ?? null,
             firstPaymentAt: data.firstPaymentAt ?? null,
             packagePaidAt: data.packagePaidAt ?? "",
             packageMonths: data.packageMonths ?? null,
@@ -1190,55 +1241,75 @@ export default function CoachClientSettingsPage() {
             )}
             {form.stripeCustomerId && (
               <>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <p className="text-sm text-[var(--color-text-muted)]">
-                    Current status: {form.paymentStatus === "paid" ? (
-                      <span className="text-green-600 dark:text-green-400">Paid up</span>
-                    ) : form.paymentStatus === "failed" || form.paymentStatus === "past_due" ? (
-                      <span className="text-red-600 dark:text-red-400">Payment failed / past due</span>
-                    ) : form.paymentStatus === "canceled" ? (
-                      <span className="text-amber-600 dark:text-amber-400">Canceled</span>
-                    ) : (
-                      <span>Not synced yet (webhook will update after you add the endpoint)</span>
-                    )}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={syncBillingLoading}
-                    onClick={async () => {
-                      setBillingError(null);
-                      setSyncBillingLoading(true);
-                      try {
-                        const res = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/sync`, { method: "POST" });
-                        const data = await res.json().catch(() => ({}));
-                        if (res.ok && data.paymentStatus != null) {
-                          setForm((f) => ({ ...f, paymentStatus: data.paymentStatus }));
-                          const profileRes = await fetchWithAuth(`/api/coach/clients/${clientId}/profile`);
-                          if (profileRes.ok) {
-                            const p = await profileRes.json();
-                            setForm((f) => ({ ...f, paymentStatus: p.paymentStatus ?? null }));
-                          }
-                          const subRes = await fetchWithAuth(`/api/coach/clients/${clientId}/billing/subscription`);
-                          if (subRes.ok) {
-                            const subData = await subRes.json();
-                            setSubscription(subData.subscription ?? null);
-                          } else {
-                            setSubscription(null);
-                          }
-                        } else {
-                          setBillingError((data && data.error) || "Sync failed");
-                        }
-                      } catch {
-                        setBillingError("Sync failed");
-                      } finally {
-                        setSyncBillingLoading(false);
-                      }
-                    }}
-                  >
-                    {syncBillingLoading ? "Syncing…" : "Sync from Stripe"}
-                  </Button>
-                </div>
+                {(() => {
+                  const accountStatus =
+                    subscription?.accountStatus ??
+                    (form.stripeSubscriptionStatus as "active" | "paused" | "cancelled" | null);
+                  return (
+                    <div className="mt-3 relative rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 pr-16">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                        Account status
+                      </p>
+                      <div className="space-y-1.5">
+                        <p className="text-sm text-[var(--color-text-muted)]">
+                          Subscription:{" "}
+                          {accountStatus === "active" ? (
+                            <span className="font-medium text-emerald-700">
+                              Active
+                              {subscription?.cancelAtPeriodEnd ? " (cancels at period end)" : ""}
+                            </span>
+                          ) : accountStatus === "paused" ? (
+                            <span className="font-medium text-amber-700">Paused</span>
+                          ) : accountStatus === "cancelled" ? (
+                            <span className="font-medium text-stone-600">Cancelled</span>
+                          ) : (
+                            <span className="text-[var(--color-text-secondary)]">Unknown</span>
+                          )}
+                        </p>
+                        <p className="text-sm text-[var(--color-text-muted)]">
+                          Payment:{" "}
+                          {form.paymentStatus === "paid" ? (
+                            <span className="font-medium text-emerald-700">Paid up</span>
+                          ) : form.paymentStatus === "failed" || form.paymentStatus === "past_due" ? (
+                            <span className="font-medium text-rose-700">Failed / past due</span>
+                          ) : form.paymentStatus === "canceled" ? (
+                            <span className="font-medium text-stone-600">Canceled</span>
+                          ) : (
+                            <span className="text-[var(--color-text-secondary)]">Not synced yet</span>
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={syncBillingLoading}
+                        onClick={handleSyncBilling}
+                        title="Sync from Stripe"
+                        aria-label="Sync account status from Stripe"
+                        className={`absolute top-3 right-3 flex h-11 w-11 items-center justify-center rounded-full border-2 shadow-sm transition-colors disabled:opacity-60 ${
+                          accountStatus === "active"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400 hover:bg-emerald-100"
+                            : accountStatus === "paused"
+                              ? "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-400 hover:bg-amber-100"
+                              : accountStatus === "cancelled"
+                                ? "border-stone-200 bg-stone-100 text-stone-600 hover:border-stone-400 hover:bg-stone-200"
+                                : "border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+                        }`}
+                      >
+                        {syncBillingLoading ? (
+                          <RefreshIcon className="h-6 w-6 animate-spin" />
+                        ) : accountStatus === "active" ? (
+                          <CheckCircleIcon className="h-6 w-6" />
+                        ) : accountStatus === "paused" ? (
+                          <PauseCircleIcon className="h-6 w-6" />
+                        ) : accountStatus === "cancelled" ? (
+                          <XCircleIcon className="h-6 w-6" />
+                        ) : (
+                          <RefreshIcon className="h-6 w-6" />
+                        )}
+                      </button>
+                    </div>
+                  );
+                })()}
                 {subscription?.currentPrice && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="text-sm text-[var(--color-text-muted)]">Current plan:</span>
@@ -1340,11 +1411,7 @@ export default function CoachClientSettingsPage() {
                         const data = await res.json().catch(() => ({}));
                         if (res.ok) {
                           setBillingError(null);
-                          const profileRes = await fetchWithAuth(`/api/coach/clients/${clientId}/profile`);
-                          if (profileRes.ok) {
-                            const p = await profileRes.json();
-                            setForm((f) => ({ ...f, paymentStatus: p.paymentStatus ?? null }));
-                          }
+                          await refreshBillingFromStripe();
                         } else {
                           setBillingError((data && data.error) || "Failed to pause");
                         }
@@ -1371,11 +1438,7 @@ export default function CoachClientSettingsPage() {
                         const data = await res.json().catch(() => ({}));
                         if (res.ok) {
                           setBillingError(null);
-                          const profileRes = await fetchWithAuth(`/api/coach/clients/${clientId}/profile`);
-                          if (profileRes.ok) {
-                            const p = await profileRes.json();
-                            setForm((f) => ({ ...f, paymentStatus: p.paymentStatus ?? null }));
-                          }
+                          await refreshBillingFromStripe();
                         } else {
                           setBillingError((data && data.error) || "Failed to resume");
                         }
@@ -1407,11 +1470,7 @@ export default function CoachClientSettingsPage() {
                         const data = await res.json().catch(() => ({}));
                         if (res.ok) {
                           setBillingError(null);
-                          const profileRes = await fetchWithAuth(`/api/coach/clients/${clientId}/profile`);
-                          if (profileRes.ok) {
-                            const p = await profileRes.json();
-                            setForm((f) => ({ ...f, paymentStatus: p.paymentStatus ?? null }));
-                          }
+                          await refreshBillingFromStripe();
                         } else {
                           setBillingError((data && data.error) || "Failed to cancel");
                         }
@@ -1658,5 +1717,45 @@ export default function CoachClientSettingsPage() {
         </form>
       )}
     </div>
+  );
+}
+
+function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <path d="M22 4 12 14.01l-3-3" />
+    </svg>
+  );
+}
+
+function PauseCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M10 15V9" />
+      <path d="M14 15V9" />
+    </svg>
+  );
+}
+
+function XCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="m15 9-6 6" />
+      <path d="m9 9 6 6" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+      <path d="M16 16h5v5" />
+    </svg>
   );
 }

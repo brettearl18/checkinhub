@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { getStripe } from "@/lib/stripe-server";
+import { getStripe, syncClientStripeSubscriptionFields } from "@/lib/stripe-server";
 
 async function getSubscriptionId(
   clientId: string,
@@ -74,10 +74,17 @@ export async function POST(
       await stripe.subscriptions.update(result.subscriptionId, {
         cancel_at_period_end: true,
       });
-      return NextResponse.json({ ok: true, cancelAtPeriodEnd: true });
+      const accountStatus = await syncClientStripeSubscriptionFields(clientId, result.subscriptionId);
+      return NextResponse.json({ ok: true, cancelAtPeriodEnd: true, stripeSubscriptionStatus: accountStatus });
     } else {
       await stripe.subscriptions.cancel(result.subscriptionId);
-      return NextResponse.json({ ok: true, cancelAtPeriodEnd: false });
+      const db = getAdminDb();
+      await db.collection("clients").doc(clientId).update({
+        stripeSubscriptionStatus: "cancelled",
+        paymentStatus: "canceled",
+        updatedAt: new Date(),
+      });
+      return NextResponse.json({ ok: true, cancelAtPeriodEnd: false, stripeSubscriptionStatus: "cancelled" });
     }
   } catch (err) {
     console.error("[billing/cancel-subscription]", err);

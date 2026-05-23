@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { getStripe } from "@/lib/stripe-server";
+import { deriveStripeSubscriptionAccountStatus } from "@/lib/stripe-subscription-status";
 
 /**
  * POST /api/coach/clients/[clientId]/billing/sync
@@ -47,11 +48,12 @@ export async function POST(
     let lastPaymentAt: Date | null = null;
     let nextBillingAt: Date | null = null;
     let stripeSubscriptionId: string | null = null;
+    let stripeSubscriptionStatus: ReturnType<typeof deriveStripeSubscriptionAccountStatus> = null;
 
     const subs = await stripe.subscriptions.list({
       customer: stripeCustomerId,
       status: "all",
-      limit: 5,
+      limit: 10,
     });
     const activeSub = subs.data?.find(
       (s) =>
@@ -60,26 +62,23 @@ export async function POST(
         s.status === "trialing" ||
         s.status === "paused"
     );
-    if (activeSub) {
-      stripeSubscriptionId = activeSub.id;
-      if (activeSub.status === "active" || activeSub.status === "trialing") {
+    const subToSync = activeSub ?? subs.data?.[0] ?? null;
+    if (subToSync) {
+      const fullSub = await stripe.subscriptions.retrieve(subToSync.id);
+      stripeSubscriptionId = fullSub.id;
+      stripeSubscriptionStatus = deriveStripeSubscriptionAccountStatus(fullSub);
+      if (stripeSubscriptionStatus === "paused") {
         paymentStatus = "paid";
-      } else if (activeSub.status === "past_due") {
+      } else if (fullSub.status === "active" || fullSub.status === "trialing") {
+        paymentStatus = "paid";
+      } else if (fullSub.status === "past_due") {
         paymentStatus = "past_due";
-      } else if (activeSub.status === "paused") {
+      } else if (stripeSubscriptionStatus === "cancelled") {
         paymentStatus = "canceled";
       }
-      const periodEnd = (activeSub as { current_period_end?: number }).current_period_end;
+      const periodEnd = (fullSub as { current_period_end?: number }).current_period_end;
       if (periodEnd != null) {
         nextBillingAt = new Date(periodEnd * 1000);
-      }
-    } else if (subs.data?.length) {
-      const last = subs.data[0];
-      stripeSubscriptionId = last.id;
-      if (last.status === "canceled" || last.status === "unpaid") {
-        paymentStatus = "canceled";
-      } else {
-        paymentStatus = "past_due";
       }
     }
 
@@ -107,6 +106,7 @@ export async function POST(
       paymentStatus,
       updatedAt: now,
       ...(stripeSubscriptionId != null ? { stripeSubscriptionId } : {}),
+      ...(stripeSubscriptionStatus != null ? { stripeSubscriptionStatus } : {}),
       ...(lastPaymentAt != null ? { lastPaymentAt } : {}),
       ...(nextBillingAt != null ? { nextBillingAt } : {}),
     };
@@ -116,7 +116,7 @@ export async function POST(
     }
     await clientSnap.ref.update(updatePayload);
 
-    return NextResponse.json({ ok: true, paymentStatus });
+    return NextResponse.json({ ok: true, paymentStatus, stripeSubscriptionStatus });
   } catch (err) {
     console.error("[billing/sync]", err);
     return NextResponse.json(

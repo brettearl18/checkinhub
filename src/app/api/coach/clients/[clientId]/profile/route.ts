@@ -76,6 +76,7 @@ export async function GET(
     coachNotes?: string;
     stripeCustomerId?: string | null;
     paymentStatus?: string | null;
+    stripeSubscriptionStatus?: string | null;
     lastPaymentAt?: unknown;
     nextBillingAt?: unknown;
     firstPaymentAt?: unknown;
@@ -143,6 +144,7 @@ export async function GET(
     coachNotes: data.coachNotes ?? "",
     stripeCustomerId: data.stripeCustomerId ?? null,
     paymentStatus: data.paymentStatus ?? null,
+    stripeSubscriptionStatus: data.stripeSubscriptionStatus ?? null,
     lastPaymentAt: toIso(data.lastPaymentAt) ?? null,
     nextBillingAt: toIso(data.nextBillingAt) ?? null,
     firstPaymentAt,

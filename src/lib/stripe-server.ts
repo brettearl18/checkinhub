@@ -1,4 +1,9 @@
 import Stripe from "stripe";
+import {
+  deriveStripeSubscriptionAccountStatus,
+  type StripeSubscriptionAccountStatus,
+} from "@/lib/stripe-subscription-status";
+import { getAdminDb } from "@/lib/firebase-admin";
 
 let stripeInstance: Stripe | null = null;
 
@@ -13,4 +18,22 @@ export function getStripe(): Stripe | null {
     stripeInstance = new Stripe(key);
   }
   return stripeInstance;
+}
+
+/** Persist subscription account status on the client doc after Stripe changes. */
+export async function syncClientStripeSubscriptionFields(
+  clientId: string,
+  subscriptionId: string
+): Promise<StripeSubscriptionAccountStatus | null> {
+  const stripe = getStripe();
+  if (!stripe) return null;
+  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  const accountStatus = deriveStripeSubscriptionAccountStatus(sub);
+  const db = getAdminDb();
+  await db.collection("clients").doc(clientId).update({
+    stripeSubscriptionId: sub.id,
+    stripeSubscriptionStatus: accountStatus,
+    updatedAt: new Date(),
+  });
+  return accountStatus;
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { getStripe } from "@/lib/stripe-server";
+import { getStripe, syncClientStripeSubscriptionFields } from "@/lib/stripe-server";
 
 async function getSubscriptionId(
   clientId: string,
@@ -31,7 +31,11 @@ async function getSubscriptionId(
       status: "all",
       limit: 5,
     });
-    const sub = list.data?.find((s) => s.status === "paused" || s.status === "active");
+    const sub = list.data?.find(
+      (s) =>
+        s.status === "paused" ||
+        (s.status === "active" && Boolean(s.pause_collection))
+    );
     subscriptionId = sub?.id ?? undefined;
   }
   if (!subscriptionId) {
@@ -63,7 +67,8 @@ export async function POST(
     await stripe.subscriptions.update(result.subscriptionId, {
       pause_collection: "",
     });
-    return NextResponse.json({ ok: true });
+    const accountStatus = await syncClientStripeSubscriptionFields(clientId, result.subscriptionId);
+    return NextResponse.json({ ok: true, stripeSubscriptionStatus: accountStatus });
   } catch (err) {
     console.error("[billing/resume-subscription]", err);
     return NextResponse.json(

@@ -12,7 +12,8 @@ This lets you show whether a client is **paid up** or **payment has failed** (or
 
 3. **Webhook updates the client**  
    The app’s webhook handler verifies the request, finds the client by `stripeCustomerId`, and updates:
-   - `paymentStatus`: `'paid' | 'past_due' | 'failed' | 'canceled' | null`
+   - `paymentStatus`: `'paid' | 'past_due' | 'failed' | 'canceled' | null` (invoice / collection health)
+   - `stripeSubscriptionStatus`: `'active' | 'paused' | 'cancelled' | null` (subscription account state; **Paused** = `pause_collection` on Stripe)
    - `lastPaymentAt`, `nextBillingAt`, `stripeSubscriptionId` when relevant.
 
    **Portal, Dashboard, or app:** Stripe sends the same events whether the change is made in the **Stripe Customer Billing Portal** (client self-serve), the **Stripe Dashboard**, or from our app (e.g. coach pause/cancel). So pausing, canceling, or updating a subscription in the portal is reflected in the app as soon as the webhook runs.
@@ -43,8 +44,9 @@ The webhook handler is implemented at `POST /api/webhooks/stripe`. When you laun
 4. **Events to send:**  
    - `invoice.paid`  
    - `invoice.payment_failed`  
-   - `customer.subscription.updated`  
-   - `customer.subscription.deleted`  
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
 5. Save and copy the **Signing secret** into `STRIPE_WEBHOOK_SECRET`.
 
 ### 3. Link clients to Stripe

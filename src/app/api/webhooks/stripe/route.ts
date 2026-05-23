@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe-server";
+import { deriveStripeSubscriptionAccountStatus } from "@/lib/stripe-subscription-status";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 
@@ -110,14 +111,18 @@ export async function POST(request: Request) {
         }
         break;
       }
-      case "customer.subscription.updated": {
+      case "customer.subscription.updated":
+      case "customer.subscription.created": {
         const subscription = event.data.object as Stripe.Subscription & { current_period_end?: number };
         const customerId = getCustomerId(subscription);
         if (customerId) {
+          const accountStatus = deriveStripeSubscriptionAccountStatus(subscription);
           const status = subscription.status;
           let paymentStatus: string =
-            status === "active"
-              ? "paid"
+            accountStatus === "paused" || status === "active" || status === "trialing"
+              ? status === "past_due"
+                ? "past_due"
+                : "paid"
               : status === "past_due"
                 ? "past_due"
                 : status === "canceled" || status === "unpaid"
@@ -129,6 +134,7 @@ export async function POST(request: Request) {
           await updateClientByCustomerId(customerId, {
             paymentStatus,
             stripeSubscriptionId: subscription.id ?? null,
+            stripeSubscriptionStatus: accountStatus,
             ...(nextBilling != null ? { nextBillingAt: nextBilling } : {}),
           });
         }
@@ -141,6 +147,7 @@ export async function POST(request: Request) {
           await updateClientByCustomerId(customerId, {
             paymentStatus: "canceled",
             stripeSubscriptionId: subscription.id ?? null,
+            stripeSubscriptionStatus: "cancelled",
           });
         }
         break;

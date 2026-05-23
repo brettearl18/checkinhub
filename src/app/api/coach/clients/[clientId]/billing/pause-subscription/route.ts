@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { getStripe } from "@/lib/stripe-server";
+import { getStripe, syncClientStripeSubscriptionFields } from "@/lib/stripe-server";
 
 async function getSubscriptionId(
   clientId: string,
@@ -82,7 +82,8 @@ export async function POST(
         ...(typeof resumesAt === "number" && resumesAt > 0 && { resumes_at: resumesAt }),
       },
     });
-    return NextResponse.json({ ok: true });
+    const accountStatus = await syncClientStripeSubscriptionFields(clientId, result.subscriptionId);
+    return NextResponse.json({ ok: true, stripeSubscriptionStatus: accountStatus });
   } catch (err) {
     console.error("[billing/pause-subscription]", err);
     return NextResponse.json(
