@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { BodyWeightBeforeCheckInModal } from "@/components/client/BodyWeightBeforeCheckInModal";
 import {
   buildResponses,
   checkInInputClass as inputClass,
@@ -39,6 +40,10 @@ export default function CheckInFormPage() {
   } | null>(null);
   const [markingMissed, setMarkingMissed] = useState(false);
   const [markedMissed, setMarkedMissed] = useState(false);
+  const [weightGateReady, setWeightGateReady] = useState(false);
+  const [weightGatePrefill, setWeightGatePrefill] = useState<number | null>(null);
+  const [weightGateSaving, setWeightGateSaving] = useState(false);
+  const [weightGateError, setWeightGateError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +70,62 @@ export default function CheckInFormPage() {
     })();
     return () => { cancelled = true; };
   }, [assignmentId, fetchWithAuth]);
+
+  // Body weight gate before check-in questions (saves to client_measurements).
+  useEffect(() => {
+    if (!data) return;
+    const status = data.assignment.status;
+    if (status === "completed" || status === "skipped") {
+      setWeightGateReady(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setWeightGateReady(false);
+      setWeightGateError(null);
+      try {
+        const res = await fetchWithAuth("/api/client/measurements");
+        if (!res.ok) return;
+        const list = (await res.json()) as Array<{ date?: string | null; bodyWeight?: number | null }>;
+        if (cancelled) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const todayRow = list.find((m) => m.date === today && m.bodyWeight != null);
+        const latestRow = list.find((m) => m.bodyWeight != null);
+        const prefill = todayRow?.bodyWeight ?? latestRow?.bodyWeight ?? null;
+        setWeightGatePrefill(typeof prefill === "number" ? prefill : null);
+      } catch {
+        if (!cancelled) setWeightGatePrefill(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data, fetchWithAuth]);
+
+  const handleWeightGateContinue = async (bodyWeightKg: number) => {
+    setWeightGateSaving(true);
+    setWeightGateError(null);
+    try {
+      const res = await fetchWithAuth("/api/client/measurements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: new Date().toISOString().slice(0, 10),
+          bodyWeight: bodyWeightKg,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setWeightGateError(typeof body?.error === "string" ? body.error : "Could not save weight.");
+        return;
+      }
+      setWeightGateReady(true);
+    } catch {
+      setWeightGateError("Could not save weight.");
+    } finally {
+      setWeightGateSaving(false);
+    }
+  };
 
   const hasHydrated = useRef(false);
   const lastAssignmentId = useRef<string | null>(null);
@@ -296,6 +357,15 @@ export default function CheckInFormPage() {
     );
   }
 
+  const weightGateOpen =
+    !weightGateReady &&
+    assignment.status !== "completed" &&
+    assignment.status !== "skipped";
+
+  const weekLabel = assignment.reflectionWeekStart
+    ? `week of ${formatDateDdMmYyyy(assignment.reflectionWeekStart)}`
+    : null;
+
   const totalSteps = questions.length + 1;
   const isSubmitStep = currentStep >= questions.length;
   const currentQuestion = !isSubmitStep ? questions[currentStep] : null;
@@ -392,6 +462,16 @@ export default function CheckInFormPage() {
           )}
         </Card>
       </form>
+
+      <BodyWeightBeforeCheckInModal
+        open={weightGateOpen}
+        formTitle={assignment.formTitle}
+        weekLabel={weekLabel}
+        initialWeightKg={weightGatePrefill}
+        saving={weightGateSaving}
+        error={weightGateError}
+        onContinue={handleWeightGateContinue}
+      />
     </div>
   );
 }
