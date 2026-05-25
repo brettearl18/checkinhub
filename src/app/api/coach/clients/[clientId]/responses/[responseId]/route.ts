@@ -112,5 +112,9 @@ export async function GET(
     readByClientAt: toDate((responseData as { readByClientAt?: unknown }).readByClientAt),
   };
 
-  return NextResponse.json({ response, form, questions });
+  const clientData = clientSnap.data() as { firstName?: string; lastName?: string };
+  const clientName =
+    [clientData.firstName, clientData.lastName].filter(Boolean).join(" ").trim() || null;
+
+  return NextResponse.json({ response, form, questions, clientName });
 }

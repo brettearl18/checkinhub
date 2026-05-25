@@ -51,6 +51,7 @@ export default function CoachViewResponsePage() {
   const responseId = params.responseId as string;
   const { fetchWithAuth } = useApiClient();
   const { getToken } = useAuth();
+  const [clientName, setClientName] = useState<string | null>(null);
   const [response, setResponse] = useState<ResponseData | null>(null);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -80,6 +81,8 @@ export default function CoachViewResponsePage() {
     if (res.ok) {
       const data = await res.json();
       setResponse(data.response ?? null);
+      const name = typeof data.clientName === "string" ? data.clientName.trim() : "";
+      setClientName(name || null);
     }
   }, [fetchWithAuth, clientId, responseId]);
 
@@ -113,6 +116,8 @@ export default function CoachViewResponsePage() {
         if (!cancelled) {
           setResponse(data.response ?? null);
           setQuestions(Array.isArray(data.questions) ? data.questions : []);
+          const name = typeof data.clientName === "string" ? data.clientName.trim() : "";
+          setClientName(name || null);
         }
         if (feedbackRes.ok) {
           const list = await feedbackRes.json();
@@ -317,6 +322,9 @@ export default function CoachViewResponsePage() {
           <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
             Past check-in response
           </h1>
+          {clientName && (
+            <p className="mt-1 text-lg font-medium text-[var(--color-text)]">{clientName}</p>
+          )}
         </div>
         <Link
           href={`/coach/clients/${clientId}/progress`}
