@@ -72,18 +72,45 @@ The project’s `vercel.json` defines two crons: **Friday 02:00 UTC** (10am Pert
 
 ---
 
-## 3. Firebase: allow your Vercel domain
+## 3. Firebase: allow your production domain (two places)
 
-Firebase Auth only allows requests from domains you list. If you skip this step, you’ll see:  
-`auth/requests-from-referer-https://your-domain-are-blocked`.
+If sign-in shows  
+`auth/requests-from-referer-https://your-domain-are-blocked`,  
+you must fix **both** steps below. Adding the domain under Authentication alone is not enough.
 
-1. Open [Firebase Console](https://console.firebase.google.com) → your project → **Authentication** → **Settings** (tab) → **Authorized domains**.
-2. Click **Add domain** and add **each** domain your app uses (Firebase does not support wildcards like `*.vercel.app`):
-   - Your app URL, e.g. `checkinhub-alpha.vercel.app`
-   - Any other Vercel deployment URLs you use (e.g. preview branches)
-   - Your custom domain if you add one later (e.g. `app.checkinhub.com`)
+### 3a. Authorized domains (Firebase Console)
 
-Without this, sign-in and redirects will be blocked.
+1. [Firebase Console](https://console.firebase.google.com) → your project → **Authentication** → **Settings** → **Authorized domains**.
+2. **Add domain** for each host clients use (no `https://`, no path):
+   - `checkinhub-alpha.vercel.app`
+   - `checkin.vanahealth.com.au`
+   - Any other Vercel preview hosts you use
+
+### 3b. API key HTTP referrers (Google Cloud — usually the actual fix)
+
+The referer error comes from the **Browser API key** restriction, not the authorized-domains list.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com) → select project **CheckinV5** (same as Firebase).
+2. **APIs & Services** → **Credentials**.
+3. Open the key used by the web app (often **Browser key (auto created by Firebase)** — match `NEXT_PUBLIC_FIREBASE_API_KEY` in Vercel).
+4. Under **Application restrictions**, choose **HTTP referrers (web sites)**.
+5. Add these referrers (keep existing ones such as `localhost` and `checkinhub-alpha.vercel.app`):
+
+   ```
+   https://checkin.vanahealth.com.au/*
+   https://checkin.vanahealth.com.au
+   https://checkinhub-alpha.vercel.app/*
+   https://checkinhub-alpha.vercel.app
+   http://localhost:3000/*
+   http://localhost:3000
+   ```
+
+6. **Save**. Changes can take a few minutes to apply; hard-refresh or try incognito.
+
+Also confirm in Vercel → **Environment Variables** (Production):
+
+- `NEXT_PUBLIC_APP_URL` = `https://checkin.vanahealth.com.au`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` = `checkinv5.firebaseapp.com` (or your Firebase auth domain)
 
 ---
 
