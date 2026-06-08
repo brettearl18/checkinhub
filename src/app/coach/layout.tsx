@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: "/coach/payments", label: "Payment" },
   { href: "/coach/important-links", label: "Important Links" },
   { href: "/coach/gallery", label: "Gallery" },
+  { href: "/coach/hall-of-fame", label: "Hall of Fame" },
   { href: "/coach/forms", label: "Forms" },
   { href: "/coach/exercises", label: "Exercise library" },
   { href: "/coach/programs", label: "Programs" },

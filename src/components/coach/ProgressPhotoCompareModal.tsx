@@ -13,8 +13,10 @@ import {
   type ProgressPhotoPose,
 } from "@/lib/progress-comparison-photos";
 import type { ProgressPhotoCompareItem } from "@/components/coach/ProgressPhotoComparePanel";
-import { useApiClient } from "@/lib/api-client";
-import { downloadProgressSocialPost } from "@/lib/progress-photo-social-export";
+import {
+  layerAlignToExportSlot,
+  type PhotoSlotAlignment,
+} from "@/lib/progress-photo-social-export";
 
 type Phase = "align" | "compare";
 type Layer = "a" | "b";
@@ -31,6 +33,13 @@ function layerTransform(zoom: number, pan: { x: number; y: number }) {
   return `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
 }
 
+export interface ShareExportRequest {
+  before: ProgressPhotoCompareItem;
+  after: ProgressPhotoCompareItem;
+  beforeAlign?: PhotoSlotAlignment;
+  afterAlign?: PhotoSlotAlignment;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -40,6 +49,7 @@ interface Props {
   initialMilestoneA: ProgressPhotoMilestone;
   initialMilestoneB: ProgressPhotoMilestone;
   clientName?: string;
+  onCreateShare?: (request: ShareExportRequest) => void;
 }
 
 function defaultComparePair(clicked: ProgressPhotoMilestone): {
@@ -137,10 +147,9 @@ export function ProgressPhotoCompareModal({
   initialMilestoneA,
   initialMilestoneB,
   clientName = "Client",
+  onCreateShare,
 }: Props) {
-  const { fetchWithAuth } = useApiClient();
   const [phase, setPhase] = useState<Phase>("align");
-  const [downloadingSocial, setDownloadingSocial] = useState(false);
   const [milestoneA, setMilestoneA] = useState<ProgressPhotoMilestone>(initialMilestoneA);
   const [milestoneB, setMilestoneB] = useState<ProgressPhotoMilestone>(initialMilestoneB);
   const [overlayOpacity, setOverlayOpacity] = useState(0.45);
@@ -304,28 +313,21 @@ export function ProgressPhotoCompareModal({
 
   const setActiveZoom = (layer: Layer, zoom: number) => setLayerZoom(layer, zoom);
 
-  const handleSocialDownload = async () => {
-    if (!photoA || !photoB) return;
+  const handleCreateShare = () => {
+    if (!photoA || !photoB || !onCreateShare) return;
     const aTime = photoA.uploadedAt ?? "";
     const bTime = photoB.uploadedAt ?? "";
-    const before = aTime <= bTime ? photoA : photoB;
-    const after = aTime <= bTime ? photoB : photoA;
-    setDownloadingSocial(true);
-    try {
-      await downloadProgressSocialPost(
-        {
-          clientName,
-          poseLabel: progressPhotoPoseTabLabel(pose),
-          beforeImageUrl: before.imageUrl,
-          afterImageUrl: after.imageUrl,
-          beforeDate: before.uploadedAt,
-          afterDate: after.uploadedAt,
-        },
-        { fetchAuthenticated: fetchWithAuth }
-      );
-    } finally {
-      setDownloadingSocial(false);
-    }
+    const aIsBefore = aTime <= bTime;
+    const beforePhoto = aIsBefore ? photoA : photoB;
+    const afterPhoto = aIsBefore ? photoB : photoA;
+    const beforeLayer = aIsBefore ? activeA : activeB;
+    const afterLayer = aIsBefore ? activeB : activeA;
+    onCreateShare({
+      before: beforePhoto,
+      after: afterPhoto,
+      beforeAlign: layerAlignToExportSlot(beforeLayer),
+      afterAlign: layerAlignToExportSlot(afterLayer),
+    });
   };
 
   return (
@@ -500,13 +502,9 @@ export function ProgressPhotoCompareModal({
           )}
 
           <div className="flex flex-wrap justify-end gap-2">
-            {canCompare && (
-              <Button
-                variant="secondary"
-                disabled={downloadingSocial}
-                onClick={handleSocialDownload}
-              >
-                {downloadingSocial ? "Creating post…" : "Download 4:5 post"}
+            {canCompare && onCreateShare && (
+              <Button variant="secondary" onClick={handleCreateShare}>
+                Create 4:5 share
               </Button>
             )}
             {phase === "compare" && (

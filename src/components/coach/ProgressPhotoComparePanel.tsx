@@ -6,12 +6,14 @@ import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { formatDateDisplay } from "@/lib/format-date";
 import { useApiClient } from "@/lib/api-client";
+import { downloadProgressPhotoFile } from "@/lib/progress-photo-social-export";
 import {
-  downloadProgressPhotoFile,
-  downloadProgressSocialPost,
-} from "@/lib/progress-photo-social-export";
+  ProgressPhotoShareExportModal,
+  type ShareExportPhoto,
+} from "@/components/coach/ProgressPhotoShareExportModal";
 import {
   buildLegacyPoseAssignment,
+  formatProgressImageTypeLabel,
   getProgressPhotoForMilestone,
   progressPhotoMilestoneLabel,
   progressPhotoPoseTabLabel,
@@ -21,9 +23,15 @@ import {
   type ProgressPhotoPose,
 } from "@/lib/progress-comparison-photos";
 import {
+  deriveSharePoseLabel,
+  ProgressPhotoGalleryPickerModal,
+} from "@/components/coach/ProgressPhotoGalleryPickerModal";
+import {
   defaultComparePair,
   ProgressPhotoCompareModal,
+  type ShareExportRequest,
 } from "@/components/coach/ProgressPhotoCompareModal";
+import type { PhotoSlotAlignment } from "@/lib/progress-photo-social-export";
 
 export interface ProgressPhotoCompareItem {
   id: string;
@@ -76,28 +84,6 @@ function canDownloadSocialPost(
   const before = getProgressPhotoForMilestone(images, pose, "first_baseline", legacyAssignment);
   const after = getProgressPhotoForMilestone(images, pose, "latest", legacyAssignment);
   return Boolean(before && after && before.id !== after.id);
-}
-
-async function downloadSocialPostForPose(
-  images: ProgressPhotoCompareItem[],
-  pose: ProgressPhotoPose,
-  legacyAssignment: Map<string, ProgressPhotoPose>,
-  clientName: string,
-  fetchAuthenticated: (url: string) => Promise<Response>
-) {
-  const before = getProgressPhotoForMilestone(images, pose, "first_baseline", legacyAssignment)!;
-  const after = getProgressPhotoForMilestone(images, pose, "latest", legacyAssignment)!;
-  await downloadProgressSocialPost(
-    {
-      clientName,
-      poseLabel: progressPhotoPoseTabLabel(pose),
-      beforeImageUrl: before.imageUrl,
-      afterImageUrl: after.imageUrl,
-      beforeDate: before.uploadedAt,
-      afterDate: after.uploadedAt,
-    },
-    { fetchAuthenticated }
-  );
 }
 
 function PhotoThumb({
@@ -237,12 +223,18 @@ export function ProgressPhotoComparePanel({
   const { fetchWithAuth } = useApiClient();
   const legacyAssignment = useMemo(() => buildLegacyPoseAssignment(images), [images]);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [downloadingPose, setDownloadingPose] = useState<ProgressPhotoPose | null>(null);
   const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [comparePose, setComparePose] = useState<ProgressPhotoPose>("front");
   const [compareMilestoneA, setCompareMilestoneA] = useState<ProgressPhotoMilestone>("first_baseline");
   const [compareMilestoneB, setCompareMilestoneB] = useState<ProgressPhotoMilestone>("latest");
+  const [galleryPickerOpen, setGalleryPickerOpen] = useState(false);
+  const [shareExportOpen, setShareExportOpen] = useState(false);
+  const [shareExportPoseLabel, setShareExportPoseLabel] = useState("Front");
+  const [shareBefore, setShareBefore] = useState<ShareExportPhoto | null>(null);
+  const [shareAfter, setShareAfter] = useState<ShareExportPhoto | null>(null);
+  const [shareBeforeAlign, setShareBeforeAlign] = useState<PhotoSlotAlignment | undefined>();
+  const [shareAfterAlign, setShareAfterAlign] = useState<PhotoSlotAlignment | undefined>();
 
   const openCompare = (pose: ProgressPhotoPose, clicked: ProgressPhotoMilestone) => {
     const pair = defaultComparePair(clicked);
@@ -275,16 +267,77 @@ export function ProgressPhotoComparePanel({
     }
   };
 
-  const handleSocialDownload = async (pose: ProgressPhotoPose) => {
-    setDownloadError(null);
-    setDownloadingPose(pose);
-    try {
-      await downloadSocialPostForPose(images, pose, legacyAssignment, clientName, fetchWithAuth);
-    } catch (err) {
-      setDownloadError(err instanceof Error ? err.message : "Download failed");
-    } finally {
-      setDownloadingPose(null);
+  const openShareExport = (
+    poseLabel: string,
+    before: ProgressPhotoCompareItem,
+    after: ProgressPhotoCompareItem,
+    beforeLabel: string,
+    afterLabel: string,
+    beforeAlign?: PhotoSlotAlignment,
+    afterAlign?: PhotoSlotAlignment
+  ) => {
+    if (!clientId) {
+      setDownloadError("Client ID required to save highlights.");
+      return;
     }
+    setDownloadError(null);
+    setShareExportPoseLabel(poseLabel);
+    setShareBefore({
+      imageUrl: before.imageUrl,
+      uploadedAt: before.uploadedAt,
+      label: beforeLabel,
+    });
+    setShareAfter({
+      imageUrl: after.imageUrl,
+      uploadedAt: after.uploadedAt,
+      label: afterLabel,
+    });
+    setShareBeforeAlign(beforeAlign);
+    setShareAfterAlign(afterAlign);
+    setShareExportOpen(true);
+  };
+
+  const openShareFromCompare = (request: ShareExportRequest) => {
+    const milestoneFor = (photo: ProgressPhotoCompareItem): ProgressPhotoMilestone => {
+      const a = getProgressPhotoForMilestone(images, comparePose, compareMilestoneA, legacyAssignment);
+      const b = getProgressPhotoForMilestone(images, comparePose, compareMilestoneB, legacyAssignment);
+      if (a?.id === photo.id) return compareMilestoneA;
+      if (b?.id === photo.id) return compareMilestoneB;
+      return "latest";
+    };
+    openShareExport(
+      progressPhotoPoseTabLabel(comparePose),
+      request.before,
+      request.after,
+      progressPhotoMilestoneLabel(milestoneFor(request.before)),
+      progressPhotoMilestoneLabel(milestoneFor(request.after)),
+      request.beforeAlign,
+      request.afterAlign
+    );
+  };
+
+  const openShareForPose = (pose: ProgressPhotoPose) => {
+    const before = getProgressPhotoForMilestone(images, pose, "first_baseline", legacyAssignment);
+    const after = getProgressPhotoForMilestone(images, pose, "latest", legacyAssignment);
+    if (!before || !after || before.id === after.id) return;
+    openShareExport(
+      progressPhotoPoseTabLabel(pose),
+      before,
+      after,
+      "Baseline",
+      "Latest"
+    );
+  };
+
+  const openShareFromGallery = (before: ProgressPhotoCompareItem, after: ProgressPhotoCompareItem) => {
+    setGalleryPickerOpen(false);
+    openShareExport(
+      deriveSharePoseLabel(before, after, legacyAssignment),
+      before,
+      after,
+      formatProgressImageTypeLabel(before.imageType),
+      formatProgressImageTypeLabel(after.imageType)
+    );
   };
 
   if (images.length === 0) {
@@ -328,28 +381,42 @@ export function ProgressPhotoComparePanel({
         ))}
 
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-          <p className="text-sm font-medium text-[var(--color-text)]">Social post download (4:5)</p>
+          <p className="text-sm font-medium text-[var(--color-text)]">Create 4:5 share</p>
           <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-            Before & after with client name, dates, and Vana branding — ready for Instagram.
+            Quick baseline vs latest per pose, or pick any two photos from the full gallery.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={images.length < 2 || !clientId}
+              onClick={() => setGalleryPickerOpen(true)}
+              className="min-h-9 py-1.5 text-xs"
+            >
+              Choose from gallery
+            </Button>
             {PROGRESS_PHOTO_POSES.map((pose) => {
               const ready = canDownloadSocialPost(images, pose, legacyAssignment);
               return (
                 <Button
                   key={pose}
                   variant="secondary"
-                  disabled={!ready || downloadingPose !== null}
-                  onClick={() => handleSocialDownload(pose)}
+                  disabled={!ready || !clientId}
+                  onClick={() => openShareForPose(pose)}
                   className="min-h-9 py-1.5 text-xs"
                 >
-                  {downloadingPose === pose
-                    ? "Creating…"
-                    : `Download ${progressPhotoPoseTabLabel(pose)}`}
+                  {progressPhotoPoseTabLabel(pose)}
                 </Button>
               );
             })}
           </div>
+          {clientId && (
+            <Link
+              href="/coach/hall-of-fame"
+              className="mt-2 inline-block text-xs font-medium text-[var(--color-primary)] hover:underline"
+            >
+              View Hall of Fame →
+            </Link>
+          )}
           {downloadError && (
             <p className="mt-2 text-xs text-rose-600">{downloadError}</p>
           )}
@@ -361,6 +428,13 @@ export function ProgressPhotoComparePanel({
         </p>
       </div>
 
+      <ProgressPhotoGalleryPickerModal
+        open={galleryPickerOpen}
+        onClose={() => setGalleryPickerOpen(false)}
+        images={images}
+        onConfirm={openShareFromGallery}
+      />
+
       <ProgressPhotoCompareModal
         open={compareOpen}
         onClose={() => setCompareOpen(false)}
@@ -370,7 +444,23 @@ export function ProgressPhotoComparePanel({
         initialMilestoneA={compareMilestoneA}
         initialMilestoneB={compareMilestoneB}
         clientName={clientName}
+        onCreateShare={clientId ? openShareFromCompare : undefined}
       />
+
+      {clientId && shareBefore && shareAfter && (
+        <ProgressPhotoShareExportModal
+          open={shareExportOpen}
+          onClose={() => setShareExportOpen(false)}
+          clientId={clientId}
+          clientName={clientName}
+          poseLabel={shareExportPoseLabel}
+          before={shareBefore}
+          after={shareAfter}
+          fetchAuthenticated={fetchWithAuth}
+          initialBeforeAlign={shareBeforeAlign}
+          initialAfterAlign={shareAfterAlign}
+        />
+      )}
     </>
   );
 }

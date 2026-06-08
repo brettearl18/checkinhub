@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { CoachLegacyProgressPhotoUpload } from "@/components/coach/CoachLegacyProgressPhotoUpload";
 import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
@@ -320,6 +321,33 @@ export default function CoachClientProgress2Page() {
   const [habitRange, setHabitRange] = useState<HabitStripRange>("30d");
   const [measurementRange, setMeasurementRange] = useState<MeasurementRangeKey>("180d");
 
+  const applyProgressPayload = useCallback((data: Record<string, unknown>) => {
+    const c = (data.client ?? {}) as { firstName?: string; lastName?: string };
+    setClientName([c.firstName, c.lastName].filter(Boolean).join(" ") || "Client");
+    setMeasurements(Array.isArray(data.measurements) ? data.measurements : []);
+    setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
+    setCheckInScores(Array.isArray(data.checkInScores) ? data.checkInScores : []);
+    const qp = data.questionProgress as QuestionProgress | null | undefined;
+    setQuestionProgress(
+      qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
+        ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
+        : null
+    );
+    setTrafficLightRedMax(typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 40);
+    setTrafficLightOrangeMax(
+      typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 70
+    );
+  }, []);
+
+  const reloadProgressImages = useCallback(async () => {
+    if (!clientId) return;
+    const progressRes = await fetchWithAuth(`/api/coach/clients/${clientId}/progress`);
+    if (progressRes.ok) {
+      const data = await progressRes.json();
+      setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
+    }
+  }, [clientId, fetchWithAuth]);
+
   useEffect(() => {
     if (!clientId) return;
     (async () => {
@@ -335,22 +363,7 @@ export default function CoachClientProgress2Page() {
           return;
         }
         if (progressRes.ok) {
-          const data = await progressRes.json();
-          const c = data.client ?? {};
-          setClientName([c.firstName, c.lastName].filter(Boolean).join(" ") || "Client");
-          setMeasurements(Array.isArray(data.measurements) ? data.measurements : []);
-          setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
-          setCheckInScores(Array.isArray(data.checkInScores) ? data.checkInScores : []);
-          const qp = data.questionProgress;
-          setQuestionProgress(
-            qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
-              ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
-              : null
-          );
-          setTrafficLightRedMax(typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 40);
-          setTrafficLightOrangeMax(
-            typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 70
-          );
+          applyProgressPayload(await progressRes.json());
         }
         if (habitsRes.ok) {
           const h = await habitsRes.json();
@@ -364,7 +377,7 @@ export default function CoachClientProgress2Page() {
         setLoading(false);
       }
     })();
-  }, [clientId, fetchWithAuth]);
+  }, [clientId, fetchWithAuth, applyProgressPayload]);
 
   const latest = measurements[0];
   const baseline = measurements.find((m) => m.isBaseline) ?? measurements[measurements.length - 1];
@@ -673,7 +686,13 @@ export default function CoachClientProgress2Page() {
                 </Link>
               )}
             </div>
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
+              {clientId && (
+                <CoachLegacyProgressPhotoUpload
+                  clientId={clientId}
+                  onUploaded={reloadProgressImages}
+                />
+              )}
               <ProgressPhotoComparePanel
                 images={progressImages}
                 clientName={clientName}

@@ -9,7 +9,22 @@ const VANA_CREAM = "#faf7f2";
 const VANA_SURFACE = "#fffdf9";
 const VANA_TEXT = "#2c2825";
 const VANA_MUTED = "#78716c";
-const LOGO_PATH = "/Vana%20Logo-1-Black-RGB.png";
+
+export const SOCIAL_EXPORT_PAD = 48;
+export const SOCIAL_EXPORT_PHOTO_GAP = 20;
+export const SOCIAL_EXPORT_CORNER_RADIUS = 20;
+export const SOCIAL_EXPORT_FOOTER_HEIGHT = 148;
+
+export const SOCIAL_POST_PHOTO_WIDTH =
+  (SOCIAL_POST_WIDTH - SOCIAL_EXPORT_PAD * 2 - SOCIAL_EXPORT_PHOTO_GAP) / 2;
+
+export interface PhotoSlotAlignment {
+  /** Vertical shift in export canvas pixels (positive = down). */
+  offsetY?: number;
+  zoom?: number;
+  panX?: number;
+  panY?: number;
+}
 
 export interface ProgressSocialPostInput {
   clientName: string;
@@ -18,11 +33,68 @@ export interface ProgressSocialPostInput {
   afterImageUrl: string;
   beforeDate: string | null;
   afterDate: string | null;
+  beforeAlign?: PhotoSlotAlignment;
+  afterAlign?: PhotoSlotAlignment;
+  /** Show "N weeks between" centred below the photos. */
+  showWeeksBetween?: boolean;
 }
+
+/** Photo area height — leaves room for labels, dates, and weeks line. */
+export const SOCIAL_POST_PHOTO_SLOT_HEIGHT =
+  SOCIAL_POST_HEIGHT - SOCIAL_EXPORT_PAD * 2 - SOCIAL_EXPORT_FOOTER_HEIGHT;
+
+/** Compare modal viewport height (max-w-md × 3:4). */
+export const COMPARE_VIEWPORT_HEIGHT = 597;
 
 export interface ProgressSocialPostOptions {
   /** Authenticated fetch (e.g. useApiClient) — required for Firebase progress photos. */
-  fetchAuthenticated?: (url: string) => Promise<Response>;
+  fetchAuthenticated?: (url: string, options?: RequestInit) => Promise<Response>;
+}
+
+/** Map compare-modal layer pan/zoom to export canvas slot alignment. */
+export function layerAlignToExportSlot(layer: {
+  zoom: number;
+  pan: { x: number; y: number };
+}): PhotoSlotAlignment {
+  const viewportW = 448;
+  const scaleX = SOCIAL_POST_PHOTO_WIDTH / viewportW;
+  const scaleY = SOCIAL_POST_PHOTO_SLOT_HEIGHT / COMPARE_VIEWPORT_HEIGHT;
+  return {
+    zoom: layer.zoom,
+    panX: layer.pan.x * scaleX,
+    panY: layer.pan.y * scaleY,
+  };
+}
+
+export function previewLayerToExportSlot(
+  layer: { zoom: number; pan: { x: number; y: number } },
+  previewW: number,
+  previewH: number
+): PhotoSlotAlignment {
+  const scaleX = SOCIAL_POST_PHOTO_WIDTH / previewW;
+  const scaleY = SOCIAL_POST_PHOTO_SLOT_HEIGHT / previewH;
+  return {
+    zoom: layer.zoom,
+    panX: layer.pan.x * scaleX,
+    panY: layer.pan.y * scaleY,
+  };
+}
+
+export function exportSlotToPreviewLayer(
+  align: PhotoSlotAlignment | undefined,
+  previewW: number,
+  previewH: number
+): { zoom: number; pan: { x: number; y: number } } {
+  if (!align) return { zoom: 1, pan: { x: 0, y: 0 } };
+  const scaleX = previewW / SOCIAL_POST_PHOTO_WIDTH;
+  const scaleY = previewH / SOCIAL_POST_PHOTO_SLOT_HEIGHT;
+  return {
+    zoom: align.zoom ?? 1,
+    pan: {
+      x: (align.panX ?? 0) * scaleX,
+      y: ((align.panY ?? 0) + (align.offsetY ?? 0)) * scaleY,
+    },
+  };
 }
 
 function normalizeImageUrl(url: string): string {
@@ -103,32 +175,35 @@ async function loadProgressImage(
   return loadImageFromBlob(await res.blob());
 }
 
-function drawImageCover(
+/** object-contain — matches the share modal preview so alignment carries to export. */
+function drawImageContain(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
   x: number,
   y: number,
   w: number,
-  h: number
+  h: number,
+  align?: PhotoSlotAlignment
 ) {
+  const zoom = align?.zoom ?? 1;
+  const panX = align?.panX ?? 0;
+  const panY = (align?.panY ?? 0) + (align?.offsetY ?? 0);
   const ir = img.naturalWidth / img.naturalHeight;
   const dr = w / h;
-  let sw: number;
-  let sh: number;
-  let sx: number;
-  let sy: number;
+  let dw: number;
+  let dh: number;
   if (ir > dr) {
-    sh = img.naturalHeight;
-    sw = sh * dr;
-    sx = (img.naturalWidth - sw) / 2;
-    sy = 0;
+    dw = w;
+    dh = w / ir;
   } else {
-    sw = img.naturalWidth;
-    sh = sw / dr;
-    sx = 0;
-    sy = (img.naturalHeight - sh) / 2;
+    dh = h;
+    dw = h * ir;
   }
-  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  ctx.save();
+  ctx.translate(x + w / 2 + panX, y + h / 2 + panY);
+  ctx.scale(zoom, zoom);
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  ctx.restore();
 }
 
 function roundRect(
@@ -149,36 +224,28 @@ function roundRect(
   ctx.closePath();
 }
 
-function drawLogoWhite(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-) {
-  const off = document.createElement("canvas");
-  off.width = img.naturalWidth;
-  off.height = img.naturalHeight;
-  const oc = off.getContext("2d");
-  if (!oc) {
-    ctx.drawImage(img, x, y, w, h);
-    return;
-  }
-  oc.drawImage(img, 0, 0);
-  oc.globalCompositeOperation = "source-in";
-  oc.fillStyle = "#ffffff";
-  oc.fillRect(0, 0, off.width, off.height);
-  ctx.drawImage(off, x, y, w, h);
+function weeksBetween(beforeDate: string | null, afterDate: string | null): number | null {
+  if (!beforeDate || !afterDate) return null;
+  const before = new Date(beforeDate.slice(0, 10));
+  const after = new Date(afterDate.slice(0, 10));
+  if (Number.isNaN(before.getTime()) || Number.isNaN(after.getTime())) return null;
+  const diffMs = after.getTime() - before.getTime();
+  if (diffMs < 0) return null;
+  return Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
 }
 
-function formatTimeSpan(beforeDate: string | null, afterDate: string | null): string {
-  const before = beforeDate ? formatDateDisplay(beforeDate.slice(0, 10)) : null;
-  const after = afterDate ? formatDateDisplay(afterDate.slice(0, 10)) : null;
-  if (before && after) return `${before} → ${after}`;
-  if (after) return after;
-  if (before) return before;
-  return "";
+function weeksBetweenLabel(weeks: number): string {
+  return weeks === 1 ? "1 week between" : `${weeks} weeks between`;
+}
+
+/** Label for export footer — null if dates missing or same-day. */
+export function getWeeksBetweenLabel(
+  beforeDate: string | null,
+  afterDate: string | null
+): string | null {
+  const weeks = weeksBetween(beforeDate, afterDate);
+  if (weeks == null || weeks <= 0) return null;
+  return weeksBetweenLabel(weeks);
 }
 
 function sanitizeFilename(name: string): string {
@@ -194,10 +261,9 @@ export async function generateProgressSocialPostCanvas(
   input: ProgressSocialPostInput,
   options?: ProgressSocialPostOptions
 ): Promise<HTMLCanvasElement> {
-  const [beforeImg, afterImg, logoImg] = await Promise.all([
+  const [beforeImg, afterImg] = await Promise.all([
     loadProgressImage(input.beforeImageUrl, options),
     loadProgressImage(input.afterImageUrl, options),
-    loadImageElement(LOGO_PATH, false),
   ]);
 
   const canvas = document.createElement("canvas");
@@ -209,75 +275,78 @@ export async function generateProgressSocialPostCanvas(
   ctx.fillStyle = VANA_CREAM;
   ctx.fillRect(0, 0, SOCIAL_POST_WIDTH, SOCIAL_POST_HEIGHT);
 
-  const logoBarH = 88;
-  ctx.fillStyle = VANA_GOLD;
-  ctx.fillRect(0, 0, SOCIAL_POST_WIDTH, logoBarH);
+  const photoW = SOCIAL_POST_PHOTO_WIDTH;
+  const photoH = SOCIAL_POST_PHOTO_SLOT_HEIGHT;
+  const photoY = SOCIAL_EXPORT_PAD;
+  const leftX = SOCIAL_EXPORT_PAD;
+  const rightX = leftX + photoW + SOCIAL_EXPORT_PHOTO_GAP;
+  const radius = SOCIAL_EXPORT_CORNER_RADIUS;
 
-  const logoW = 200;
-  const logoH = (logoImg.naturalHeight / logoImg.naturalWidth) * logoW;
-  drawLogoWhite(ctx, logoImg, (SOCIAL_POST_WIDTH - logoW) / 2, (logoBarH - logoH) / 2, logoW, logoH);
-
-  const padX = 56;
-  let y = logoBarH + 44;
-
-  ctx.fillStyle = VANA_TEXT;
-  ctx.font = "600 52px Georgia, 'Times New Roman', serif";
-  ctx.textAlign = "center";
-  ctx.fillText(input.clientName.trim() || "Client", SOCIAL_POST_WIDTH / 2, y);
-  y += 44;
-
-  const timeSpan = formatTimeSpan(input.beforeDate, input.afterDate);
-  if (timeSpan) {
-    ctx.fillStyle = VANA_MUTED;
-    ctx.font = "500 30px system-ui, -apple-system, sans-serif";
-    ctx.fillText(timeSpan, SOCIAL_POST_WIDTH / 2, y);
-    y += 36;
-  }
-
-  ctx.fillStyle = VANA_GOLD;
-  ctx.font = "600 22px system-ui, -apple-system, sans-serif";
-  ctx.letterSpacing = "0.12em";
-  ctx.fillText(input.poseLabel.toUpperCase(), SOCIAL_POST_WIDTH / 2, y);
-  ctx.letterSpacing = "0";
-  y += 40;
-
-  const photoGap = 32;
-  const photoW = (SOCIAL_POST_WIDTH - padX * 2 - photoGap) / 2;
-  const photoH = 920;
-  const leftX = padX;
-  const rightX = padX + photoW + photoGap;
-
-  const slots: Array<{ img: HTMLImageElement; label: string; x: number }> = [
-    { img: beforeImg, label: "Before", x: leftX },
-    { img: afterImg, label: "After", x: rightX },
+  const slots: Array<{
+    img: HTMLImageElement;
+    label: string;
+    date: string | null;
+    x: number;
+    align?: PhotoSlotAlignment;
+  }> = [
+    {
+      img: beforeImg,
+      label: "Before",
+      date: input.beforeDate,
+      x: leftX,
+      align: input.beforeAlign,
+    },
+    {
+      img: afterImg,
+      label: "After",
+      date: input.afterDate,
+      x: rightX,
+      align: input.afterAlign,
+    },
   ];
 
   for (const slot of slots) {
     ctx.fillStyle = VANA_SURFACE;
-    roundRect(ctx, slot.x - 4, y - 4, photoW + 8, photoH + 8, 20);
+    roundRect(ctx, slot.x, photoY, photoW, photoH, radius);
     ctx.fill();
+
     ctx.save();
-    roundRect(ctx, slot.x, y, photoW, photoH, 16);
+    roundRect(ctx, slot.x, photoY, photoW, photoH, radius);
     ctx.clip();
-    drawImageCover(ctx, slot.img, slot.x, y, photoW, photoH);
+    drawImageContain(ctx, slot.img, slot.x, photoY, photoW, photoH, slot.align);
     ctx.restore();
 
-    ctx.strokeStyle = "rgba(218, 164, 80, 0.35)";
-    ctx.lineWidth = 2;
-    roundRect(ctx, slot.x, y, photoW, photoH, 16);
+    ctx.strokeStyle = VANA_GOLD;
+    ctx.lineWidth = 3;
+    roundRect(ctx, slot.x, photoY, photoW, photoH, radius);
     ctx.stroke();
-
-    ctx.fillStyle = VANA_TEXT;
-    ctx.font = "600 26px system-ui, -apple-system, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(slot.label, slot.x + photoW / 2, y + photoH + 40);
   }
 
-  const footerY = SOCIAL_POST_HEIGHT - 48;
-  ctx.fillStyle = VANA_MUTED;
-  ctx.font = "500 22px system-ui, -apple-system, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("Vana Health", SOCIAL_POST_WIDTH / 2, footerY);
+  const footerTop = photoY + photoH + 28;
+  for (const slot of slots) {
+    const cx = slot.x + photoW / 2;
+
+    ctx.fillStyle = VANA_TEXT;
+    ctx.font = "600 32px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(slot.label, cx, footerTop);
+
+    if (slot.date) {
+      ctx.fillStyle = VANA_MUTED;
+      ctx.font = "500 26px system-ui, -apple-system, sans-serif";
+      ctx.fillText(formatDateDisplay(slot.date.slice(0, 10)), cx, footerTop + 40);
+    }
+  }
+
+  if (input.showWeeksBetween !== false) {
+    const weeks = weeksBetween(input.beforeDate, input.afterDate);
+    if (weeks != null && weeks > 0) {
+      ctx.fillStyle = VANA_GOLD;
+      ctx.font = "600 28px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(weeksBetweenLabel(weeks), SOCIAL_POST_WIDTH / 2, footerTop + 96);
+    }
+  }
 
   return canvas;
 }
@@ -325,23 +394,28 @@ export async function downloadProgressPhotoFile(
   URL.revokeObjectURL(url);
 }
 
+export async function socialPostCanvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Export failed"))), "image/png", 1);
+  });
+}
+
+export function socialPostFilename(input: ProgressSocialPostInput): string {
+  const pose = sanitizeFilename(input.poseLabel);
+  const client = sanitizeFilename(input.clientName) || "client";
+  return `${client}-${pose}-before-after.png`;
+}
+
 export async function downloadProgressSocialPost(
   input: ProgressSocialPostInput,
   options?: ProgressSocialPostOptions
 ): Promise<void> {
   const canvas = await generateProgressSocialPostCanvas(input, options);
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Export failed"))), "image/png", 1);
-  });
-
-  const pose = sanitizeFilename(input.poseLabel);
-  const client = sanitizeFilename(input.clientName) || "client";
-  const filename = `${client}-${pose}-progress-vana.png`;
-
+  const blob = await socialPostCanvasToPngBlob(canvas);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = socialPostFilename(input);
   a.click();
   URL.revokeObjectURL(url);
 }
