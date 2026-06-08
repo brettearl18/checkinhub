@@ -197,8 +197,6 @@ type MeasurementTrendCard =
       unit: string;
     };
 
-const GRID_CHART_HEIGHT = 200;
-
 export default function CoachClientProgressPage() {
   const params = useParams();
   const clientId = params?.clientId as string | undefined;
@@ -644,19 +642,17 @@ export default function CoachClientProgressPage() {
                           unit={card.unit}
                           leftLabel={card.leftLabel}
                           rightLabel={card.rightLabel}
-                          height={GRID_CHART_HEIGHT}
                           fillContainer
                         />
                       ) : (
                         <MeasurementSlotTrendChartLazy
                           rows={card.slotRows}
                           unit={card.unit}
-                          height={GRID_CHART_HEIGHT}
                           fillContainer
                         />
                       )
                     ) : (
-                      <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                      <p className="flex aspect-square w-full items-center justify-center text-center text-sm text-[var(--color-text-muted)]">
                         {card.hasEver
                           ? "No measurements in this time range."
                           : "No data yet."}

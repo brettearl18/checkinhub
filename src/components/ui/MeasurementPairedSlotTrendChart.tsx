@@ -65,17 +65,11 @@ export function MeasurementPairedSlotTrendChart({
   const hasData = filledRows.length > 0;
   if (!hasData) return null;
 
-  return (
-    <div
-      style={{
-        width: "100%",
-        ...(fillContainer ? {} : { maxWidth: 420 }),
-        height,
-        minHeight: Math.max(100, height),
-      }}
-      className={fillContainer ? "w-full overflow-visible" : "mx-auto overflow-visible"}
-    >
-      <ResponsiveContainer width="100%" height={height} minHeight={Math.max(100, height)}>
+  const chartHeight = fillContainer ? "100%" : height;
+  const chartMinHeight = fillContainer ? undefined : Math.max(100, height);
+
+  const chart = (
+    <ResponsiveContainer width="100%" height={chartHeight} minHeight={chartMinHeight}>
         <AreaChart data={filledRows} margin={{ top: 8, right: 12, left: 4, bottom: 8 }}>
           <defs>
             <linearGradient id={gradL} x1="0" y1="0" x2="0" y2="1">
@@ -157,17 +151,43 @@ export function MeasurementPairedSlotTrendChart({
             activeDot={{ r: 4 }}
           />
         </AreaChart>
-      </ResponsiveContainer>
-      <div className="mt-2 flex flex-wrap gap-4 text-xs text-[var(--color-text-muted)]">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: leftColor }} />
-          {leftLabel}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: rightColor }} />
-          {rightLabel}
-        </span>
+    </ResponsiveContainer>
+  );
+
+  const legend = (
+    <div className="mt-2 flex flex-wrap gap-4 text-xs text-[var(--color-text-muted)]">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-block h-2 w-2 rounded-full" style={{ background: leftColor }} />
+        {leftLabel}
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-block h-2 w-2 rounded-full" style={{ background: rightColor }} />
+        {rightLabel}
+      </span>
+    </div>
+  );
+
+  if (fillContainer) {
+    return (
+      <div className="w-full">
+        <div className="aspect-square w-full overflow-visible">{chart}</div>
+        {legend}
       </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 420,
+        height,
+        minHeight: Math.max(100, height),
+      }}
+      className="mx-auto overflow-visible"
+    >
+      {chart}
+      {legend}
     </div>
   );
 }

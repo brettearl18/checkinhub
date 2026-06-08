@@ -8,7 +8,7 @@ const MeasurementSlotTrendChart = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="min-h-[200px] w-full animate-pulse rounded-lg bg-[var(--color-bg-elevated)]" />
+      <div className="aspect-square w-full animate-pulse rounded-lg bg-[var(--color-bg-elevated)]" />
     ),
   }
 );

@@ -62,17 +62,28 @@ export function MeasurementSlotTrendChart({
   const hasData = filledRows.length > 0;
   if (!hasData) return null;
 
+  const chartHeight = fillContainer ? "100%" : height;
+  const chartMinHeight = fillContainer ? undefined : Math.max(100, height);
+
   return (
     <div
-      style={{
-        width: "100%",
-        ...(fillContainer ? {} : { maxWidth: 420 }),
-        height,
-        minHeight: Math.max(100, height),
-      }}
-      className={fillContainer ? "w-full overflow-visible" : "mx-auto overflow-visible"}
+      style={
+        fillContainer
+          ? undefined
+          : {
+              width: "100%",
+              maxWidth: 420,
+              height,
+              minHeight: Math.max(100, height),
+            }
+      }
+      className={
+        fillContainer
+          ? "aspect-square w-full overflow-visible"
+          : "mx-auto overflow-visible"
+      }
     >
-      <ResponsiveContainer width="100%" height={height} minHeight={Math.max(100, height)}>
+      <ResponsiveContainer width="100%" height={chartHeight} minHeight={chartMinHeight}>
         <AreaChart data={filledRows} margin={{ top: 8, right: 12, left: 4, bottom: 8 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
