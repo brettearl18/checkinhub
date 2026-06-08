@@ -10,6 +10,7 @@ import {
   entriesByHabitAndDate,
   computeStreakFromEntries,
 } from "@/lib/habits-streaks";
+import { evaluateAndAwardAchievements } from "@/lib/award-achievements";
 
 function isValidYyyyMmDd(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -103,10 +104,12 @@ export async function POST(request: Request) {
   const streak = computeStreakFromEntries(habitId, entriesByDate, todayEntries);
 
   const status = isGoalMet(habitId, value) ? "met" : "missed";
+  const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
 
   return NextResponse.json({
     ok: true,
     streak,
     entry: { date: entryDate, habitId, status },
+    newlyEarned,
   });
 }

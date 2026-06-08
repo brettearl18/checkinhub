@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
+import { CLIENT_BADGE_AWARD_MODE_LABELS, type ClientBadgeAwardMode } from "@/lib/badge-approval";
 import { PREDEFINED_MEAL_PLANS } from "@/lib/meal-plan-predefined-urls";
 import { MealPlanViewer } from "@/components/client/MealPlanViewer";
 
@@ -43,6 +44,7 @@ interface ClientSettings {
   packagePaidAt: string;
   packageMonths: number | null;
   packageFreeWeeks: number;
+  badgeAwardMode: ClientBadgeAwardMode;
 }
 
 const DEFAULT_SETTINGS: ClientSettings = {
@@ -69,6 +71,7 @@ const DEFAULT_SETTINGS: ClientSettings = {
   packagePaidAt: "",
   packageMonths: null,
   packageFreeWeeks: 0,
+  badgeAwardMode: "default",
 };
 
 function formatBillingAmount(cents: number, currency: string): string {
@@ -266,6 +269,10 @@ export default function CoachClientSettingsPage() {
               data.mealPlanJson && typeof data.mealPlanJson === "object" && !Array.isArray(data.mealPlanJson)
                 ? data.mealPlanJson
                 : null,
+            badgeAwardMode:
+              data.badgeAwardMode === "auto" || data.badgeAwardMode === "coach"
+                ? data.badgeAwardMode
+                : "default",
           });
         }
       } finally {
@@ -430,6 +437,7 @@ export default function CoachClientSettingsPage() {
           packagePaidAt: form.packagePaidAt || undefined,
           packageMonths: form.packageMonths ?? undefined,
           packageFreeWeeks: form.packageFreeWeeks,
+          badgeAwardMode: form.badgeAwardMode,
           mealPlanLinks: form.mealPlanLinks,
           mealPlanJson: form.mealPlanJson,
           ...(sendMealPlanEmail ? { sendMealPlanEmail: true } : {}),
@@ -1117,6 +1125,34 @@ export default function CoachClientSettingsPage() {
                   Add to list
                 </Button>
               </div>
+            </div>
+          </Card>
+
+          {/* Badge approval */}
+          <Card className="p-6">
+            <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Badges</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
+              Choose whether this client&apos;s badges are awarded automatically or need your approval first.
+              &quot;Use coach default&quot; follows your setting in Coach → Settings.
+            </p>
+            <div className="max-w-md">
+              <label className="mb-1 block text-sm font-medium text-[var(--color-text)]">Badge award mode</label>
+              <select
+                value={form.badgeAwardMode}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    badgeAwardMode: e.target.value as ClientBadgeAwardMode,
+                  }))
+                }
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)]"
+              >
+                {(Object.keys(CLIENT_BADGE_AWARD_MODE_LABELS) as ClientBadgeAwardMode[]).map((key) => (
+                  <option key={key} value={key}>
+                    {CLIENT_BADGE_AWARD_MODE_LABELS[key]}
+                  </option>
+                ))}
+              </select>
             </div>
           </Card>
 

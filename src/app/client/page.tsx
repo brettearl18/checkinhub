@@ -153,7 +153,6 @@ export default function ClientPortalPage() {
   } | null>(null);
   const [markingMissedId, setMarkingMissedId] = useState<string | null>(null);
   const [markMissedError, setMarkMissedError] = useState<string | null>(null);
-
   const markAssignmentMissed = useCallback(
     async (assignmentId: string) => {
       const a = assignments.find((x) => x.id === assignmentId);
@@ -1029,6 +1028,7 @@ export default function ClientPortalPage() {
           ))}
         </div>
       </section>
+
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { isAdminConfigured } from "@/lib/firebase-admin";
 import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 import { computeScore, getScoreBand } from "@/lib/check-in-score";
 import { resolveThresholds, BAND_LABELS } from "@/lib/scoring-utils";
+import { evaluateAndAwardAchievements } from "@/lib/award-achievements";
 
 export async function POST(request: Request) {
   const authResult = await requireClient(request);
@@ -120,6 +121,8 @@ export async function POST(request: Request) {
     draftUpdatedAt: FieldValue.delete(),
   });
 
+  const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+
   return NextResponse.json({
     responseId: responseRef.id,
     success: true,
@@ -128,5 +131,6 @@ export async function POST(request: Request) {
     message,
     trafficLightRedMax: redMax,
     trafficLightOrangeMax: orangeMax,
+    newlyEarned,
   });
 }

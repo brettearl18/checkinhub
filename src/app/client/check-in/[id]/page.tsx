@@ -15,7 +15,6 @@ import {
 } from "@/components/client/CheckInFormFields";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDdMmYyyy, toLocalDateString } from "@/lib/format-date";
-
 export default function CheckInFormPage() {
   const router = useRouter();
   const params = useParams();

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { evaluateAndAwardAchievements } from "@/lib/award-achievements";
 
 export async function GET(request: Request) {
   const authResult = await requireClient(request);
@@ -81,7 +82,8 @@ export async function POST(request: Request) {
       payload.measurements = { ...(cur.measurements ?? {}), ...body.measurements };
     }
     await sameDay.ref.update(payload);
-    return NextResponse.json({ id: sameDay.id, ok: true, updated: true });
+    const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+    return NextResponse.json({ id: sameDay.id, ok: true, updated: true, newlyEarned });
   }
 
   const ref = await db.collection("client_measurements").add({
@@ -93,5 +95,6 @@ export async function POST(request: Request) {
     createdAt: now,
     updatedAt: now,
   });
-  return NextResponse.json({ id: ref.id, ok: true, updated: false });
+  const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+  return NextResponse.json({ id: ref.id, ok: true, updated: false, newlyEarned });
 }

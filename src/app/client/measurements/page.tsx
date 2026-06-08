@@ -53,7 +53,6 @@ export default function ClientMeasurementsPage() {
     waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "",
   });
   const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number] | "arms" | "thighs">("bodyWeight");
-
   const chartData = useMemo(() => {
     if (chartMetric === "arms" || chartMetric === "thighs") return [];
     const chronological = [...list].filter((m) => m.date).reverse();
@@ -129,6 +128,7 @@ export default function ClientMeasurementsPage() {
         return;
       }
       if (res.ok) {
+        await res.json();
         setShowForm(false);
         setBodyWeight("");
         setMeasurements({ waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "" });
@@ -312,6 +312,7 @@ export default function ClientMeasurementsPage() {
         </Card>
         </>
       )}
+
     </div>
   );
 }

@@ -8,7 +8,6 @@ import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/Habi
 import { useApiClient } from "@/lib/api-client";
 import type { HabitDefinition } from "@/lib/habits";
 import { todayDate } from "@/lib/habits-streaks";
-
 interface StreakInfo {
   current: number;
   longest: number;
@@ -37,7 +36,6 @@ export default function ClientHabitsPage() {
   const [stripRange, setStripRange] = useState<HabitStripRange>("7d");
   const [cellPicker, setCellPicker] = useState<{ habitId: string; date: string } | null>(null);
   const [habitLogError, setHabitLogError] = useState<string | null>(null);
-
   const load = useCallback(async () => {
     setLoading(true);
     setAuthError(false);
@@ -293,6 +291,7 @@ export default function ClientHabitsPage() {
           </div>
         );
       })()}
+
     </div>
   );
 }

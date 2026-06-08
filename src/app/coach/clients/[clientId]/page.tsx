@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { CoachPendingBadgesPanel } from "@/components/coach/CoachPendingBadgesPanel";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
 
@@ -331,6 +332,8 @@ export default function CoachClientCheckInsPage() {
           <Button onClick={() => setAssignOpen(true)}>Assign check-in</Button>
         </div>
       </div>
+
+      {!authError && clientId && <CoachPendingBadgesPanel clientId={clientId} />}
 
       {/* Overview: check-ins, traffic lights, Stripe, meal plans – all loadable when client is set up */}
       {!authError && !loading && (

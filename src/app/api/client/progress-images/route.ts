@@ -3,6 +3,7 @@ import { requireClient } from "@/lib/api-auth";
 import { getAdminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { getDownloadURL } from "firebase-admin/storage";
+import { evaluateAndAwardAchievements } from "@/lib/award-achievements";
 
 function toDate(v: unknown): string | null {
   if (!v) return null;
@@ -125,12 +126,15 @@ export async function POST(request: Request) {
       updatedAt: now,
     });
 
+    const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+
     return NextResponse.json({
       id: docRef.id,
       imageUrl,
       imageType,
       caption,
       uploadedAt: now.toISOString(),
+      newlyEarned,
     });
   } catch (err) {
     console.error("[client/progress-images POST]", err);

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { evaluateAndAwardAchievements } from "@/lib/award-achievements";
 
 export async function PATCH(
   request: Request,
@@ -30,9 +31,24 @@ export async function PATCH(
     return NextResponse.json({ error: "Goal not found" }, { status: 404 });
   }
 
+  const data = snap.data() as {
+    targetValue?: number;
+    currentValue?: number;
+    progress?: number;
+  };
+
   const update: Record<string, unknown> = { updatedAt: new Date() };
   if (body.currentValue !== undefined) update.currentValue = body.currentValue;
   if (body.progress !== undefined) update.progress = body.progress;
+
+  const nextProgress = body.progress ?? data.progress ?? 0;
+  const nextCurrent = body.currentValue ?? data.currentValue ?? 0;
+  const target = data.targetValue ?? 0;
+  if (nextProgress >= 100 || (target > 0 && nextCurrent >= target)) {
+    update.status = "completed";
+  }
+
   await ref.update(update);
-  return NextResponse.json({ ok: true });
+  const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+  return NextResponse.json({ ok: true, newlyEarned });
 }

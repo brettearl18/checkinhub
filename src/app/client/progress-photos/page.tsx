@@ -40,7 +40,6 @@ export default function ProgressPhotosPage() {
   const [imageType, setImageType] = useState("before_front");
   const [caption, setCaption] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   /** Hide before (front/side/back) once that baseline angle already exists—clients add current shots after that. */
   const uploadTypeOptions = useMemo(() => {
     return IMAGE_TYPES.filter((t) => {
@@ -114,6 +113,7 @@ export default function ProgressPhotosPage() {
         setError((body && body.error) || "Upload failed.");
         return;
       }
+      await res.json();
       setCaption("");
       input.value = "";
       await load();
@@ -229,6 +229,7 @@ export default function ProgressPhotosPage() {
           </div>
         )}
       </section>
+
     </div>
   );
 }

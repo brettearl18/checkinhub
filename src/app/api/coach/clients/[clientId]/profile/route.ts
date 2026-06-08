@@ -4,6 +4,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
 import { isClosedClientStatus, normalizeClientStatusForApi, normalizeClientStatusForStorage } from "@/lib/client-status";
+import type { ClientBadgeAwardMode } from "@/lib/badge-approval";
 import { resolveThresholds, SCORING_PROFILES, type ScoringProfileId } from "@/lib/scoring-utils";
 
 function toIso(v: unknown): string | null {
@@ -51,6 +52,7 @@ export async function GET(
       packageMonths: null as number | null,
       packageFreeWeeks: 0,
       packageExpiresAt: null as string | null,
+      badgeAwardMode: "default" as ClientBadgeAwardMode,
     });
   }
 
@@ -87,6 +89,7 @@ export async function GET(
     packagePaidAt?: unknown;
     packageMonths?: number | null;
     packageFreeWeeks?: number | null;
+    badgeAwardMode?: ClientBadgeAwardMode;
   };
   if (data.coachId !== coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -165,6 +168,10 @@ export async function GET(
     packagePaidAt: toIso(data.packagePaidAt) ?? null,
     packageMonths: typeof data.packageMonths === "number" ? data.packageMonths : null,
     packageFreeWeeks: typeof data.packageFreeWeeks === "number" ? data.packageFreeWeeks : 0,
+    badgeAwardMode:
+      data.badgeAwardMode === "auto" || data.badgeAwardMode === "coach"
+        ? data.badgeAwardMode
+        : ("default" as ClientBadgeAwardMode),
     packageExpiresAt: (() => {
       const paid = toIso(data.packagePaidAt);
       const months = typeof data.packageMonths === "number" ? data.packageMonths : null;
@@ -267,6 +274,12 @@ export async function PATCH(
     const raw = body.mealPlanJson;
     clientUpdate.mealPlanJson =
       raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null;
+  }
+  if (body.badgeAwardMode !== undefined) {
+    const mode = body.badgeAwardMode;
+    if (mode === "default" || mode === "auto" || mode === "coach") {
+      clientUpdate.badgeAwardMode = mode;
+    }
   }
 
   if (body.checkInFrequency !== undefined || body.communicationPreference !== undefined) {
