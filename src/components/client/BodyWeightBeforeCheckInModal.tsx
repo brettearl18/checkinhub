@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
-
-function todayLocalYyyyMmDd(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { toLocalDateString } from "@/lib/format-date";
 
 export interface BodyWeightBeforeCheckInModalProps {
   open: boolean;
@@ -82,7 +79,7 @@ export function BodyWeightBeforeCheckInModal({
             disabled={saving}
           />
           <p className="text-xs text-[var(--color-text-muted)]">
-            Recorded for {todayLocalYyyyMmDd()}. You can update measurements anytime from your dashboard.
+            Recorded for {toLocalDateString(new Date())}. You can update measurements anytime from your dashboard.
           </p>
           {error && (
             <p className="text-sm text-[var(--color-error)]" role="alert">

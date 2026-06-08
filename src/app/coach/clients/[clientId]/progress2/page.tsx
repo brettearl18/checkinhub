@@ -9,6 +9,10 @@ import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
 import { CheckInScoreTrendChartLazy } from "@/components/ui/CheckInScoreTrendChartLazy";
+import { MeasurementSlotTrendChartLazy } from "@/components/ui/MeasurementSlotTrendChartLazy";
+import { MeasurementPairedSlotTrendChartLazy } from "@/components/ui/MeasurementPairedSlotTrendChartLazy";
+import { MEASUREMENT_SLOT_COUNT, type SlotChartRow } from "@/components/ui/MeasurementSlotTrendChart";
+import type { PairedSlotChartRow } from "@/components/ui/MeasurementPairedSlotTrendChart";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
 import {
@@ -24,16 +28,6 @@ interface Measurement {
   bodyWeight: number | null;
   measurements: Record<string, number>;
   isBaseline: boolean;
-}
-
-interface Goal {
-  id: string;
-  title: string;
-  targetValue: number;
-  currentValue: number;
-  unit: string;
-  progress: number;
-  status: string;
 }
 
 interface ProgressImage {
@@ -157,6 +151,142 @@ function daysSince(iso: string | null): number | null {
   return Math.floor((now - then) / (24 * 60 * 60 * 1000));
 }
 
+const MEASUREMENT_LABELS: Record<string, string> = {
+  bodyWeight: "Body Weight (kg)",
+  waist: "Waist (cm)",
+  hips: "Hips (cm)",
+  chest: "Chest (cm)",
+  thighs: "Thighs (cm)",
+  arms: "Arms (cm)",
+};
+
+const MEASUREMENT_SERIES_LABELS: Record<string, string> = {
+  bodyWeight: "Body weight",
+  waist: "Waist",
+  hips: "Hips",
+  chest: "Chest",
+  thighs: "Thigh",
+  arms: "Arm",
+};
+
+type MeasurementRangeKey = "7d" | "30d" | "90d" | "180d";
+
+const MEASUREMENT_RANGE_OPTIONS: { key: MeasurementRangeKey; label: string; days: number }[] = [
+  { key: "7d", label: "7 days", days: 7 },
+  { key: "30d", label: "1 month", days: 30 },
+  { key: "90d", label: "3 months", days: 90 },
+  { key: "180d", label: "6 months", days: 180 },
+];
+
+function getAllTrendPoints(
+  measurements: Measurement[],
+  key: "bodyWeight" | string
+): { date: string; value: number }[] {
+  const points: { date: string; value: number }[] = [];
+  for (const m of measurements) {
+    const value =
+      key === "bodyWeight"
+        ? measurementNumericValue(m.bodyWeight)
+        : measurementNumericValue(m.measurements?.[key]);
+    if (value != null && m.date) points.push({ date: m.date, value });
+  }
+  return points.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function filterPointsByRange(
+  points: { date: string; value: number }[],
+  days: number
+): { date: string; value: number }[] {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  start.setHours(0, 0, 0, 0);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  return points.filter((p) => {
+    const t = new Date(`${p.date}T12:00:00`).getTime();
+    return t >= startMs && t <= endMs;
+  });
+}
+
+function buildSlotRows(points: { date: string; value: number }[]): SlotChartRow[] {
+  const take =
+    points.length > MEASUREMENT_SLOT_COUNT ? points.slice(-MEASUREMENT_SLOT_COUNT) : points;
+  const rows: SlotChartRow[] = [];
+  for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
+    if (i < take.length) {
+      rows.push({ slot: i, value: take[i].value, date: take[i].date });
+    } else {
+      rows.push({ slot: i, value: null, date: null });
+    }
+  }
+  return rows;
+}
+
+interface PairedMeasurementRow {
+  date: string;
+  left: number | null;
+  right: number | null;
+}
+
+function mergePairedTrendPoints(
+  left: { date: string; value: number }[],
+  right: { date: string; value: number }[]
+): PairedMeasurementRow[] {
+  const dates = new Set<string>();
+  for (const p of left) dates.add(p.date);
+  for (const p of right) dates.add(p.date);
+  const lm = new Map(left.map((p) => [p.date, p.value]));
+  const rm = new Map(right.map((p) => [p.date, p.value]));
+  return [...dates]
+    .sort((a, b) => a.localeCompare(b))
+    .map((date) => ({
+      date,
+      left: lm.get(date) ?? null,
+      right: rm.get(date) ?? null,
+    }));
+}
+
+function buildPairedSlotRows(merged: PairedMeasurementRow[]): PairedSlotChartRow[] {
+  const take =
+    merged.length > MEASUREMENT_SLOT_COUNT ? merged.slice(-MEASUREMENT_SLOT_COUNT) : merged;
+  const rows: PairedSlotChartRow[] = [];
+  for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
+    if (i < take.length) {
+      const r = take[i];
+      rows.push({ slot: i, date: r.date, left: r.left, right: r.right });
+    } else {
+      rows.push({ slot: i, date: null, left: null, right: null });
+    }
+  }
+  return rows;
+}
+
+type MeasurementTrendCard =
+  | {
+      key: string;
+      label: string;
+      seriesLabel: string;
+      kind: "single";
+      slotRows: SlotChartRow[];
+      hasInRange: boolean;
+      hasEver: boolean;
+      unit: string;
+    }
+  | {
+      key: string;
+      label: string;
+      seriesLabel: string;
+      kind: "paired";
+      slotRows: PairedSlotChartRow[];
+      leftLabel: string;
+      rightLabel: string;
+      hasInRange: boolean;
+      hasEver: boolean;
+      unit: string;
+    };
+
 function getQuestionTrends(qp: QuestionProgress | null) {
   if (!qp || qp.weeks.length < 2) return { improving: [], declining: [] };
   const trends: Array<{ id: string; text: string; delta: number; latest: number; earliest: number }> = [];
@@ -184,7 +314,6 @@ export default function CoachClientProgress2Page() {
 
   const [clientName, setClientName] = useState("");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
   const [checkInScores, setCheckInScores] = useState<CheckInScore[]>([]);
   const [questionProgress, setQuestionProgress] = useState<QuestionProgress | null>(null);
@@ -194,6 +323,7 @@ export default function CoachClientProgress2Page() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [habitRange, setHabitRange] = useState<HabitStripRange>("30d");
+  const [measurementRange, setMeasurementRange] = useState<MeasurementRangeKey>("180d");
 
   useEffect(() => {
     if (!clientId) return;
@@ -214,7 +344,6 @@ export default function CoachClientProgress2Page() {
           const c = data.client ?? {};
           setClientName([c.firstName, c.lastName].filter(Boolean).join(" ") || "Client");
           setMeasurements(Array.isArray(data.measurements) ? data.measurements : []);
-          setGoals(Array.isArray(data.goals) ? data.goals : []);
           setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
           setCheckInScores(Array.isArray(data.checkInScores) ? data.checkInScores : []);
           const qp = data.questionProgress;
@@ -294,7 +423,66 @@ export default function CoachClientProgress2Page() {
 
   const questionTrends = useMemo(() => getQuestionTrends(questionProgress), [questionProgress]);
 
-  const activeGoals = goals.filter((g) => g.status === "active");
+  const measurementRangeDays =
+    MEASUREMENT_RANGE_OPTIONS.find((r) => r.key === measurementRange)?.days ?? 180;
+
+  const measurementTrendCards = useMemo((): MeasurementTrendCard[] => {
+    const days = measurementRangeDays;
+    const cards: MeasurementTrendCard[] = [];
+
+    for (const key of ["bodyWeight", "waist", "hips", "chest"] as const) {
+      const all = getAllTrendPoints(measurements, key);
+      const filtered = filterPointsByRange(all, days);
+      cards.push({
+        key,
+        label: MEASUREMENT_LABELS[key] ?? key,
+        seriesLabel: MEASUREMENT_SERIES_LABELS[key] ?? key,
+        kind: "single",
+        slotRows: buildSlotRows(filtered),
+        hasInRange: filtered.length > 0,
+        hasEver: all.length > 0,
+        unit: key === "bodyWeight" ? "kg" : "cm",
+      });
+    }
+
+    const leftThigh = filterPointsByRange(getAllTrendPoints(measurements, "leftThigh"), days);
+    const rightThigh = filterPointsByRange(getAllTrendPoints(measurements, "rightThigh"), days);
+    const thighMerged = mergePairedTrendPoints(leftThigh, rightThigh);
+    cards.push({
+      key: "thighs",
+      label: MEASUREMENT_LABELS.thighs,
+      seriesLabel: MEASUREMENT_SERIES_LABELS.thighs,
+      kind: "paired",
+      slotRows: buildPairedSlotRows(thighMerged),
+      leftLabel: "Left thigh",
+      rightLabel: "Right thigh",
+      hasInRange: thighMerged.some((r) => r.left != null || r.right != null),
+      hasEver:
+        getAllTrendPoints(measurements, "leftThigh").length > 0 ||
+        getAllTrendPoints(measurements, "rightThigh").length > 0,
+      unit: "cm",
+    });
+
+    const leftArm = filterPointsByRange(getAllTrendPoints(measurements, "leftArm"), days);
+    const rightArm = filterPointsByRange(getAllTrendPoints(measurements, "rightArm"), days);
+    const armMerged = mergePairedTrendPoints(leftArm, rightArm);
+    cards.push({
+      key: "arms",
+      label: MEASUREMENT_LABELS.arms,
+      seriesLabel: MEASUREMENT_SERIES_LABELS.arms,
+      kind: "paired",
+      slotRows: buildPairedSlotRows(armMerged),
+      leftLabel: "Left arm",
+      rightLabel: "Right arm",
+      hasInRange: armMerged.some((r) => r.left != null || r.right != null),
+      hasEver:
+        getAllTrendPoints(measurements, "leftArm").length > 0 ||
+        getAllTrendPoints(measurements, "rightArm").length > 0,
+      unit: "cm",
+    });
+
+    return cards;
+  }, [measurements, measurementRangeDays]);
 
   if (!clientId) {
     return <p className="text-[var(--color-text-muted)]">Invalid client.</p>;
@@ -465,100 +653,138 @@ export default function CoachClientProgress2Page() {
               ) : (
                 <p className="mt-3 text-sm text-[var(--color-text-muted)]">No body measurements logged.</p>
               )}
-              <Link
-                href={`/coach/clients/${clientId}/progress`}
+              <a
+                href="#measurement-trends"
                 className="mt-3 inline-block text-sm text-[var(--color-primary)] hover:underline"
               >
-                View measurement charts →
-              </Link>
+                View measurement charts ↓
+              </a>
             </Card>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {/* Before / after photos */}
-            <Card className="p-4">
-              <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
-              <p className="text-sm text-[var(--color-text-muted)]">Baseline vs current (matching pose)</p>
-              {photoPair.baselinePhoto || photoPair.currentPhoto ? (
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  {(["baselinePhoto", "currentPhoto"] as const).map((slot) => {
-                    const img = photoPair[slot];
-                    const title = slot === "baselinePhoto" ? "Baseline" : "Current";
-                    return (
-                      <div key={slot} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                        <div className="relative aspect-[3/4] bg-[var(--color-bg-elevated)]">
-                          {img ? (
-                            <Image
-                              src={img.imageUrl}
-                              alt={title}
-                              fill
-                              className="object-cover"
-                              sizes="200px"
-                              unoptimized
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-[var(--color-text-muted)]">
-                              No photo
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-2">
-                          <p className="text-xs font-medium text-[var(--color-text)]">{title}</p>
-                          {img && (
-                            <>
-                              <p className="text-xs text-[var(--color-text-muted)]">
-                                {formatProgressImageTypeLabel(img.imageType)}
+          {/* Before / after photos — full width for side-by-side comparison */}
+          <Card className="p-4">
+            <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
+            <p className="text-sm text-[var(--color-text-muted)]">Baseline vs current (matching pose)</p>
+            {photoPair.baselinePhoto || photoPair.currentPhoto ? (
+              <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+                {(["currentPhoto", "baselinePhoto"] as const).map((slot) => {
+                  const img = photoPair[slot];
+                  const title = slot === "baselinePhoto" ? "Baseline" : "Current";
+                  return (
+                    <div
+                      key={slot}
+                      className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)]"
+                    >
+                      <div className="relative aspect-[3/4] w-full min-h-[280px] max-h-[min(72vh,640px)] bg-[var(--color-bg)]">
+                        {img ? (
+                          <Image
+                            src={img.imageUrl}
+                            alt={title}
+                            fill
+                            className="object-contain"
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
+                            No photo
+                          </div>
+                        )}
+                      </div>
+                      <div className="border-t border-[var(--color-border)] p-3">
+                        <p className="text-sm font-semibold text-[var(--color-text)]">{title}</p>
+                        {img && (
+                          <>
+                            <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
+                              {formatProgressImageTypeLabel(img.imageType)}
+                            </p>
+                            {img.uploadedAt && (
+                              <p className="text-sm text-[var(--color-text-muted)]">
+                                {formatDateDisplay(img.uploadedAt.slice(0, 10))}
                               </p>
-                              {img.uploadedAt && (
-                                <p className="text-xs text-[var(--color-text-muted)]">
-                                  {formatDateDisplay(img.uploadedAt.slice(0, 10))}
-                                </p>
-                              )}
-                              {progressPhotoPoseLabel(img.imageType) && (
-                                <p className="text-xs text-[var(--color-text-muted)]">
-                                  {progressPhotoPoseLabel(img.imageType)}
-                                </p>
-                              )}
-                            </>
-                          )}
-                        </div>
+                            )}
+                            {progressPhotoPoseLabel(img.imageType) && (
+                              <p className="text-sm text-[var(--color-text-muted)]">
+                                {progressPhotoPoseLabel(img.imageType)}
+                              </p>
+                            )}
+                          </>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-[var(--color-text-muted)]">No progress photos uploaded.</p>
-              )}
-            </Card>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-[var(--color-text-muted)]">No progress photos uploaded.</p>
+            )}
+          </Card>
 
-            {/* Goals */}
-            <Card className="p-4">
-              <h2 className="font-medium text-[var(--color-text)]">Goals</h2>
-              <p className="text-sm text-[var(--color-text-muted)]">Active targets</p>
-              {activeGoals.length > 0 ? (
-                <ul className="mt-3 space-y-3">
-                  {activeGoals.slice(0, 4).map((g) => (
-                    <li key={g.id}>
-                      <div className="flex justify-between gap-2 text-sm">
-                        <span className="font-medium text-[var(--color-text)]">{g.title}</span>
-                        <span className="text-[var(--color-text-muted)]">
-                          {g.currentValue} / {g.targetValue} {g.unit}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
-                        <div
-                          className="h-full rounded-full bg-[var(--color-primary)]"
-                          style={{ width: `${Math.min(100, Math.max(0, g.progress))}%` }}
+          {/* Measurement trend charts — 3 columns × 2 rows */}
+          <Card id="measurement-trends" className="p-4 scroll-mt-6">
+            <h2 className="font-medium text-[var(--color-text)]">Measurement trends</h2>
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Weight and body measurements over time
+            </p>
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">Time range</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {MEASUREMENT_RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setMeasurementRange(opt.key)}
+                  className={`rounded px-3 py-1.5 text-sm ${
+                    measurementRange === opt.key
+                      ? "bg-[var(--color-text)] text-[var(--color-bg)]"
+                      : "bg-[var(--color-bg-elevated)] text-[var(--color-text)] ring-1 ring-[var(--color-border)]"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              Most recent readings in order within the range. Thighs and arms plot left and right together.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {measurementTrendCards.map((card) => (
+                <div
+                  key={card.key}
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3"
+                >
+                  <h3 className="text-sm font-medium text-[var(--color-text)]">{card.label}</h3>
+                  <div className="mt-2">
+                    {card.hasInRange ? (
+                      card.kind === "paired" ? (
+                        <MeasurementPairedSlotTrendChartLazy
+                          rows={card.slotRows}
+                          unit={card.unit}
+                          leftLabel={card.leftLabel}
+                          rightLabel={card.rightLabel}
+                          seriesLabel={card.seriesLabel}
+                          fillContainer
                         />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-3 text-sm text-[var(--color-text-muted)]">No active goals.</p>
-              )}
-            </Card>
-          </div>
+                      ) : (
+                        <MeasurementSlotTrendChartLazy
+                          rows={card.slotRows}
+                          unit={card.unit}
+                          seriesLabel={card.seriesLabel}
+                          fillContainer
+                        />
+                      )
+                    ) : (
+                      <p className="flex aspect-[5/4] w-full items-center justify-center text-center text-sm text-[var(--color-text-muted)]">
+                        {card.hasEver
+                          ? "No measurements in this time range."
+                          : "No data yet."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
 
           {/* Habits */}
           <Card className="p-4">

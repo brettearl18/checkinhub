@@ -14,7 +14,7 @@ import {
   type CheckInQuestion as Question,
 } from "@/components/client/CheckInFormFields";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDdMmYyyy } from "@/lib/format-date";
+import { formatDateDdMmYyyy, toLocalDateString } from "@/lib/format-date";
 
 export default function CheckInFormPage() {
   const router = useRouter();
@@ -110,7 +110,7 @@ export default function CheckInFormPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: new Date().toISOString().slice(0, 10),
+          date: toLocalDateString(new Date()),
           bodyWeight: bodyWeightKg,
         }),
       });

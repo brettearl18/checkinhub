@@ -221,7 +221,11 @@ function filterPointsByRange(
 }
 
 function buildSlotRows(points: { date: string; value: number }[]): SlotChartRow[] {
-  const take = points.slice(0, MEASUREMENT_SLOT_COUNT);
+  // Points are oldest → newest; chart shows the most recent readings in range (incl. check-in weight).
+  const take =
+    points.length > MEASUREMENT_SLOT_COUNT
+      ? points.slice(-MEASUREMENT_SLOT_COUNT)
+      : points;
   const rows: SlotChartRow[] = [];
   for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
     if (i < take.length) {
@@ -259,7 +263,10 @@ function mergePairedTrendPoints(
 }
 
 function buildPairedSlotRows(merged: PairedMeasurementRow[]): PairedSlotChartRow[] {
-  const take = merged.slice(0, MEASUREMENT_SLOT_COUNT);
+  const take =
+    merged.length > MEASUREMENT_SLOT_COUNT
+      ? merged.slice(-MEASUREMENT_SLOT_COUNT)
+      : merged;
   const rows: PairedSlotChartRow[] = [];
   for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
     if (i < take.length) {
