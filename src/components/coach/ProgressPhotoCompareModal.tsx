@@ -13,6 +13,8 @@ import {
   type ProgressPhotoPose,
 } from "@/lib/progress-comparison-photos";
 import type { ProgressPhotoCompareItem } from "@/components/coach/ProgressPhotoComparePanel";
+import { useApiClient } from "@/lib/api-client";
+import { downloadProgressSocialPost } from "@/lib/progress-photo-social-export";
 
 type Phase = "align" | "compare";
 type Layer = "a" | "b";
@@ -37,6 +39,7 @@ interface Props {
   legacyAssignment: Map<string, ProgressPhotoPose>;
   initialMilestoneA: ProgressPhotoMilestone;
   initialMilestoneB: ProgressPhotoMilestone;
+  clientName?: string;
 }
 
 function defaultComparePair(clicked: ProgressPhotoMilestone): {
@@ -133,8 +136,11 @@ export function ProgressPhotoCompareModal({
   legacyAssignment,
   initialMilestoneA,
   initialMilestoneB,
+  clientName = "Client",
 }: Props) {
+  const { fetchWithAuth } = useApiClient();
   const [phase, setPhase] = useState<Phase>("align");
+  const [downloadingSocial, setDownloadingSocial] = useState(false);
   const [milestoneA, setMilestoneA] = useState<ProgressPhotoMilestone>(initialMilestoneA);
   const [milestoneB, setMilestoneB] = useState<ProgressPhotoMilestone>(initialMilestoneB);
   const [overlayOpacity, setOverlayOpacity] = useState(0.45);
@@ -297,6 +303,30 @@ export function ProgressPhotoCompareModal({
   const canCompare = photoA && photoB && photoA.id !== photoB.id;
 
   const setActiveZoom = (layer: Layer, zoom: number) => setLayerZoom(layer, zoom);
+
+  const handleSocialDownload = async () => {
+    if (!photoA || !photoB) return;
+    const aTime = photoA.uploadedAt ?? "";
+    const bTime = photoB.uploadedAt ?? "";
+    const before = aTime <= bTime ? photoA : photoB;
+    const after = aTime <= bTime ? photoB : photoA;
+    setDownloadingSocial(true);
+    try {
+      await downloadProgressSocialPost(
+        {
+          clientName,
+          poseLabel: progressPhotoPoseTabLabel(pose),
+          beforeImageUrl: before.imageUrl,
+          afterImageUrl: after.imageUrl,
+          beforeDate: before.uploadedAt,
+          afterDate: after.uploadedAt,
+        },
+        { fetchAuthenticated: fetchWithAuth }
+      );
+    } finally {
+      setDownloadingSocial(false);
+    }
+  };
 
   return (
     <div
@@ -470,6 +500,15 @@ export function ProgressPhotoCompareModal({
           )}
 
           <div className="flex flex-wrap justify-end gap-2">
+            {canCompare && (
+              <Button
+                variant="secondary"
+                disabled={downloadingSocial}
+                onClick={handleSocialDownload}
+              >
+                {downloadingSocial ? "Creating post…" : "Download 4:5 post"}
+              </Button>
+            )}
             {phase === "compare" && (
               <Button
                 variant="secondary"

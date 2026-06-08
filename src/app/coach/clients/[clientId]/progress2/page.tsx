@@ -657,12 +657,28 @@ export default function CoachClientProgress2Page() {
 
           {/* Progress photos — pose + milestone comparison */}
           <Card className="p-4">
-            <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
-            <p className="text-sm text-[var(--color-text-muted)]">
-              Latest, previous, and first upload — Front, Back, and Side
-            </p>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Latest, previous, and first upload — Front, Back, and Side
+                </p>
+              </div>
+              {clientId && (
+                <Link
+                  href={`/coach/gallery?client=${clientId}`}
+                  className="shrink-0 text-sm font-medium text-[var(--color-primary)] hover:underline"
+                >
+                  Photo gallery →
+                </Link>
+              )}
+            </div>
             <div className="mt-4">
-              <ProgressPhotoComparePanel images={progressImages} />
+              <ProgressPhotoComparePanel
+                images={progressImages}
+                clientName={clientName}
+                clientId={clientId}
+              />
             </div>
           </Card>
 

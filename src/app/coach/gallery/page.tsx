@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
@@ -21,11 +22,19 @@ interface GalleryImage {
 }
 
 export default function CoachGalleryPage() {
+  const searchParams = useSearchParams();
   const { fetchWithAuth } = useApiClient();
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
-  const [filterClient, setFilterClient] = useState<string>("");
+  const [filterClient, setFilterClient] = useState<string>(
+    () => searchParams.get("client") ?? ""
+  );
+
+  useEffect(() => {
+    const client = searchParams.get("client");
+    if (client) setFilterClient(client);
+  }, [searchParams]);
 
   const load = async () => {
     setLoading(true);
