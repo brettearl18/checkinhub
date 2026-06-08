@@ -127,6 +127,7 @@ export async function GET(
       id: d.id,
       imageUrl: img.imageUrl ?? "",
       imageType: img.imageType ?? null,
+      orientation: img.orientation ?? null,
       caption: img.caption ?? null,
       uploadedAt: toDate(img.uploadedAt),
     };

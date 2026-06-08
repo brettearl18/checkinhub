@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
 import { CheckInScoreTrendChartLazy } from "@/components/ui/CheckInScoreTrendChartLazy";
@@ -15,11 +15,6 @@ import { MEASUREMENT_SLOT_COUNT, type SlotChartRow } from "@/components/ui/Measu
 import type { PairedSlotChartRow } from "@/components/ui/MeasurementPairedSlotTrendChart";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
-import {
-  formatProgressImageTypeLabel,
-  pickBaselineAndCurrentPhoto,
-  progressPhotoPoseLabel,
-} from "@/lib/progress-comparison-photos";
 import type { HabitDefinition } from "@/lib/habits";
 
 interface Measurement {
@@ -419,8 +414,6 @@ export default function CoachClientProgress2Page() {
 
   const daysSinceCheckIn = daysSince(latestScore?.submittedAt ?? null);
 
-  const photoPair = useMemo(() => pickBaselineAndCurrentPhoto(progressImages), [progressImages]);
-
   const questionTrends = useMemo(() => getQuestionTrends(questionProgress), [questionProgress]);
 
   const measurementRangeDays =
@@ -662,63 +655,15 @@ export default function CoachClientProgress2Page() {
             </Card>
           </div>
 
-          {/* Before / after photos — full width for side-by-side comparison */}
+          {/* Progress photos — pose + milestone comparison */}
           <Card className="p-4">
             <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
-            <p className="text-sm text-[var(--color-text-muted)]">Baseline vs current (matching pose)</p>
-            {photoPair.baselinePhoto || photoPair.currentPhoto ? (
-              <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
-                {(["currentPhoto", "baselinePhoto"] as const).map((slot) => {
-                  const img = photoPair[slot];
-                  const title = slot === "baselinePhoto" ? "Baseline" : "Current";
-                  return (
-                    <div
-                      key={slot}
-                      className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)]"
-                    >
-                      <div className="relative aspect-[3/4] w-full min-h-[280px] max-h-[min(72vh,640px)] bg-[var(--color-bg)]">
-                        {img ? (
-                          <Image
-                            src={img.imageUrl}
-                            alt={title}
-                            fill
-                            className="object-contain"
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                            unoptimized
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
-                            No photo
-                          </div>
-                        )}
-                      </div>
-                      <div className="border-t border-[var(--color-border)] p-3">
-                        <p className="text-sm font-semibold text-[var(--color-text)]">{title}</p>
-                        {img && (
-                          <>
-                            <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
-                              {formatProgressImageTypeLabel(img.imageType)}
-                            </p>
-                            {img.uploadedAt && (
-                              <p className="text-sm text-[var(--color-text-muted)]">
-                                {formatDateDisplay(img.uploadedAt.slice(0, 10))}
-                              </p>
-                            )}
-                            {progressPhotoPoseLabel(img.imageType) && (
-                              <p className="text-sm text-[var(--color-text-muted)]">
-                                {progressPhotoPoseLabel(img.imageType)}
-                              </p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-[var(--color-text-muted)]">No progress photos uploaded.</p>
-            )}
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Latest, previous, and first upload — Front, Back, and Side
+            </p>
+            <div className="mt-4">
+              <ProgressPhotoComparePanel images={progressImages} />
+            </div>
           </Card>
 
           {/* Measurement trend charts — 3 columns × 2 rows */}

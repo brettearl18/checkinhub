@@ -13,6 +13,7 @@ export type ProgressImageLike = {
   imageUrl: string;
   imageType: string | null;
   uploadedAt: string | null;
+  orientation?: string | null;
 };
 
 function sortUploadedAsc<T extends ProgressImageLike>(arr: T[]): T[] {
@@ -143,6 +144,9 @@ export function formatProgressImageTypeLabel(imageType: string | null | undefine
     after_front: "Current (front)",
     after_side: "Current (side)",
     after_back: "Current (back)",
+    before: "Before",
+    progress: "Progress",
+    after: "Current",
     other: "Other",
   };
   if (map[imageType]) return map[imageType]!;
@@ -156,4 +160,134 @@ export function progressPhotoPoseLabel(imageType: string | null): string | null 
   if (imageType.endsWith("_side")) return "Side";
   if (imageType.endsWith("_back")) return "Back";
   return null;
+}
+
+export type ProgressPhotoPose = "front" | "side" | "back";
+
+export type ProgressPhotoMilestone = "latest" | "previous" | "first_baseline";
+
+/** Column order for compare grid */
+export const PROGRESS_PHOTO_POSES: ProgressPhotoPose[] = ["front", "back", "side"];
+
+/** Row order for compare grid (newest milestones first) */
+export const PROGRESS_PHOTO_COMPARE_ROWS: ProgressPhotoMilestone[] = [
+  "latest",
+  "previous",
+  "first_baseline",
+];
+
+const POSE_TYPE_KEYS: Record<ProgressPhotoPose, { before: string; after: string }> = {
+  front: { before: "before_front", after: "after_front" },
+  side: { before: "before_side", after: "after_side" },
+  back: { before: "before_back", after: "after_back" },
+};
+
+const LEGACY_UNTAGGED_TYPES = new Set(["", "before", "progress", "after", "other"]);
+
+function isTypedPosePhoto(imageType: string | null | undefined): boolean {
+  if (!imageType) return false;
+  return ANGLE_PAIRS.some(({ before, after }) => imageType === before || imageType === after);
+}
+
+function normalizeOrientation(value: string | null | undefined): ProgressPhotoPose | null {
+  if (!value) return null;
+  const s = value.toLowerCase().trim();
+  if (s === "front") return "front";
+  if (s === "back") return "back";
+  if (s === "side") return "side";
+  return null;
+}
+
+/** Pose from `before_front`-style types or legacy `orientation` field. */
+export function resolveProgressPhotoPose(image: ProgressImageLike): ProgressPhotoPose | null {
+  const type = (image.imageType ?? "").toLowerCase();
+  if (type.endsWith("_front")) return "front";
+  if (type.endsWith("_back")) return "back";
+  if (type.endsWith("_side")) return "side";
+  return normalizeOrientation(image.orientation);
+}
+
+/** Assign legacy uploads (e.g. `before`, `progress`) to Front / Back / Side in upload order. */
+export function buildLegacyPoseAssignment<T extends ProgressImageLike>(
+  images: T[]
+): Map<string, ProgressPhotoPose> {
+  const map = new Map<string, ProgressPhotoPose>();
+  const needsAssignment = sortUploadedAsc(
+    images.filter((img) => {
+      if (isTypedPosePhoto(img.imageType)) return false;
+      if (resolveProgressPhotoPose(img)) return false;
+      const t = (img.imageType ?? "").toLowerCase();
+      return LEGACY_UNTAGGED_TYPES.has(t);
+    })
+  );
+  needsAssignment.forEach((img, i) => {
+    map.set(img.id, PROGRESS_PHOTO_POSES[i % PROGRESS_PHOTO_POSES.length]!);
+  });
+  return map;
+}
+
+function getPhotosForPose<T extends ProgressImageLike>(
+  images: T[],
+  pose: ProgressPhotoPose,
+  legacyAssignment: Map<string, ProgressPhotoPose>
+): T[] {
+  const { before, after } = POSE_TYPE_KEYS[pose];
+  return sortUploadedAsc(
+    images.filter((img) => {
+      if (img.imageType === before || img.imageType === after) return true;
+      const canonical = resolveProgressPhotoPose(img);
+      if (canonical === pose && !isTypedPosePhoto(img.imageType)) return true;
+      return legacyAssignment.get(img.id) === pose;
+    })
+  );
+}
+
+export function progressPhotoMilestoneLabel(milestone: ProgressPhotoMilestone): string {
+  const map: Record<ProgressPhotoMilestone, string> = {
+    latest: "Latest",
+    previous: "Previous",
+    first_baseline: "Baseline",
+  };
+  return map[milestone];
+}
+
+export function progressPhotoPoseTabLabel(pose: ProgressPhotoPose): string {
+  const map: Record<ProgressPhotoPose, string> = {
+    front: "Front",
+    side: "Side",
+    back: "Back",
+  };
+  return map[pose];
+}
+
+/** Pick one progress photo for a pose + milestone (typed + legacy types, chronological). */
+export function getProgressPhotoForMilestone<T extends ProgressImageLike>(
+  images: T[],
+  pose: ProgressPhotoPose,
+  milestone: ProgressPhotoMilestone,
+  legacyAssignment?: Map<string, ProgressPhotoPose>
+): T | null {
+  const assignment = legacyAssignment ?? buildLegacyPoseAssignment(images);
+  const combined = getPhotosForPose(images, pose, assignment);
+
+  if (milestone === "first_baseline") {
+    return combined[0] ?? null;
+  }
+  if (milestone === "latest") {
+    return combined[combined.length - 1] ?? null;
+  }
+  if (milestone === "previous") {
+    return combined.length >= 2 ? combined[combined.length - 2]! : null;
+  }
+  return null;
+}
+
+/** True when at least one photo exists for this pose (any milestone). */
+export function hasProgressPhotosForPose<T extends ProgressImageLike>(
+  images: T[],
+  pose: ProgressPhotoPose,
+  legacyAssignment?: Map<string, ProgressPhotoPose>
+): boolean {
+  const assignment = legacyAssignment ?? buildLegacyPoseAssignment(images);
+  return getPhotosForPose(images, pose, assignment).length > 0;
 }
