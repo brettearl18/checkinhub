@@ -8,7 +8,7 @@ const MeasurementSlotTrendChart = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="aspect-square w-full animate-pulse rounded-lg bg-[var(--color-bg-elevated)]" />
+      <div className="aspect-[5/4] w-full animate-pulse rounded-lg bg-[var(--color-bg-elevated)]" />
     ),
   }
 );
@@ -18,6 +18,7 @@ export type { SlotChartRow };
 interface Props {
   rows: SlotChartRow[];
   unit: string;
+  seriesLabel?: string;
   height?: number;
   fillContainer?: boolean;
 }

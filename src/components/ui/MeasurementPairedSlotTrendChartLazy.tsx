@@ -12,6 +12,7 @@ interface Props {
   unit: string;
   leftLabel: string;
   rightLabel: string;
+  seriesLabel?: string;
   height?: number;
   fillContainer?: boolean;
 }

@@ -48,14 +48,17 @@ export function slotChartYDomain(
   return { domain: [domainMin, domainMax], ticks };
 }
 
-/** X-axis spans only readings with data so points are spaced wider (not stretched across 20 slots). */
-export function slotChartXAxis(filledMaxSlot: number): {
+/** X-axis spans only measurements with data so points are spaced wider (not stretched across 20 slots). */
+export function slotChartXAxis(
+  filledMaxSlot: number,
+  measurementName = "Measurement"
+): {
   domain: [number, number];
   ticks: number[];
   label: string;
 } {
   if (filledMaxSlot < 0) {
-    return { domain: [0, 1], ticks: [0], label: "Reading #" };
+    return { domain: [0, 1], ticks: [0], label: `${measurementName} #` };
   }
   const domain: [number, number] = [-0.35, filledMaxSlot + 0.35];
   const ticks: number[] = [];
@@ -64,7 +67,7 @@ export function slotChartXAxis(filledMaxSlot: number): {
   for (let i = 0; i <= filledMaxSlot; i += step) ticks.push(i);
   if (ticks[ticks.length - 1] !== filledMaxSlot) ticks.push(filledMaxSlot);
   const label =
-    count === 1 ? "Reading #1" : `Reading # (1–${count})`;
+    count === 1 ? `${measurementName} #1` : `${measurementName} # (1–${count})`;
   return { domain, ticks, label };
 }
 

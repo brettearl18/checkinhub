@@ -29,6 +29,8 @@ interface MeasurementSlotTrendChartProps {
   /** Up to 20 points, chronological order within the selected range. */
   rows: SlotChartRow[];
   unit: string;
+  /** Short name for X-axis and tooltips, e.g. "Body weight" or "Waist". */
+  seriesLabel?: string;
   color?: string;
   height?: number;
   /** When true, chart fills its parent (e.g. grid cell) instead of capping at 420px. */
@@ -41,6 +43,7 @@ interface MeasurementSlotTrendChartProps {
 export function MeasurementSlotTrendChart({
   rows,
   unit,
+  seriesLabel = "Measurement",
   color = "var(--color-primary)",
   height = 260,
   fillContainer = false,
@@ -57,7 +60,10 @@ export function MeasurementSlotTrendChart({
     return slotChartYDomain(values, unit);
   }, [filledRows, unit]);
 
-  const xAxis = useMemo(() => slotChartXAxis(maxFilledSlot(rows)), [rows]);
+  const xAxis = useMemo(
+    () => slotChartXAxis(maxFilledSlot(rows), seriesLabel),
+    [rows, seriesLabel]
+  );
 
   const hasData = filledRows.length > 0;
   if (!hasData) return null;
@@ -79,7 +85,7 @@ export function MeasurementSlotTrendChart({
       }
       className={
         fillContainer
-          ? "aspect-square w-full overflow-visible"
+          ? "aspect-[5/4] w-full overflow-visible"
           : "mx-auto overflow-visible"
       }
     >
@@ -133,8 +139,10 @@ export function MeasurementSlotTrendChart({
             }}
             labelFormatter={(_, payload) => {
               const row = payload?.[0]?.payload as SlotChartRow | undefined;
-              if (row?.date) return `${formatDateDisplay(row.date)} · #${row.slot + 1}`;
-              return `Slot ${row != null ? row.slot + 1 : ""}`;
+              if (row?.date) {
+                return `${formatDateDisplay(row.date)} · ${seriesLabel} #${row.slot + 1}`;
+              }
+              return `${seriesLabel} #${row != null ? row.slot + 1 : ""}`;
             }}
           />
           <Area

@@ -29,6 +29,8 @@ interface Props {
   unit: string;
   leftLabel: string;
   rightLabel: string;
+  /** Short name for X-axis and tooltips, e.g. "Thigh" or "Arm". */
+  seriesLabel?: string;
   leftColor?: string;
   rightColor?: string;
   height?: number;
@@ -42,6 +44,7 @@ export function MeasurementPairedSlotTrendChart({
   unit,
   leftLabel,
   rightLabel,
+  seriesLabel = "Measurement",
   leftColor = "var(--color-primary)",
   rightColor = "var(--color-warning)",
   height = 260,
@@ -60,7 +63,10 @@ export function MeasurementPairedSlotTrendChart({
     return slotChartYDomain(values, unit);
   }, [filledRows, unit]);
 
-  const xAxis = useMemo(() => slotChartXAxis(maxFilledSlot(rows)), [rows]);
+  const xAxis = useMemo(
+    () => slotChartXAxis(maxFilledSlot(rows), seriesLabel),
+    [rows, seriesLabel]
+  );
 
   const hasData = filledRows.length > 0;
   if (!hasData) return null;
@@ -124,8 +130,10 @@ export function MeasurementPairedSlotTrendChart({
             }}
             labelFormatter={(_, payload) => {
               const row = payload?.[0]?.payload as PairedSlotChartRow | undefined;
-              if (row?.date) return `${formatDateDisplay(row.date)} · #${row.slot + 1}`;
-              return `Reading #${row != null ? row.slot + 1 : ""}`;
+              if (row?.date) {
+                return `${formatDateDisplay(row.date)} · ${seriesLabel} #${row.slot + 1}`;
+              }
+              return `${seriesLabel} #${row != null ? row.slot + 1 : ""}`;
             }}
           />
           <Area
@@ -170,7 +178,7 @@ export function MeasurementPairedSlotTrendChart({
   if (fillContainer) {
     return (
       <div className="w-full">
-        <div className="aspect-square w-full overflow-visible">{chart}</div>
+        <div className="aspect-[5/4] w-full overflow-visible">{chart}</div>
         {legend}
       </div>
     );

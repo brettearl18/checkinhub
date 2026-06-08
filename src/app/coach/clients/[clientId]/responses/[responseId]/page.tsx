@@ -314,7 +314,7 @@ export default function CoachViewResponsePage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <Link
-            href={`/coach/clients/${clientId}`}
+            href="/coach/check-ins"
             className="text-sm text-[var(--color-primary)] hover:underline"
           >
             ← Back to check-ins
@@ -509,6 +509,15 @@ export default function CoachViewResponsePage() {
                 Mark as Reviewed
               </Button>
             )}
+          </div>
+
+          <div className="border-t border-[var(--color-border)] pt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              See weight, measurements, habits, and trends for {clientName || "this client"}.
+            </p>
+            <Button asChild variant="secondary">
+              <Link href={`/coach/clients/${clientId}/progress2`}>View progress</Link>
+            </Button>
           </div>
         </Card>
       )}

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
-import { HABIT_DEFINITIONS } from "@/lib/habits";
+import { HABIT_DEFINITIONS, isGoalMet } from "@/lib/habits";
 import {
   entriesByHabitAndDate,
   computeStreakFromEntries,
@@ -34,6 +34,11 @@ export async function GET(
         ])
       ),
       recentByDate: [],
+      history: {
+        start: todayDate(),
+        end: todayDate(),
+        byDate: {} as Record<string, Record<string, "met" | "missed">>,
+      },
     });
   }
 
@@ -89,10 +94,32 @@ export async function GET(
     }
   }
 
+  const historyDays = 30;
+  const historyEnd = new Date(today);
+  const historyStart = new Date(historyEnd);
+  historyStart.setDate(historyStart.getDate() - historyDays + 1);
+  const byDate: Record<string, Record<string, "met" | "missed">> = {};
+  for (let i = 0; i < historyDays; i++) {
+    const d = new Date(historyStart);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    byDate[dateStr] = {};
+    for (const h of HABIT_DEFINITIONS) {
+      const value = byHabit.get(h.id)?.get(dateStr);
+      if (value == null) continue;
+      byDate[dateStr][h.id] = isGoalMet(h.id, value) ? "met" : "missed";
+    }
+  }
+
   return NextResponse.json({
     habits: HABIT_DEFINITIONS,
     todayEntries,
     streaks,
     recentByDate,
+    history: {
+      start: historyStart.toISOString().slice(0, 10),
+      end: today,
+      byDate,
+    },
   });
 }

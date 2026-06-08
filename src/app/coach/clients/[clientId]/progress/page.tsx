@@ -82,6 +82,102 @@ const MEASUREMENT_LABELS: Record<string, string> = {
   arms: "Arms (cm)",
 };
 
+/** Short names for chart X-axis and tooltips. */
+const MEASUREMENT_SERIES_LABELS: Record<string, string> = {
+  bodyWeight: "Body weight",
+  waist: "Waist",
+  hips: "Hips",
+  chest: "Chest",
+  thighs: "Thigh",
+  arms: "Arm",
+};
+
+const BODY_MEASUREMENT_KEYS = [
+  "waist",
+  "hips",
+  "chest",
+  "leftThigh",
+  "rightThigh",
+  "leftArm",
+  "rightArm",
+] as const;
+
+/** Two-column summary: waist/hips, chest full width, then L/R thighs and L/R arms paired. */
+const BODY_MEASUREMENT_SUMMARY_ORDER = [
+  "waist",
+  "hips",
+  "chest",
+  "leftThigh",
+  "rightThigh",
+  "leftArm",
+  "rightArm",
+] as const;
+
+const BODY_MEASUREMENT_SUMMARY_LABELS: Record<(typeof BODY_MEASUREMENT_KEYS)[number], string> = {
+  waist: "Waist",
+  hips: "Hips",
+  chest: "Chest",
+  leftThigh: "Left thigh",
+  rightThigh: "Right thigh",
+  leftArm: "Left arm",
+  rightArm: "Right arm",
+};
+
+function measurementNumericValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+type BodyMeasurementSummary = {
+  key: string;
+  label: string;
+  value: number;
+  change: number | null;
+};
+
+function formatMeasurementNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatMeasurementDelta(delta: number): string {
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${formatMeasurementNumber(delta)} cm`;
+}
+
+/** Latest cm value per body measurement key (newest record with that field wins). */
+function getLatestBodyMeasurementValues(
+  measurements: Measurement[],
+  baseline: Measurement | undefined
+): BodyMeasurementSummary[] {
+  const result: BodyMeasurementSummary[] = [];
+  for (const key of BODY_MEASUREMENT_SUMMARY_ORDER) {
+    let value: number | null = null;
+    for (const m of measurements) {
+      const latest = measurementNumericValue(m.measurements?.[key]);
+      if (latest != null) {
+        value = latest;
+        break;
+      }
+    }
+    if (value == null) continue;
+
+    const baselineValue = baseline ? measurementNumericValue(baseline.measurements?.[key]) : null;
+    const change = baselineValue != null ? value - baselineValue : null;
+
+    result.push({
+      key,
+      label: BODY_MEASUREMENT_SUMMARY_LABELS[key],
+      value,
+      change,
+    });
+  }
+  return result;
+}
+
 /** All measurements with a value for this metric, oldest → newest. */
 function getAllTrendPoints(
   measurements: Measurement[],
@@ -89,9 +185,10 @@ function getAllTrendPoints(
 ): { date: string; value: number }[] {
   const points: { date: string; value: number }[] = [];
   for (const m of measurements) {
-    let value: number | null = null;
-    if (key === "bodyWeight") value = m.bodyWeight ?? null;
-    else value = m.measurements?.[key] ?? null;
+    const value =
+      key === "bodyWeight"
+        ? measurementNumericValue(m.bodyWeight)
+        : measurementNumericValue(m.measurements?.[key]);
     if (value != null && m.date) points.push({ date: m.date, value });
   }
   return points.sort((a, b) => a.date.localeCompare(b.date));
@@ -179,6 +276,7 @@ type MeasurementTrendCard =
   | {
       key: string;
       label: string;
+      seriesLabel: string;
       kind: "single";
       slotRows: SlotChartRow[];
       hasInRange: boolean;
@@ -188,6 +286,7 @@ type MeasurementTrendCard =
   | {
       key: string;
       label: string;
+      seriesLabel: string;
       kind: "paired";
       slotRows: PairedSlotChartRow[];
       leftLabel: string;
@@ -266,6 +365,7 @@ export default function CoachClientProgressPage() {
       cards.push({
         key,
         label: MEASUREMENT_LABELS[key] ?? key,
+        seriesLabel: MEASUREMENT_SERIES_LABELS[key] ?? key,
         kind: "single",
         slotRows: buildSlotRows(filtered),
         hasInRange: filtered.length > 0,
@@ -280,6 +380,7 @@ export default function CoachClientProgressPage() {
     cards.push({
       key: "thighs",
       label: MEASUREMENT_LABELS.thighs,
+      seriesLabel: MEASUREMENT_SERIES_LABELS.thighs,
       kind: "paired",
       slotRows: buildPairedSlotRows(thighMerged),
       leftLabel: "Left thigh",
@@ -297,6 +398,7 @@ export default function CoachClientProgressPage() {
     cards.push({
       key: "arms",
       label: MEASUREMENT_LABELS.arms,
+      seriesLabel: MEASUREMENT_SERIES_LABELS.arms,
       kind: "paired",
       slotRows: buildPairedSlotRows(armMerged),
       leftLabel: "Left arm",
@@ -317,10 +419,11 @@ export default function CoachClientProgressPage() {
   const baselineWeight = baseline?.bodyWeight ?? null;
   const weightChange =
     currentWeight != null && baselineWeight != null ? currentWeight - baselineWeight : null;
-  const latestMeasurements = latest?.measurements ?? {};
-  const measurementKeys = Object.keys(latestMeasurements).filter(
-    (k) => k !== "bodyWeight" && typeof latestMeasurements[k] === "number"
+  const latestBodyMeasurements = useMemo(
+    () => getLatestBodyMeasurementValues(measurements, baseline),
+    [measurements, baseline]
   );
+  const hasBodyMeasurementBaseline = latestBodyMeasurements.some((item) => item.change != null);
   if (!clientId) {
     return (
       <div className="space-y-6">
@@ -353,11 +456,18 @@ export default function CoachClientProgressPage() {
             Question-level progress over time
           </p>
         </div>
-        <Button asChild variant="secondary">
-          <Link href={clientId ? `/coach/clients/${clientId}/settings` : "#"}>
-            Settings
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link href={clientId ? `/coach/clients/${clientId}/progress2` : "#"}>
+              Try new dashboard
+            </Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href={clientId ? `/coach/clients/${clientId}/settings` : "#"}>
+              Settings
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
@@ -433,17 +543,37 @@ export default function CoachClientProgressPage() {
 
             <Card className="p-4">
               <h3 className="text-sm font-medium text-[var(--color-text-muted)]">Body measurements</h3>
-              {measurementKeys.length > 0 ? (
-                <ul className="mt-2 space-y-1 text-sm text-[var(--color-text)]">
-                  {measurementKeys.slice(0, 6).map((key) => (
-                    <li key={key}>
-                      {key.replace(/([A-Z])/g, " $1").trim()}: {latestMeasurements[key]} cm
-                    </li>
-                  ))}
-                  {measurementKeys.length > 6 && (
-                    <li className="text-[var(--color-text-muted)]">+{measurementKeys.length - 6} more</li>
+              {latestBodyMeasurements.length > 0 ? (
+                <>
+                  <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-[var(--color-text)]">
+                    {latestBodyMeasurements.map((item) => (
+                      <li
+                        key={item.key}
+                        className={`flex min-w-0 flex-wrap items-baseline gap-x-1.5${item.key === "chest" ? " col-span-2" : ""}`}
+                      >
+                        <span className="whitespace-nowrap">
+                          {item.label}: {formatMeasurementNumber(item.value)} cm
+                        </span>
+                        {item.change != null && item.change !== 0 && (
+                          <span
+                            className={
+                              item.change < 0
+                                ? "whitespace-nowrap text-green-600 dark:text-green-400"
+                                : item.change > 0
+                                  ? "whitespace-nowrap text-red-600 dark:text-red-400"
+                                  : "whitespace-nowrap text-amber-600 dark:text-amber-400"
+                            }
+                          >
+                            ({formatMeasurementDelta(item.change)})
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {hasBodyMeasurementBaseline && (
+                    <p className="mt-2 text-xs text-[var(--color-text-muted)]">Change vs baseline</p>
                   )}
-                </ul>
+                </>
               ) : (
                 <p className="mt-1 text-sm text-[var(--color-text-muted)]">No measurements</p>
               )}
@@ -624,8 +754,8 @@ export default function CoachClientProgressPage() {
               ))}
             </div>
             <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              Readings in order within the range (not stretched by calendar gaps). Charts scale to your data so changes are easier to see.
-              Thighs and arms plot left and right together; each reading # is a day with at least one side logged.
+              Measurements in order within the range (not stretched by calendar gaps). Charts scale to your data so changes are easier to see.
+              Thighs and arms plot left and right together; each point # is a day with at least one side logged.
             </p>
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               {measurementTrendCards.map((card) => (
@@ -642,17 +772,19 @@ export default function CoachClientProgressPage() {
                           unit={card.unit}
                           leftLabel={card.leftLabel}
                           rightLabel={card.rightLabel}
+                          seriesLabel={card.seriesLabel}
                           fillContainer
                         />
                       ) : (
                         <MeasurementSlotTrendChartLazy
                           rows={card.slotRows}
                           unit={card.unit}
+                          seriesLabel={card.seriesLabel}
                           fillContainer
                         />
                       )
                     ) : (
-                      <p className="flex aspect-square w-full items-center justify-center text-center text-sm text-[var(--color-text-muted)]">
+                      <p className="flex aspect-[5/4] w-full items-center justify-center text-center text-sm text-[var(--color-text-muted)]">
                         {card.hasEver
                           ? "No measurements in this time range."
                           : "No data yet."}
