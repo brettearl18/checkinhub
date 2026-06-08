@@ -73,14 +73,6 @@ function getScoreBand(score: number, redMax: number, orangeMax: number): "red" |
   return "green";
 }
 
-const MEASUREMENT_KEYS = [
-  "bodyWeight",
-  "waist",
-  "hips",
-  "chest",
-  "thighs",
-  "arms",
-] as const;
 const MEASUREMENT_LABELS: Record<string, string> = {
   bodyWeight: "Body Weight (kg)",
   waist: "Waist (cm)",
@@ -183,11 +175,29 @@ function buildPairedSlotRows(merged: PairedMeasurementRow[]): PairedSlotChartRow
   return rows;
 }
 
-function singleMetricKeyFromTab(tab: string): string | null {
-  if (tab === "bodyWeight") return "bodyWeight";
-  if (tab === "thighs" || tab === "arms") return null;
-  return tab;
-}
+type MeasurementTrendCard =
+  | {
+      key: string;
+      label: string;
+      kind: "single";
+      slotRows: SlotChartRow[];
+      hasInRange: boolean;
+      hasEver: boolean;
+      unit: string;
+    }
+  | {
+      key: string;
+      label: string;
+      kind: "paired";
+      slotRows: PairedSlotChartRow[];
+      leftLabel: string;
+      rightLabel: string;
+      hasInRange: boolean;
+      hasEver: boolean;
+      unit: string;
+    };
+
+const GRID_CHART_HEIGHT = 200;
 
 export default function CoachClientProgressPage() {
   const params = useParams();
@@ -202,7 +212,6 @@ export default function CoachClientProgressPage() {
   const [trafficLightOrangeMax, setTrafficLightOrangeMax] = useState(70);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
-  const [trendTab, setTrendTab] = useState<string>("bodyWeight");
   const [measurementRange, setMeasurementRange] = useState<MeasurementRangeKey>("180d");
 
   const { fetchWithAuth } = useApiClient();
@@ -247,81 +256,62 @@ export default function CoachClientProgressPage() {
     })();
   }, [clientId, fetchWithAuth]);
 
-  const singleMetricKey = singleMetricKeyFromTab(trendTab);
   const measurementRangeDays = MEASUREMENT_RANGE_OPTIONS.find((r) => r.key === measurementRange)?.days ?? 180;
 
-  const allTrendPoints = useMemo(() => {
-    if (!singleMetricKey) return [];
-    return getAllTrendPoints(measurements, singleMetricKey);
-  }, [measurements, singleMetricKey]);
+  const measurementTrendCards = useMemo((): MeasurementTrendCard[] => {
+    const days = measurementRangeDays;
+    const cards: MeasurementTrendCard[] = [];
 
-  const filteredTrendPoints = useMemo(() => {
-    if (!singleMetricKey) return [];
-    return filterPointsByRange(allTrendPoints, measurementRangeDays);
-  }, [singleMetricKey, allTrendPoints, measurementRangeDays]);
+    for (const key of ["bodyWeight", "waist", "hips", "chest"] as const) {
+      const all = getAllTrendPoints(measurements, key);
+      const filtered = filterPointsByRange(all, days);
+      cards.push({
+        key,
+        label: MEASUREMENT_LABELS[key] ?? key,
+        kind: "single",
+        slotRows: buildSlotRows(filtered),
+        hasInRange: filtered.length > 0,
+        hasEver: all.length > 0,
+        unit: key === "bodyWeight" ? "kg" : "cm",
+      });
+    }
 
-  const slotRows = useMemo(() => buildSlotRows(filteredTrendPoints), [filteredTrendPoints]);
+    const leftThigh = filterPointsByRange(getAllTrendPoints(measurements, "leftThigh"), days);
+    const rightThigh = filterPointsByRange(getAllTrendPoints(measurements, "rightThigh"), days);
+    const thighMerged = mergePairedTrendPoints(leftThigh, rightThigh);
+    cards.push({
+      key: "thighs",
+      label: MEASUREMENT_LABELS.thighs,
+      kind: "paired",
+      slotRows: buildPairedSlotRows(thighMerged),
+      leftLabel: "Left thigh",
+      rightLabel: "Right thigh",
+      hasInRange: thighMerged.some((r) => r.left != null || r.right != null),
+      hasEver:
+        getAllTrendPoints(measurements, "leftThigh").length > 0 ||
+        getAllTrendPoints(measurements, "rightThigh").length > 0,
+      unit: "cm",
+    });
 
-  const filteredLeftThigh = useMemo(
-    () => filterPointsByRange(getAllTrendPoints(measurements, "leftThigh"), measurementRangeDays),
-    [measurements, measurementRangeDays]
-  );
-  const filteredRightThigh = useMemo(
-    () => filterPointsByRange(getAllTrendPoints(measurements, "rightThigh"), measurementRangeDays),
-    [measurements, measurementRangeDays]
-  );
-  const thighTableRows = useMemo(
-    () => mergePairedTrendPoints(filteredLeftThigh, filteredRightThigh),
-    [filteredLeftThigh, filteredRightThigh]
-  );
+    const leftArm = filterPointsByRange(getAllTrendPoints(measurements, "leftArm"), days);
+    const rightArm = filterPointsByRange(getAllTrendPoints(measurements, "rightArm"), days);
+    const armMerged = mergePairedTrendPoints(leftArm, rightArm);
+    cards.push({
+      key: "arms",
+      label: MEASUREMENT_LABELS.arms,
+      kind: "paired",
+      slotRows: buildPairedSlotRows(armMerged),
+      leftLabel: "Left arm",
+      rightLabel: "Right arm",
+      hasInRange: armMerged.some((r) => r.left != null || r.right != null),
+      hasEver:
+        getAllTrendPoints(measurements, "leftArm").length > 0 ||
+        getAllTrendPoints(measurements, "rightArm").length > 0,
+      unit: "cm",
+    });
 
-  const filteredLeftArm = useMemo(
-    () => filterPointsByRange(getAllTrendPoints(measurements, "leftArm"), measurementRangeDays),
-    [measurements, measurementRangeDays]
-  );
-  const filteredRightArm = useMemo(
-    () => filterPointsByRange(getAllTrendPoints(measurements, "rightArm"), measurementRangeDays),
-    [measurements, measurementRangeDays]
-  );
-  const armTableRows = useMemo(
-    () => mergePairedTrendPoints(filteredLeftArm, filteredRightArm),
-    [filteredLeftArm, filteredRightArm]
-  );
-
-  const thighAnyEver = useMemo(
-    () =>
-      getAllTrendPoints(measurements, "leftThigh").length > 0 ||
-      getAllTrendPoints(measurements, "rightThigh").length > 0,
-    [measurements]
-  );
-  const armAnyEver = useMemo(
-    () =>
-      getAllTrendPoints(measurements, "leftArm").length > 0 ||
-      getAllTrendPoints(measurements, "rightArm").length > 0,
-    [measurements]
-  );
-
-  const thighInRange = useMemo(
-    () => thighTableRows.some((r) => r.left != null || r.right != null),
-    [thighTableRows]
-  );
-  const armInRange = useMemo(
-    () => armTableRows.some((r) => r.left != null || r.right != null),
-    [armTableRows]
-  );
-
-  const thighPairedSlotRows = useMemo(() => buildPairedSlotRows(thighTableRows), [thighTableRows]);
-  const armPairedSlotRows = useMemo(() => buildPairedSlotRows(armTableRows), [armTableRows]);
-
-  const showNoDataInRange =
-    (!!singleMetricKey && allTrendPoints.length > 0 && filteredTrendPoints.length === 0) ||
-    (trendTab === "thighs" && thighAnyEver && !thighInRange) ||
-    (trendTab === "arms" && armAnyEver && !armInRange);
-
-  const showTrendChart =
-    (!!singleMetricKey && filteredTrendPoints.length > 0) ||
-    (trendTab === "thighs" && thighInRange) ||
-    (trendTab === "arms" && armInRange);
+    return cards;
+  }, [measurements, measurementRangeDays]);
 
   const latest = measurements[0];
   const baseline = measurements.find((m) => m.isBaseline) ?? measurements[measurements.length - 1];
@@ -622,19 +612,7 @@ export default function CoachClientProgressPage() {
             <p className="text-sm text-[var(--color-text-muted)]">
               Track weight and body measurements over time
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {MEASUREMENT_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTrendTab(key)}
-                  className={`rounded px-3 py-1.5 text-sm ${trendTab === key ? "bg-[var(--color-primary)] text-white" : "bg-[var(--color-primary-subtle)] text-[var(--color-text)]"}`}
-                >
-                  {MEASUREMENT_LABELS[key] ?? key}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]">Time range</p>
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">Time range</p>
             <div className="mt-1 flex flex-wrap gap-2">
               {MEASUREMENT_RANGE_OPTIONS.map((opt) => (
                 <button
@@ -648,131 +626,46 @@ export default function CoachClientProgressPage() {
               ))}
             </div>
             <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              X-axis shows up to {MEASUREMENT_SLOT_COUNT} readings in order (1st, 2nd, …) within the range — not stretched by calendar gaps.
-              {trendTab === "thighs" || trendTab === "arms"
-                ? " Thighs and arms plot left and right together; each reading # is a day with at least one side logged."
-                : ""}
+              Readings in order within the range (not stretched by calendar gaps). Charts scale to your data so changes are easier to see.
+              Thighs and arms plot left and right together; each reading # is a day with at least one side logged.
             </p>
-            {showNoDataInRange ? (
-              <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-                No measurements in this time range. Try a longer range.
-              </p>
-            ) : showTrendChart ? (
-              <>
-                <div className="mt-4">
-                  {trendTab === "thighs" ? (
-                    <MeasurementPairedSlotTrendChartLazy
-                      rows={thighPairedSlotRows}
-                      unit="cm"
-                      leftLabel="Left thigh"
-                      rightLabel="Right thigh"
-                    />
-                  ) : trendTab === "arms" ? (
-                    <MeasurementPairedSlotTrendChartLazy
-                      rows={armPairedSlotRows}
-                      unit="cm"
-                      leftLabel="Left arm"
-                      rightLabel="Right arm"
-                    />
-                  ) : (
-                    <MeasurementSlotTrendChartLazy
-                      rows={slotRows}
-                      unit={trendTab === "bodyWeight" ? "kg" : "cm"}
-                    />
-                  )}
-                </div>
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-                    View as table
-                  </summary>
-                  <div className="mt-2 overflow-x-auto">
-                    {trendTab === "thighs" ? (
-                      <table className="w-full min-w-[280px] text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
-                            <th className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] pb-2 pr-4 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                              Date
-                            </th>
-                            <th className="pb-2 pr-4">Left thigh</th>
-                            <th className="pb-2">Right thigh</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {thighTableRows.map((row) => (
-                            <tr key={row.date} className="border-b border-[var(--color-border)]">
-                              <td className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] py-1.5 pr-4 text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                                {formatDateDisplay(row.date)}
-                              </td>
-                              <td className="py-1.5 pr-4 text-[var(--color-text)]">
-                                {row.left != null ? `${row.left} cm` : "—"}
-                              </td>
-                              <td className="py-1.5 text-[var(--color-text)]">
-                                {row.right != null ? `${row.right} cm` : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : trendTab === "arms" ? (
-                      <table className="w-full min-w-[280px] text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
-                            <th className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] pb-2 pr-4 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                              Date
-                            </th>
-                            <th className="pb-2 pr-4">Left arm</th>
-                            <th className="pb-2">Right arm</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {armTableRows.map((row) => (
-                            <tr key={row.date} className="border-b border-[var(--color-border)]">
-                              <td className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] py-1.5 pr-4 text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                                {formatDateDisplay(row.date)}
-                              </td>
-                              <td className="py-1.5 pr-4 text-[var(--color-text)]">
-                                {row.left != null ? `${row.left} cm` : "—"}
-                              </td>
-                              <td className="py-1.5 text-[var(--color-text)]">
-                                {row.right != null ? `${row.right} cm` : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {measurementTrendCards.map((card) => (
+                <div
+                  key={card.key}
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3"
+                >
+                  <h4 className="text-sm font-medium text-[var(--color-text)]">{card.label}</h4>
+                  <div className="mt-2">
+                    {card.hasInRange ? (
+                      card.kind === "paired" ? (
+                        <MeasurementPairedSlotTrendChartLazy
+                          rows={card.slotRows}
+                          unit={card.unit}
+                          leftLabel={card.leftLabel}
+                          rightLabel={card.rightLabel}
+                          height={GRID_CHART_HEIGHT}
+                          fillContainer
+                        />
+                      ) : (
+                        <MeasurementSlotTrendChartLazy
+                          rows={card.slotRows}
+                          unit={card.unit}
+                          height={GRID_CHART_HEIGHT}
+                          fillContainer
+                        />
+                      )
                     ) : (
-                      <table className="w-full min-w-[200px] text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
-                            <th className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] pb-2 pr-4 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                              Date
-                            </th>
-                            <th className="pb-2">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredTrendPoints.map((p, i) => (
-                            <tr key={`${p.date}-${i}-${p.value}`} className="group border-b border-[var(--color-border)]">
-                              <td className="sticky left-0 z-10 min-w-[90px] bg-[var(--color-bg)] py-1.5 pr-4 text-[var(--color-text)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                                {formatDateDisplay(p.date)}
-                              </td>
-                              <td className="py-1.5 text-[var(--color-text)]">
-                                {p.value}
-                                {trendTab === "bodyWeight" ? " kg" : " cm"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+                        {card.hasEver
+                          ? "No measurements in this time range."
+                          : "No data yet."}
+                      </p>
                     )}
                   </div>
-                </details>
-              </>
-            ) : (
-              <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-                No data for {MEASUREMENT_LABELS[trendTab] ?? trendTab}
-              </p>
-            )}
+                </div>
+              ))}
+            </div>
           </Card>
 
           <Card className="p-4">

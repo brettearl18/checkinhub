@@ -13,6 +13,7 @@ interface Props {
   leftLabel: string;
   rightLabel: string;
   height?: number;
+  fillContainer?: boolean;
 }
 
 /** Direct import avoids Turbopack/async chunk failures from nested dynamic() + recharts. */

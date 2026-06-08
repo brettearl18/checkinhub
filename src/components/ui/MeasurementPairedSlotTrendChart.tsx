@@ -11,7 +11,11 @@ import {
   AreaChart,
 } from "recharts";
 import { formatDateDisplay } from "@/lib/format-date";
-import { MEASUREMENT_SLOT_COUNT } from "./measurement-slot-constants";
+import {
+  maxFilledSlot,
+  slotChartXAxis,
+  slotChartYDomain,
+} from "./measurement-slot-chart-utils";
 
 export interface PairedSlotChartRow {
   slot: number;
@@ -28,30 +32,11 @@ interface Props {
   leftColor?: string;
   rightColor?: string;
   height?: number;
+  /** When true, chart fills its parent (e.g. grid cell) instead of capping at 420px. */
+  fillContainer?: boolean;
 }
 
-const PADDING_CM = 5;
-
-function tickStep(range: number): number {
-  if (range <= 0) return 1;
-  if (range <= 12) return 2;
-  if (range <= 25) return 5;
-  return 10;
-}
-
-function niceTicks(domainMin: number, domainMax: number): number[] {
-  const range = domainMax - domainMin;
-  const step = tickStep(range);
-  const start = Math.floor(domainMin / step) * step;
-  const ticks: number[] = [];
-  for (let v = start; v <= domainMax + step * 0.5; v += step) {
-    if (v >= domainMin - 0.001) ticks.push(v);
-  }
-  if (ticks.length < 2) return [domainMin, domainMax];
-  return ticks;
-}
-
-/** Fixed 20 slots; each slot is a calendar date with at least one side logged (left / right series). */
+/** Each slot is a calendar date with at least one side logged (left / right series). */
 export function MeasurementPairedSlotTrendChart({
   rows,
   unit,
@@ -60,28 +45,38 @@ export function MeasurementPairedSlotTrendChart({
   leftColor = "var(--color-primary)",
   rightColor = "var(--color-warning)",
   height = 260,
+  fillContainer = false,
 }: Props) {
   const gradL = useId().replace(/:/g, "");
   const gradR = useId().replace(/:/g, "");
 
-  const { domain, ticks } = useMemo(() => {
-    const values = rows.flatMap((r) => [r.left, r.right]).filter((v): v is number => v != null);
-    if (values.length === 0) return { domain: [0, 10] as [number, number], ticks: [0, 5, 10] };
-    const dataMin = Math.min(...values);
-    const dataMax = Math.max(...values);
-    const domainMin = dataMin - PADDING_CM;
-    const domainMax = dataMax + PADDING_CM;
-    const domain: [number, number] = [domainMin, domainMax];
-    return { domain, ticks: niceTicks(domainMin, domainMax) };
-  }, [rows]);
+  const filledRows = useMemo(
+    () => rows.filter((r) => r.left != null || r.right != null),
+    [rows]
+  );
 
-  const hasData = rows.some((r) => r.left != null || r.right != null);
+  const { domain, ticks } = useMemo(() => {
+    const values = filledRows.flatMap((r) => [r.left, r.right]).filter((v): v is number => v != null);
+    return slotChartYDomain(values, unit);
+  }, [filledRows, unit]);
+
+  const xAxis = useMemo(() => slotChartXAxis(maxFilledSlot(rows)), [rows]);
+
+  const hasData = filledRows.length > 0;
   if (!hasData) return null;
 
   return (
-    <div style={{ width: "100%", minWidth: 200, height, minHeight: Math.max(100, height) }} className="overflow-visible">
+    <div
+      style={{
+        width: "100%",
+        ...(fillContainer ? {} : { maxWidth: 420 }),
+        height,
+        minHeight: Math.max(100, height),
+      }}
+      className={fillContainer ? "w-full overflow-visible" : "mx-auto overflow-visible"}
+    >
       <ResponsiveContainer width="100%" height={height} minHeight={Math.max(100, height)}>
-        <AreaChart data={rows} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+        <AreaChart data={filledRows} margin={{ top: 8, right: 12, left: 4, bottom: 8 }}>
           <defs>
             <linearGradient id={gradL} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={leftColor} stopOpacity={0.28} />
@@ -96,15 +91,15 @@ export function MeasurementPairedSlotTrendChart({
           <XAxis
             type="number"
             dataKey="slot"
-            domain={[0, MEASUREMENT_SLOT_COUNT - 1]}
-            ticks={[0, 4, 8, 12, 16, 19]}
+            domain={xAxis.domain}
+            ticks={xAxis.ticks}
             tickFormatter={(s) => (Number.isInteger(s) ? `${s + 1}` : "")}
             stroke="var(--color-text-muted)"
             tick={{ fontSize: 11 }}
             axisLine={{ stroke: "var(--color-border)" }}
             tickLine={false}
             label={{
-              value: "Reading # (1–20)",
+              value: xAxis.label,
               position: "bottom",
               offset: 0,
               fill: "var(--color-text-muted)",

@@ -19,6 +19,7 @@ interface Props {
   rows: SlotChartRow[];
   unit: string;
   height?: number;
+  fillContainer?: boolean;
 }
 
 export function MeasurementSlotTrendChartLazy(props: Props) {
