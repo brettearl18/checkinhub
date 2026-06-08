@@ -70,20 +70,18 @@ function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   });
 }
 
+function isRemoteProgressPhotoUrl(url: string): boolean {
+  return url.startsWith("http://") || url.startsWith("https://");
+}
+
 async function loadProgressImage(
   imageUrl: string,
   options?: ProgressSocialPostOptions
 ): Promise<HTMLImageElement> {
   const normalized = normalizeImageUrl(imageUrl);
 
-  if (normalized.startsWith("/")) {
+  if (!isRemoteProgressPhotoUrl(normalized)) {
     return loadImageElement(normalized, false);
-  }
-
-  try {
-    return await loadImageElement(normalized, true);
-  } catch {
-    /* try authenticated proxy */
   }
 
   const fetchAuth = options?.fetchAuthenticated;
@@ -290,11 +288,10 @@ export async function fetchProgressPhotoBlob(
 ): Promise<Blob> {
   const normalized = normalizeImageUrl(imageUrl);
 
-  try {
-    const direct = await fetch(normalized);
-    if (direct.ok) return direct.blob();
-  } catch {
-    /* try authenticated proxy */
+  if (!isRemoteProgressPhotoUrl(normalized)) {
+    const res = await fetch(normalized);
+    if (!res.ok) throw new Error(`Failed to load image (${res.status})`);
+    return res.blob();
   }
 
   const res = await fetchAuthenticated(proxiedImageUrl(normalized));
