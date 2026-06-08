@@ -113,6 +113,7 @@ export async function POST(request: Request) {
       clientName,
       pose,
       imageUrl,
+      storagePath: path,
       beforeDate,
       afterDate,
       createdAt: now,

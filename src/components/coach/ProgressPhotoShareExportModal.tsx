@@ -62,6 +62,22 @@ function layerTransform(zoom: number, pan: { x: number; y: number }) {
   return `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
 }
 
+const ALIGNMENT_GUIDE_POSITIONS = [20, 35, 50, 65, 80];
+
+function AlignmentGuides() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10" aria-hidden>
+      {ALIGNMENT_GUIDE_POSITIONS.map((pct) => (
+        <div
+          key={pct}
+          className="absolute left-0 right-0 border-t border-dotted border-[var(--color-primary)]/55"
+          style={{ top: `${pct}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ZoomControl({
   label,
   value,
@@ -110,6 +126,7 @@ function ShareSlotEditor({
   side,
   layer,
   active,
+  showGuides,
   onActivate,
   onLayerChange,
 }: {
@@ -117,6 +134,7 @@ function ShareSlotEditor({
   side: SlotId;
   layer: LayerState;
   active: boolean;
+  showGuides: boolean;
   onActivate: () => void;
   onLayerChange: (next: LayerState) => void;
 }) {
@@ -170,6 +188,7 @@ function ShareSlotEditor({
         onPointerDown={onActivate}
         onWheel={onWheel}
       >
+        {showGuides && <AlignmentGuides />}
         <div
           className="absolute inset-0 cursor-move"
           style={{
@@ -213,6 +232,7 @@ export function ProgressPhotoShareExportModal({
   const [activeSlot, setActiveSlot] = useState<SlotId>("before");
   const [saveToHallOfFame, setSaveToHallOfFame] = useState(true);
   const [showWeeksBetween, setShowWeeksBetween] = useState(true);
+  const [showAlignmentGuides, setShowAlignmentGuides] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -228,6 +248,7 @@ export function ProgressPhotoShareExportModal({
     setActiveSlot("before");
     setSaveToHallOfFame(true);
     setShowWeeksBetween(true);
+    setShowAlignmentGuides(true);
     setError(null);
     setSuccess(null);
   }, [open, initialBeforeAlign, initialAfterAlign]);
@@ -362,6 +383,7 @@ export function ProgressPhotoShareExportModal({
               side="before"
               layer={beforeLayer}
               active={activeSlot === "before"}
+              showGuides={showAlignmentGuides}
               onActivate={() => setActiveSlot("before")}
               onLayerChange={setBeforeLayer}
             />
@@ -370,6 +392,7 @@ export function ProgressPhotoShareExportModal({
               side="after"
               layer={afterLayer}
               active={activeSlot === "after"}
+              showGuides={showAlignmentGuides}
               onActivate={() => setActiveSlot("after")}
               onLayerChange={setAfterLayer}
             />
@@ -392,13 +415,24 @@ export function ProgressPhotoShareExportModal({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={resetLayers}
-            className="text-xs font-medium text-[var(--color-primary)] hover:underline"
-          >
-            Reset alignment
-          </button>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="button"
+              onClick={resetLayers}
+              className="text-xs font-medium text-[var(--color-primary)] hover:underline"
+            >
+              Reset alignment
+            </button>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--color-text)]">
+              <input
+                type="checkbox"
+                checked={showAlignmentGuides}
+                onChange={(e) => setShowAlignmentGuides(e.target.checked)}
+                className="accent-[var(--color-primary)]"
+              />
+              Show alignment guides
+            </label>
+          </div>
 
           <div className="space-y-2">
             <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--color-text)]">
