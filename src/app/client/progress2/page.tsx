@@ -528,7 +528,10 @@ export default function ClientProgress2Page() {
             <Link href="/client/measurements">Measurements</Link>
           </Button>
           <Button asChild variant="secondary">
-            <Link href="/client/timeline">Timeline</Link>
+            <Link href="/client/timeline" className="inline-flex items-center gap-1.5">
+              <TimelineIcon className="h-4 w-4 shrink-0" />
+              Timeline
+            </Link>
           </Button>
         </div>
       </div>
@@ -842,5 +845,25 @@ export default function ClientProgress2Page() {
         </>
       )}
     </div>
+  );
+}
+
+function TimelineIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 3v18" />
+      <circle cx="12" cy="6" r="2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="18" r="2" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
