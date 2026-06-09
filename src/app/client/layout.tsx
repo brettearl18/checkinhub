@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { TimelineAnnouncementModal } from "@/components/client/TimelineAnnouncementModal";
 import { VanaBrandBar } from "@/components/client/VanaBrandBar";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -125,11 +126,14 @@ export default function ClientLayout({
     return pathname?.startsWith(href);
   };
 
+  const announcementUserId = identity?.clientId ?? user?.uid ?? null;
+
   return (
     <div
       className="flex min-h-screen flex-col md:flex-row bg-[var(--color-bg)]"
       {...(VANA_THEME_TRIAL ? { "data-theme": "vana" } : {})}
     >
+      <TimelineAnnouncementModal userId={announcementUserId} />
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-stone-200/80 bg-[#faf7f2]">
         <VanaBrandBar />
