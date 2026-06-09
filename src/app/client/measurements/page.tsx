@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -100,9 +100,24 @@ export default function ClientMeasurementsPage() {
     }
   };
 
+  const scrollToHashEntry = useCallback(() => {
+    const hash = typeof window !== "undefined" ? window.location.hash.slice(1) : "";
+    if (!hash.startsWith("measurement-")) return;
+    const el = document.getElementById(hash);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("bg-[var(--color-primary-subtle)]");
+      window.setTimeout(() => el.classList.remove("bg-[var(--color-primary-subtle)]"), 2000);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [fetchWithAuth]);
+
+  useEffect(() => {
+    if (!loading && list.length > 0) scrollToHashEntry();
+  }, [loading, list.length, scrollToHashEntry]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,7 +299,11 @@ export default function ClientMeasurementsPage() {
               </thead>
               <tbody>
                 {list.map((m) => (
-                  <tr key={m.id} className="border-b border-[var(--color-border)] hover:bg-[var(--color-primary-subtle)]/20">
+                  <tr
+                    key={m.id}
+                    id={`measurement-${m.id}`}
+                    className="scroll-mt-24 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-primary-subtle)]/20"
+                  >
                     <td className="px-4 py-3">
                       <span className="font-medium text-[var(--color-text)]">{formatDateDisplay(m.date)}</span>
                       {m.isBaseline && (

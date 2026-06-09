@@ -3,14 +3,23 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
 import { MeasurementComparisonChartLazy } from "@/components/ui/MeasurementComparisonChartLazy";
+import { ProgressPhotoCompareModal } from "@/components/coach/ProgressPhotoCompareModal";
+import type { ProgressPhotoCompareItem } from "@/components/coach/ProgressPhotoComparePanel";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
-import { pickBaselineAndCurrentPhoto, progressPhotoPoseLabel } from "@/lib/progress-comparison-photos";
+import {
+  buildLegacyPoseAssignment,
+  pickBaselineAndCurrentPhoto,
+  progressPhotoPoseLabel,
+  resolveProgressPhotoPose,
+  type ProgressPhotoPose,
+} from "@/lib/progress-comparison-photos";
 
 interface WeekLabel {
   key: string;
@@ -84,6 +93,7 @@ export default function ClientProgressPage() {
   const [authError, setAuthError] = useState(false);
   const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number] | "arms" | "thighs">("bodyWeight");
   const [stripRange, setStripRange] = useState<HabitStripRange>("7d");
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,6 +192,33 @@ export default function ClientProgressPage() {
     [baselinePhoto, currentPhoto]
   );
 
+  const compareImages = useMemo(
+    (): ProgressPhotoCompareItem[] =>
+      progressImages.map((img) => ({
+        id: img.id,
+        imageUrl: img.imageUrl,
+        imageType: img.imageType,
+        caption: img.caption,
+        uploadedAt: img.uploadedAt,
+      })),
+    [progressImages]
+  );
+
+  const legacyAssignment = useMemo(
+    () => buildLegacyPoseAssignment(compareImages),
+    [compareImages]
+  );
+
+  const comparePose = useMemo((): ProgressPhotoPose => {
+    const ref = baselinePhoto ?? currentPhoto;
+    if (!ref) return "front";
+    return resolveProgressPhotoPose(ref) ?? "front";
+  }, [baselinePhoto, currentPhoto]);
+
+  const canComparePhotos = Boolean(
+    baselinePhoto && currentPhoto && baselinePhoto.id !== currentPhoto.id
+  );
+
   if (authError) {
     return <AuthErrorRetry onRetry={() => window.location.reload()} />;
   }
@@ -191,6 +228,12 @@ export default function ClientProgressPage() {
       <div>
         <Link href="/client" className="text-sm text-[var(--color-primary)] hover:underline">
           ← Dashboard
+        </Link>
+        <Link
+          href="/client/progress2"
+          className="ml-3 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:underline"
+        >
+          New dashboard (beta) →
         </Link>
         <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Your Progress</h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
@@ -460,13 +503,30 @@ export default function ClientProgressPage() {
                   )}
                 </div>
               </div>
-              <Link href="/client/progress-photos" className="mt-4 inline-block text-sm text-[var(--color-primary)] hover:underline">
-                Manage all photos →
-              </Link>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {canComparePhotos && (
+                  <Button type="button" variant="primary" onClick={() => setCompareOpen(true)}>
+                    Compare before &amp; after
+                  </Button>
+                )}
+                <Link href="/client/progress-photos" className="text-sm text-[var(--color-primary)] hover:underline">
+                  Manage all photos →
+                </Link>
+              </div>
             </Card>
           </section>
         </div>
       )}
+
+      <ProgressPhotoCompareModal
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        pose={comparePose}
+        images={compareImages}
+        legacyAssignment={legacyAssignment}
+        initialMilestoneA="first_baseline"
+        initialMilestoneB="latest"
+      />
     </div>
   );
 }

@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { CoachLegacyProgressPhotoUpload } from "@/components/coach/CoachLegacyProgressPhotoUpload";
 import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
@@ -285,12 +283,9 @@ type MeasurementTrendCard =
       unit: string;
     };
 
-export default function CoachClientProgress2Page() {
-  const params = useParams();
-  const clientId = params?.clientId as string | undefined;
+export default function ClientProgress2Page() {
   const { fetchWithAuth } = useApiClient();
 
-  const [clientName, setClientName] = useState("");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
   const [checkInScores, setCheckInScores] = useState<CheckInScore[]>([]);
@@ -303,50 +298,35 @@ export default function CoachClientProgress2Page() {
   const [habitRange, setHabitRange] = useState<HabitStripRange>("30d");
   const [measurementRange, setMeasurementRange] = useState<MeasurementRangeKey>("180d");
 
-  const applyProgressPayload = useCallback((data: Record<string, unknown>) => {
-    const c = (data.client ?? {}) as { firstName?: string; lastName?: string };
-    setClientName([c.firstName, c.lastName].filter(Boolean).join(" ") || "Client");
-    setMeasurements(Array.isArray(data.measurements) ? data.measurements : []);
-    setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
-    setCheckInScores(Array.isArray(data.checkInScores) ? data.checkInScores : []);
-    const qp = data.questionProgress as QuestionProgress | null | undefined;
-    setQuestionProgress(
-      qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
-        ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
-        : null
-    );
-    setTrafficLightRedMax(typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 40);
-    setTrafficLightOrangeMax(
-      typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 70
-    );
-  }, []);
-
-  const reloadProgressImages = useCallback(async () => {
-    if (!clientId) return;
-    const progressRes = await fetchWithAuth(`/api/coach/clients/${clientId}/progress`);
-    if (progressRes.ok) {
-      const data = await progressRes.json();
-      setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
-    }
-  }, [clientId, fetchWithAuth]);
-
   useEffect(() => {
-    if (!clientId) return;
     (async () => {
       setLoading(true);
       setAuthError(false);
       try {
-        const [progressRes, habitsRes] = await Promise.all([
-          fetchWithAuth(`/api/coach/clients/${clientId}/progress`),
-          fetchWithAuth(`/api/coach/clients/${clientId}/habits`),
+        const [measRes, habitsRes, imagesRes, historyRes, qpRes] = await Promise.all([
+          fetchWithAuth("/api/client/measurements"),
+          fetchWithAuth("/api/client/habits"),
+          fetchWithAuth("/api/client/progress-images"),
+          fetchWithAuth("/api/client/history"),
+          fetchWithAuth("/api/client/question-progress"),
         ]);
-        if (progressRes.status === 401 || habitsRes.status === 401) {
+
+        if (
+          measRes.status === 401 ||
+          habitsRes.status === 401 ||
+          imagesRes.status === 401 ||
+          historyRes.status === 401 ||
+          qpRes.status === 401
+        ) {
           setAuthError(true);
           return;
         }
-        if (progressRes.ok) {
-          applyProgressPayload(await progressRes.json());
+
+        if (measRes.ok) {
+          const data = await measRes.json();
+          setMeasurements(Array.isArray(data) ? data : []);
         }
+
         if (habitsRes.ok) {
           const h = await habitsRes.json();
           setHabitsData({
@@ -355,11 +335,52 @@ export default function CoachClientProgress2Page() {
             history: h.history,
           });
         }
+
+        if (imagesRes.ok) {
+          const data = await imagesRes.json();
+          setProgressImages(Array.isArray(data) ? data : []);
+        }
+
+        if (historyRes.ok) {
+          const history = await historyRes.json();
+          const scores: CheckInScore[] = (Array.isArray(history) ? history : [])
+            .filter(
+              (row: { score?: number | null; completedAt?: string | null }) =>
+                row.score != null && row.completedAt
+            )
+            .map(
+              (row: {
+                id: string;
+                formTitle?: string;
+                completedAt: string;
+                score: number;
+              }) => ({
+                id: row.id,
+                formTitle: row.formTitle ?? "Check-in",
+                submittedAt: row.completedAt,
+                score: row.score,
+              })
+            );
+          setCheckInScores(scores);
+        }
+
+        if (qpRes.ok) {
+          const qp = await qpRes.json();
+          setQuestionProgress(
+            qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
+              ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
+              : null
+          );
+          setTrafficLightRedMax(typeof qp.trafficLightRedMax === "number" ? qp.trafficLightRedMax : 40);
+          setTrafficLightOrangeMax(
+            typeof qp.trafficLightOrangeMax === "number" ? qp.trafficLightOrangeMax : 70
+          );
+        }
       } finally {
         setLoading(false);
       }
     })();
-  }, [clientId, fetchWithAuth, applyProgressPayload]);
+  }, [fetchWithAuth]);
 
   const latest = measurements[0];
   const baseline = measurements.find((m) => m.isBaseline) ?? measurements[measurements.length - 1];
@@ -472,10 +493,6 @@ export default function CoachClientProgress2Page() {
     return cards;
   }, [measurements, measurementRangeDays]);
 
-  if (!clientId) {
-    return <p className="text-[var(--color-text-muted)]">Invalid client.</p>;
-  }
-
   if (authError) {
     return <AuthErrorRetry onRetry={() => window.location.reload()} />;
   }
@@ -484,33 +501,34 @@ export default function CoachClientProgress2Page() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
+          <Link href="/client" className="text-sm text-[var(--color-primary)] hover:underline">
+            ← Dashboard
+          </Link>
           <Link
-            href={`/coach/clients/${clientId}/progress`}
-            className="text-sm text-[var(--color-primary)] hover:underline"
+            href="/client/progress"
+            className="ml-3 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:underline"
           >
-            ← Classic progress view
+            Classic view
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold text-[var(--color-text)]">
-              Progress dashboard: {loading ? "…" : clientName.toUpperCase()}
-            </h1>
+            <h1 className="text-2xl font-semibold text-[var(--color-text)]">Your progress</h1>
             <span className="rounded-full bg-[var(--color-primary-subtle)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-primary)]">
               Beta
             </span>
           </div>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            Command-centre view — scores, body comp, habits, and photos at a glance
+            Scores, body measurements, habits, and photos at a glance
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary">
-            <Link href={`/coach/clients/${clientId}/timeline`}>Timeline</Link>
+            <Link href="/client/habits">Log habits</Link>
           </Button>
           <Button asChild variant="secondary">
-            <Link href={`/coach/clients/${clientId}`}>Check-ins</Link>
+            <Link href="/client/measurements">Measurements</Link>
           </Button>
           <Button asChild variant="secondary">
-            <Link href={`/coach/clients/${clientId}/settings`}>Settings</Link>
+            <Link href="/client/timeline">Timeline</Link>
           </Button>
         </div>
       </div>
@@ -519,7 +537,6 @@ export default function CoachClientProgress2Page() {
 
       {!loading && (
         <>
-          {/* KPI strip */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Weight</p>
@@ -594,11 +611,10 @@ export default function CoachClientProgress2Page() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* Score trend */}
             <Card className="p-4">
               <h2 className="font-medium text-[var(--color-text)]">Check-in score trend</h2>
               <p className="text-sm text-[var(--color-text-muted)]">
-                Overall traffic-light score over time (dashed lines = client thresholds)
+                Your overall traffic-light score over time
               </p>
               {scoreChartData.length > 0 ? (
                 <div className="mt-4">
@@ -613,7 +629,6 @@ export default function CoachClientProgress2Page() {
               )}
             </Card>
 
-            {/* Body measurements snapshot */}
             <Card className="p-4">
               <h2 className="font-medium text-[var(--color-text)]">Body measurements</h2>
               <p className="text-sm text-[var(--color-text-muted)]">Latest values with change vs baseline</p>
@@ -653,40 +668,26 @@ export default function CoachClientProgress2Page() {
             </Card>
           </div>
 
-          {/* Progress photos — pose + milestone comparison */}
           <Card className="p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
                 <p className="text-sm text-[var(--color-text-muted)]">
-                  Latest, previous, and first upload — Front, Back, and Side
+                  Compare latest, previous, and first upload — Front, Back, and Side
                 </p>
               </div>
-              {clientId && (
-                <Link
-                  href={`/coach/gallery?client=${clientId}`}
-                  className="shrink-0 text-sm font-medium text-[var(--color-primary)] hover:underline"
-                >
-                  Photo gallery →
-                </Link>
-              )}
+              <Link
+                href="/client/progress-photos"
+                className="shrink-0 text-sm font-medium text-[var(--color-primary)] hover:underline"
+              >
+                Manage photos →
+              </Link>
             </div>
-            <div className="mt-4 space-y-4">
-              {clientId && (
-                <CoachLegacyProgressPhotoUpload
-                  clientId={clientId}
-                  onUploaded={reloadProgressImages}
-                />
-              )}
-              <ProgressPhotoComparePanel
-                images={progressImages}
-                clientName={clientName}
-                clientId={clientId}
-              />
+            <div className="mt-4">
+              <ProgressPhotoComparePanel images={progressImages} variant="client" />
             </div>
           </Card>
 
-          {/* Measurement trend charts — 3 columns × 2 rows */}
           <Card id="measurement-trends" className="p-4 scroll-mt-6">
             <h2 className="font-medium text-[var(--color-text)]">Measurement trends</h2>
             <p className="text-sm text-[var(--color-text-muted)]">
@@ -740,29 +741,32 @@ export default function CoachClientProgress2Page() {
                       )
                     ) : (
                       <p className="flex aspect-[5/4] w-full items-center justify-center text-center text-sm text-[var(--color-text-muted)]">
-                        {card.hasEver
-                          ? "No measurements in this time range."
-                          : "No data yet."}
+                        {card.hasEver ? "No measurements in this time range." : "No data yet."}
                       </p>
                     )}
                   </div>
                 </div>
               ))}
             </div>
+            <Link
+              href="/client/measurements"
+              className="mt-4 inline-block text-sm text-[var(--color-primary)] hover:underline"
+            >
+              Log measurements →
+            </Link>
           </Card>
 
-          {/* Habits */}
           <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="font-medium text-[var(--color-text)]">Habit trackers</h2>
-                <p className="text-sm text-[var(--color-text-muted)]">Client habit compliance (read-only)</p>
+                <p className="text-sm text-[var(--color-text-muted)]">Your daily habit compliance</p>
               </div>
               <Link
-                href={`/coach/clients/${clientId}/habits`}
+                href="/client/habits"
                 className="text-sm text-[var(--color-primary)] hover:underline"
               >
-                Full habits view →
+                Log habits →
               </Link>
             </div>
             {habitsData?.history ? (
@@ -794,16 +798,15 @@ export default function CoachClientProgress2Page() {
                 </div>
               </>
             ) : (
-              <p className="mt-3 text-sm text-[var(--color-text-muted)]">No habit data for this client.</p>
+              <p className="mt-3 text-sm text-[var(--color-text-muted)]">No habit data yet.</p>
             )}
           </Card>
 
-          {/* Question insights */}
           {allQuestionTrends.length > 0 && (
             <Card className="p-4">
               <h2 className="font-medium text-[var(--color-text)]">What&apos;s changed?</h2>
               <p className="text-sm text-[var(--color-text-muted)]">
-                How each answer moved from first scored week to latest
+                How each answer moved from your first scored week to your latest
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
                 <span className="flex items-center gap-1.5">
@@ -829,7 +832,7 @@ export default function CoachClientProgress2Page() {
                 ))}
               </div>
               <Link
-                href={`/coach/clients/${clientId}/progress`}
+                href="/client/progress"
                 className="mt-4 inline-block text-sm text-[var(--color-primary)] hover:underline"
               >
                 Full question grid →

@@ -16,7 +16,8 @@ const NAV_LINKS = [
   { href: "/client/check-in/new", label: "New check-in" },
   { href: "/client/habits", label: "Habits" },
   { href: "/client/history", label: "History" },
-  { href: "/client/progress", label: "Progress" },
+  { href: "/client/progress2", label: "Progress" },
+  { href: "/client/timeline", label: "Timeline" },
   { href: "/client/notifications", label: "Notifications" },
   { href: "/client/messages", label: "Messages" },
   { href: "/client/measurements", label: "Measurements" },
@@ -32,7 +33,7 @@ const BOTTOM_NAV = [
   { href: "/client", label: "Home", short: "Home" },
   { href: "/client/program", label: "Program", short: "Workouts" },
   { href: "/client/check-in/new", label: "New check-in", short: "Check-in" },
-  { href: "/client/progress", label: "Progress", short: "Progress" },
+  { href: "/client/progress2", label: "Progress", short: "Progress" },
 ] as const;
 
 const MORE_LINKS = NAV_LINKS.filter(
@@ -118,8 +119,11 @@ export default function ClientLayout({
   }
   if (!user) return null;
 
-  const isActive = (href: string) =>
-    href === "/client" ? pathname === "/client" : pathname?.startsWith(href);
+  const isActive = (href: string) => {
+    if (href === "/client") return pathname === "/client";
+    if (href === "/client/progress2") return pathname?.startsWith("/client/progress");
+    return pathname?.startsWith(href);
+  };
 
   return (
     <div

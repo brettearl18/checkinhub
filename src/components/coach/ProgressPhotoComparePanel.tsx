@@ -46,6 +46,8 @@ interface Props {
   images: ProgressPhotoCompareItem[];
   clientName?: string;
   clientId?: string;
+  /** Coach: share export + Hall of Fame. Client: compare + download only. */
+  variant?: "coach" | "client";
 }
 
 function DownloadIcon({ className }: { className?: string }) {
@@ -219,7 +221,9 @@ export function ProgressPhotoComparePanel({
   images,
   clientName = "Client",
   clientId,
+  variant = "coach",
 }: Props) {
+  const isCoach = variant === "coach";
   const { fetchWithAuth } = useApiClient();
   const legacyAssignment = useMemo(() => buildLegacyPoseAssignment(images), [images]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -344,12 +348,20 @@ export function ProgressPhotoComparePanel({
     return (
       <div className="space-y-2">
         <p className="text-sm text-[var(--color-text-muted)]">No progress photos uploaded.</p>
-        {clientId && (
+        {isCoach && clientId && (
           <Link
             href={`/coach/gallery?client=${clientId}`}
             className="text-sm font-medium text-[var(--color-primary)] hover:underline"
           >
             View client gallery →
+          </Link>
+        )}
+        {!isCoach && (
+          <Link
+            href="/client/progress-photos"
+            className="text-sm font-medium text-[var(--color-primary)] hover:underline"
+          >
+            Upload photos →
           </Link>
         )}
       </div>
@@ -380,60 +392,69 @@ export function ProgressPhotoComparePanel({
           />
         ))}
 
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-          <p className="text-sm font-medium text-[var(--color-text)]">Create 4:5 share</p>
-          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-            Quick baseline vs latest per pose, or pick any two photos from the full gallery.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              disabled={images.length < 2 || !clientId}
-              onClick={() => setGalleryPickerOpen(true)}
-              className="min-h-9 py-1.5 text-xs"
-            >
-              Choose from gallery
-            </Button>
-            {PROGRESS_PHOTO_POSES.map((pose) => {
-              const ready = canDownloadSocialPost(images, pose, legacyAssignment);
-              return (
-                <Button
-                  key={pose}
-                  variant="secondary"
-                  disabled={!ready || !clientId}
-                  onClick={() => openShareForPose(pose)}
-                  className="min-h-9 py-1.5 text-xs"
-                >
-                  {progressPhotoPoseTabLabel(pose)}
-                </Button>
-              );
-            })}
+        {isCoach && (
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
+            <p className="text-sm font-medium text-[var(--color-text)]">Create 4:5 share</p>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Quick baseline vs latest per pose, or pick any two photos from the full gallery.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={images.length < 2 || !clientId}
+                onClick={() => setGalleryPickerOpen(true)}
+                className="min-h-9 py-1.5 text-xs"
+              >
+                Choose from gallery
+              </Button>
+              {PROGRESS_PHOTO_POSES.map((pose) => {
+                const ready = canDownloadSocialPost(images, pose, legacyAssignment);
+                return (
+                  <Button
+                    key={pose}
+                    variant="secondary"
+                    disabled={!ready || !clientId}
+                    onClick={() => openShareForPose(pose)}
+                    className="min-h-9 py-1.5 text-xs"
+                  >
+                    {progressPhotoPoseTabLabel(pose)}
+                  </Button>
+                );
+              })}
+            </div>
+            {clientId && (
+              <Link
+                href="/coach/hall-of-fame"
+                className="mt-2 inline-block text-xs font-medium text-[var(--color-primary)] hover:underline"
+              >
+                View Hall of Fame →
+              </Link>
+            )}
+            {downloadError && (
+              <p className="mt-2 text-xs text-rose-600">{downloadError}</p>
+            )}
           </div>
-          {clientId && (
-            <Link
-              href="/coach/hall-of-fame"
-              className="mt-2 inline-block text-xs font-medium text-[var(--color-primary)] hover:underline"
-            >
-              View Hall of Fame →
-            </Link>
-          )}
-          {downloadError && (
-            <p className="mt-2 text-xs text-rose-600">{downloadError}</p>
-          )}
-        </div>
+        )}
+
+        {!isCoach && downloadError && (
+          <p className="text-xs text-rose-600">{downloadError}</p>
+        )}
 
         <p className="text-xs text-[var(--color-text-muted)]">
-          Click a photo to compare, or use the download icon on each thumbnail. Latest = most recent
-          upload. Previous = upload before that. Baseline = first upload for that pose.
+          {isCoach
+            ? "Click a photo to compare, or use the download icon on each thumbnail. Latest = most recent upload. Previous = upload before that. Baseline = first upload for that pose."
+            : "Tap any photo to open the compare view — align and swipe between before and after. Latest = most recent. Baseline = your first photo for that pose."}
         </p>
       </div>
 
-      <ProgressPhotoGalleryPickerModal
-        open={galleryPickerOpen}
-        onClose={() => setGalleryPickerOpen(false)}
-        images={images}
-        onConfirm={openShareFromGallery}
-      />
+      {isCoach && (
+        <ProgressPhotoGalleryPickerModal
+          open={galleryPickerOpen}
+          onClose={() => setGalleryPickerOpen(false)}
+          images={images}
+          onConfirm={openShareFromGallery}
+        />
+      )}
 
       <ProgressPhotoCompareModal
         open={compareOpen}
@@ -444,10 +465,10 @@ export function ProgressPhotoComparePanel({
         initialMilestoneA={compareMilestoneA}
         initialMilestoneB={compareMilestoneB}
         clientName={clientName}
-        onCreateShare={clientId ? openShareFromCompare : undefined}
+        onCreateShare={isCoach && clientId ? openShareFromCompare : undefined}
       />
 
-      {clientId && shareBefore && shareAfter && (
+      {isCoach && clientId && shareBefore && shareAfter && (
         <ProgressPhotoShareExportModal
           open={shareExportOpen}
           onClose={() => setShareExportOpen(false)}

@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
 import { formatProgressImageTypeLabel } from "@/lib/progress-comparison-photos";
@@ -187,6 +188,25 @@ export default function ProgressPhotosPage() {
           </Button>
         </form>
       </Card>
+
+      {list.length > 0 && (
+        <Card className="p-5">
+          <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Compare your progress</h2>
+          <p className="mb-4 text-sm text-[var(--color-text-muted)]">
+            Tap a photo to align and swipe between before and after — same view your coach uses.
+          </p>
+          <ProgressPhotoComparePanel
+            variant="client"
+            images={list.map((img) => ({
+              id: img.id,
+              imageUrl: img.imageUrl,
+              imageType: img.imageType,
+              caption: img.caption,
+              uploadedAt: img.uploadedAt,
+            }))}
+          />
+        </Card>
+      )}
 
       <section>
         <h2 className="text-lg font-medium text-[var(--color-text)] mb-3">Your photos</h2>
