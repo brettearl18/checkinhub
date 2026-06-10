@@ -2,33 +2,57 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { TimelineAnnouncementModal } from "@/components/client/TimelineAnnouncementModal";
 import { VanaBrandBar } from "@/components/client/VanaBrandBar";
 import { useAuth } from "@/contexts/AuthContext";
+import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
 
 /** Vana theme trial — entire client portal; dashboard is the primary preview surface */
 const VANA_THEME_TRIAL = true;
 
-const NAV_LINKS = [
-  { href: "/client", label: "Dashboard" },
-  { href: "/client/program", label: "Program" },
-  { href: "/client/check-in/new", label: "New check-in" },
-  { href: "/client/habits", label: "Habits" },
-  { href: "/client/history", label: "History" },
-  { href: "/client/progress2", label: "Progress" },
-  { href: "/client/timeline", label: "Timeline" },
-  { href: "/client/notifications", label: "Notifications" },
-  { href: "/client/messages", label: "Messages" },
-  { href: "/client/measurements", label: "Measurements" },
-  { href: "/client/profile/meal-plan", label: "Meal plan" },
-  { href: "/client/goals", label: "Goals" },
-  { href: "/client/progress-photos", label: "Photos" },
-  { href: "/client/profile", label: "Profile" },
+const NAV_SECTIONS = [
+  {
+    label: "Overview",
+    links: [{ href: "/client", label: "Dashboard" }],
+  },
+  {
+    label: "Training",
+    links: [{ href: "/client/program", label: "Program" }],
+  },
+  {
+    label: "Check-ins",
+    links: [
+      { href: "/client/check-in/new", label: "New check-in" },
+      { href: "/client/habits", label: "Habits" },
+      { href: "/client/history", label: "History" },
+    ],
+  },
+  {
+    label: "Progress",
+    links: [
+      { href: "/client/progress2", label: "Progress" },
+      { href: "/client/timeline", label: "Timeline" },
+      { href: "/client/measurements", label: "Measurements" },
+      { href: "/client/goals", label: "Goals" },
+      { href: "/client/progress-photos", label: "Photos" },
+    ],
+  },
+  {
+    label: "Connect",
+    links: [
+      { href: "/client/notifications", label: "Notifications" },
+      { href: "/client/messages", label: "Messages" },
+    ],
+  },
+  {
+    label: "Account",
+    links: [{ href: "/client/profile", label: "Profile" }],
+  },
 ] as const;
 
-const RECIPE_HUB_URL = "https://meals.vanahealth.com.au";
+const NAV_LINKS = NAV_SECTIONS.flatMap((section) => [...section.links]);
 
 const BOTTOM_NAV = [
   { href: "/client", label: "Home", short: "Home" },
@@ -40,6 +64,25 @@ const BOTTOM_NAV = [
 const MORE_LINKS = NAV_LINKS.filter(
   (n) => !BOTTOM_NAV.some((b) => b.href === n.href)
 );
+
+function NavSection({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400">
+        {label}
+      </p>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
 
 function NavLink({
   href,
@@ -77,7 +120,7 @@ function RecipeHubNavLink({ onClick, className = "" }: { onClick?: () => void; c
       target="_blank"
       rel="noopener noreferrer"
       onClick={onClick}
-      className={`mt-1 block rounded-xl border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] px-3 py-2.5 text-sm font-semibold text-[var(--color-primary)] min-h-[44px] flex items-center justify-between gap-2 transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/15 ${className}`}
+      className={`block rounded-xl border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] px-3 py-2.5 text-sm font-semibold text-[var(--color-primary)] min-h-[44px] flex items-center justify-between gap-2 transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/15 ${className}`}
     >
       <span>RecipeHUB</span>
       <span className="text-[10px] font-medium uppercase tracking-wide opacity-80" aria-hidden>
@@ -140,11 +183,15 @@ export default function ClientLayout({
         <p className="px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
           Check-in portal
         </p>
-        <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
-          {NAV_LINKS.map(({ href, label }) => (
-            <NavLink key={href} href={href} label={label} active={isActive(href)} />
-          ))}
+        <nav className="flex-1 space-y-4 p-3 overflow-y-auto">
           <RecipeHubNavLink />
+          {NAV_SECTIONS.map((section) => (
+            <NavSection key={section.label} label={section.label}>
+              {section.links.map(({ href, label }) => (
+                <NavLink key={href} href={href} label={label} active={isActive(href)} />
+              ))}
+            </NavSection>
+          ))}
         </nav>
         <div className="border-t border-[var(--color-border)] p-3 space-y-0.5">
           <NavLink href="/privacy" label="Privacy" active={pathname === "/privacy"} />
@@ -239,17 +286,21 @@ export default function ClientLayout({
                   <CloseIcon />
                 </button>
               </div>
-              <div className="space-y-0.5">
-                {MORE_LINKS.map(({ href, label }) => (
-                  <NavLink
-                    key={href}
-                    href={href}
-                    label={label}
-                    active={isActive(href)}
-                    onClick={() => setDrawerOpen(false)}
-                  />
-                ))}
+              <div className="space-y-4">
                 <RecipeHubNavLink onClick={() => setDrawerOpen(false)} />
+                {NAV_SECTIONS.map((section) => (
+                  <NavSection key={section.label} label={section.label}>
+                    {section.links.map(({ href, label }) => (
+                      <NavLink
+                        key={href}
+                        href={href}
+                        label={label}
+                        active={isActive(href)}
+                        onClick={() => setDrawerOpen(false)}
+                      />
+                    ))}
+                  </NavSection>
+                ))}
               </div>
               <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-0.5">
                 <NavLink

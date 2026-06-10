@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateTimeDisplay, formatDateDisplay } from "@/lib/format-date";
 
@@ -303,21 +304,15 @@ export default function ClientProfilePage() {
       </Card>
 
       <Card className="p-6">
-        <h2 className="text-lg font-medium text-[var(--color-text)] mb-3">Nutrition plan</h2>
+        <h2 className="text-lg font-medium text-[var(--color-text)] mb-3">Meal Plan</h2>
         <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-          {profile?.mealPlanJson
-            ? "Your coach has uploaded a personalised plan you can read here."
-            : "No in-app meal plan uploaded yet. Your coach can add one in client settings."}
+          Browse recipes and meal ideas in Vana RecipeHUB.
         </p>
-        {profile?.mealPlanJson ? (
-          <Button asChild variant="secondary">
-            <Link href="/client/profile/meal-plan">Open meal plan</Link>
-          </Button>
-        ) : (
-          <Button type="button" variant="secondary" disabled>
-            Open meal plan
-          </Button>
-        )}
+        <Button asChild variant="secondary">
+          <a href={RECIPE_HUB_URL} target="_blank" rel="noopener noreferrer">
+            Open RecipeHUB
+          </a>
+        </Button>
       </Card>
 
       <Card className="p-6">
