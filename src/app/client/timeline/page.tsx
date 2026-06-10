@@ -52,7 +52,7 @@ export default function ClientTimelinePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <Link href="/client/progress2" className="text-sm text-[var(--color-primary)] hover:underline">
+        <Link href="/client/progress" className="text-sm text-[var(--color-primary)] hover:underline">
           ← Progress dashboard
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">

@@ -2,29 +2,21 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
-import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
-import { MeasurementComparisonChartLazy } from "@/components/ui/MeasurementComparisonChartLazy";
-import { ProgressPhotoCompareModal } from "@/components/coach/ProgressPhotoCompareModal";
-import type { ProgressPhotoCompareItem } from "@/components/coach/ProgressPhotoComparePanel";
+import { CheckInScoreTrendChartLazy } from "@/components/ui/CheckInScoreTrendChartLazy";
+import { MeasurementSlotTrendChartLazy } from "@/components/ui/MeasurementSlotTrendChartLazy";
+import { MeasurementPairedSlotTrendChartLazy } from "@/components/ui/MeasurementPairedSlotTrendChartLazy";
+import { QuestionTrendGauge } from "@/components/ui/QuestionTrendGauge";
+import { getAllQuestionTrends } from "@/lib/question-trends";
+import { MEASUREMENT_SLOT_COUNT, type SlotChartRow } from "@/components/ui/MeasurementSlotTrendChart";
+import type { PairedSlotChartRow } from "@/components/ui/MeasurementPairedSlotTrendChart";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
-import {
-  buildLegacyPoseAssignment,
-  pickBaselineAndCurrentPhoto,
-  progressPhotoPoseLabel,
-  resolveProgressPhotoPose,
-  type ProgressPhotoPose,
-} from "@/lib/progress-comparison-photos";
-
-interface WeekLabel {
-  key: string;
-  label: string;
-}
+import type { HabitDefinition } from "@/lib/habits";
 
 interface Measurement {
   id: string;
@@ -42,13 +34,48 @@ interface ProgressImage {
   uploadedAt: string | null;
 }
 
-interface HabitsHistory {
-  start: string;
-  end: string;
-  byDate: Record<string, Record<string, "met" | "missed">>;
+interface CheckInScore {
+  id: string;
+  formTitle: string;
+  submittedAt: string | null;
+  score: number;
 }
 
-const MEASUREMENT_KEYS = [
+interface QuestionProgress {
+  questions: Array<{ id: string; text: string }>;
+  weeks: Array<{ key: string; label: string }>;
+  grid: Record<string, Record<string, number>>;
+}
+
+interface HabitsData {
+  habits: HabitDefinition[];
+  streaks: Record<string, { current: number; longest: number; goalMetToday: boolean }>;
+  history?: {
+    start: string;
+    end: string;
+    byDate: Record<string, Record<string, "met" | "missed">>;
+  };
+}
+
+function getScoreBand(score: number, redMax: number, orangeMax: number): "red" | "orange" | "green" {
+  if (score <= redMax) return "red";
+  if (score <= orangeMax) return "orange";
+  return "green";
+}
+
+const BAND_DOT: Record<"red" | "orange" | "green", string> = {
+  red: "bg-red-500",
+  orange: "bg-amber-500",
+  green: "bg-green-500",
+};
+
+const BAND_TEXT: Record<"red" | "orange" | "green", string> = {
+  red: "text-red-600 dark:text-red-400",
+  orange: "text-amber-600 dark:text-amber-400",
+  green: "text-green-600 dark:text-green-400",
+};
+
+const BODY_MEASUREMENT_SUMMARY_ORDER = [
   "waist",
   "hips",
   "chest",
@@ -58,166 +85,413 @@ const MEASUREMENT_KEYS = [
   "rightArm",
 ] as const;
 
-const measurementLabels: Record<string, string> = {
+const BODY_MEASUREMENT_SUMMARY_LABELS: Record<(typeof BODY_MEASUREMENT_SUMMARY_ORDER)[number], string> = {
   waist: "Waist",
   hips: "Hips",
   chest: "Chest",
-  leftThigh: "L thigh",
-  rightThigh: "R thigh",
-  leftArm: "L arm",
-  rightArm: "R arm",
+  leftThigh: "Left thigh",
+  rightThigh: "Right thigh",
+  leftArm: "Left arm",
+  rightArm: "Right arm",
 };
 
-/** Fixed bands for per-question grid: Good (7–10), Moderate (4–6), Needs attention (0–3). Score is 0–100. */
-function getBand(score: number): "green" | "orange" | "red" {
-  if (score < 40) return "red";
-  if (score < 70) return "orange";
-  return "green";
+function measurementNumericValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
+
+function formatMeasurementNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatMeasurementDelta(delta: number): string {
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${formatMeasurementNumber(delta)} cm`;
+}
+
+function getLatestBodyMeasurements(
+  measurements: Measurement[],
+  baseline: Measurement | undefined
+): Array<{ key: string; label: string; value: number; change: number | null }> {
+  const result: Array<{ key: string; label: string; value: number; change: number | null }> = [];
+  for (const key of BODY_MEASUREMENT_SUMMARY_ORDER) {
+    let value: number | null = null;
+    for (const m of measurements) {
+      const latest = measurementNumericValue(m.measurements?.[key]);
+      if (latest != null) {
+        value = latest;
+        break;
+      }
+    }
+    if (value == null) continue;
+    const baselineValue = baseline ? measurementNumericValue(baseline.measurements?.[key]) : null;
+    result.push({
+      key,
+      label: BODY_MEASUREMENT_SUMMARY_LABELS[key],
+      value,
+      change: baselineValue != null ? value - baselineValue : null,
+    });
+  }
+  return result;
+}
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const now = Date.now();
+  return Math.floor((now - then) / (24 * 60 * 60 * 1000));
+}
+
+const MEASUREMENT_LABELS: Record<string, string> = {
+  bodyWeight: "Body Weight (kg)",
+  waist: "Waist (cm)",
+  hips: "Hips (cm)",
+  chest: "Chest (cm)",
+  thighs: "Thighs (cm)",
+  arms: "Arms (cm)",
+};
+
+const MEASUREMENT_SERIES_LABELS: Record<string, string> = {
+  bodyWeight: "Body weight",
+  waist: "Waist",
+  hips: "Hips",
+  chest: "Chest",
+  thighs: "Thigh",
+  arms: "Arm",
+};
+
+type MeasurementRangeKey = "7d" | "30d" | "90d" | "180d";
+
+const MEASUREMENT_RANGE_OPTIONS: { key: MeasurementRangeKey; label: string; days: number }[] = [
+  { key: "7d", label: "7 days", days: 7 },
+  { key: "30d", label: "1 month", days: 30 },
+  { key: "90d", label: "3 months", days: 90 },
+  { key: "180d", label: "6 months", days: 180 },
+];
+
+function getAllTrendPoints(
+  measurements: Measurement[],
+  key: "bodyWeight" | string
+): { date: string; value: number }[] {
+  const points: { date: string; value: number }[] = [];
+  for (const m of measurements) {
+    const value =
+      key === "bodyWeight"
+        ? measurementNumericValue(m.bodyWeight)
+        : measurementNumericValue(m.measurements?.[key]);
+    if (value != null && m.date) points.push({ date: m.date, value });
+  }
+  return points.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function filterPointsByRange(
+  points: { date: string; value: number }[],
+  days: number
+): { date: string; value: number }[] {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  start.setHours(0, 0, 0, 0);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  return points.filter((p) => {
+    const t = new Date(`${p.date}T12:00:00`).getTime();
+    return t >= startMs && t <= endMs;
+  });
+}
+
+function buildSlotRows(points: { date: string; value: number }[]): SlotChartRow[] {
+  const take =
+    points.length > MEASUREMENT_SLOT_COUNT ? points.slice(-MEASUREMENT_SLOT_COUNT) : points;
+  const rows: SlotChartRow[] = [];
+  for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
+    if (i < take.length) {
+      rows.push({ slot: i, value: take[i].value, date: take[i].date });
+    } else {
+      rows.push({ slot: i, value: null, date: null });
+    }
+  }
+  return rows;
+}
+
+interface PairedMeasurementRow {
+  date: string;
+  left: number | null;
+  right: number | null;
+}
+
+function mergePairedTrendPoints(
+  left: { date: string; value: number }[],
+  right: { date: string; value: number }[]
+): PairedMeasurementRow[] {
+  const dates = new Set<string>();
+  for (const p of left) dates.add(p.date);
+  for (const p of right) dates.add(p.date);
+  const lm = new Map(left.map((p) => [p.date, p.value]));
+  const rm = new Map(right.map((p) => [p.date, p.value]));
+  return [...dates]
+    .sort((a, b) => a.localeCompare(b))
+    .map((date) => ({
+      date,
+      left: lm.get(date) ?? null,
+      right: rm.get(date) ?? null,
+    }));
+}
+
+function buildPairedSlotRows(merged: PairedMeasurementRow[]): PairedSlotChartRow[] {
+  const take =
+    merged.length > MEASUREMENT_SLOT_COUNT ? merged.slice(-MEASUREMENT_SLOT_COUNT) : merged;
+  const rows: PairedSlotChartRow[] = [];
+  for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
+    if (i < take.length) {
+      const r = take[i];
+      rows.push({ slot: i, date: r.date, left: r.left, right: r.right });
+    } else {
+      rows.push({ slot: i, date: null, left: null, right: null });
+    }
+  }
+  return rows;
+}
+
+type MeasurementTrendCard =
+  | {
+      key: string;
+      label: string;
+      seriesLabel: string;
+      kind: "single";
+      slotRows: SlotChartRow[];
+      hasInRange: boolean;
+      hasEver: boolean;
+      unit: string;
+    }
+  | {
+      key: string;
+      label: string;
+      seriesLabel: string;
+      kind: "paired";
+      slotRows: PairedSlotChartRow[];
+      leftLabel: string;
+      rightLabel: string;
+      hasInRange: boolean;
+      hasEver: boolean;
+      unit: string;
+    };
 
 export default function ClientProgressPage() {
   const { fetchWithAuth } = useApiClient();
-  const [questions, setQuestions] = useState<Array<{ id: string; text: string }>>([]);
-  const [weeks, setWeeks] = useState<WeekLabel[]>([]);
-  const [grid, setGrid] = useState<Record<string, Record<string, number>>>({});
-  const [qpError, setQpError] = useState<string | null>(null);
 
-  const [measurementList, setMeasurementList] = useState<Measurement[]>([]);
-  const [habitsData, setHabitsData] = useState<{
-    habits: Array<{ id: string; label: string }>;
-    history?: HabitsHistory;
-  } | null>(null);
+  const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
-
+  const [checkInScores, setCheckInScores] = useState<CheckInScore[]>([]);
+  const [questionProgress, setQuestionProgress] = useState<QuestionProgress | null>(null);
+  const [habitsData, setHabitsData] = useState<HabitsData | null>(null);
+  const [trafficLightRedMax, setTrafficLightRedMax] = useState(40);
+  const [trafficLightOrangeMax, setTrafficLightOrangeMax] = useState(70);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
-  const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number] | "arms" | "thighs">("bodyWeight");
-  const [stripRange, setStripRange] = useState<HabitStripRange>("7d");
-  const [compareOpen, setCompareOpen] = useState(false);
+  const [habitRange, setHabitRange] = useState<HabitStripRange>("30d");
+  const [measurementRange, setMeasurementRange] = useState<MeasurementRangeKey>("180d");
 
   useEffect(() => {
-    let cancelled = false;
     (async () => {
       setLoading(true);
-      setQpError(null);
       setAuthError(false);
       try {
-        const [qpRes, measRes, habitsRes, imagesRes] = await Promise.all([
-          fetchWithAuth("/api/client/question-progress"),
+        const [measRes, habitsRes, imagesRes, historyRes, qpRes] = await Promise.all([
           fetchWithAuth("/api/client/measurements"),
           fetchWithAuth("/api/client/habits"),
           fetchWithAuth("/api/client/progress-images"),
+          fetchWithAuth("/api/client/history"),
+          fetchWithAuth("/api/client/question-progress"),
         ]);
 
-        if (qpRes.status === 401 || measRes.status === 401 || habitsRes.status === 401 || imagesRes.status === 401) {
-          if (!cancelled) setAuthError(true);
+        if (
+          measRes.status === 401 ||
+          habitsRes.status === 401 ||
+          imagesRes.status === 401 ||
+          historyRes.status === 401 ||
+          qpRes.status === 401
+        ) {
+          setAuthError(true);
           return;
         }
 
-        if (!cancelled) {
-          if (qpRes.ok) {
-            const data = await qpRes.json();
-            setQuestions(Array.isArray(data.questions) ? data.questions : []);
-            setWeeks(Array.isArray(data.weeks) ? data.weeks : []);
-            setGrid(typeof data.grid === "object" && data.grid !== null ? data.grid : {});
-          } else {
-            setQpError("Could not load question progress.");
-          }
-
-          if (measRes.ok) {
-            const data = await measRes.json();
-            setMeasurementList(Array.isArray(data) ? data : []);
-          }
-
-          if (habitsRes.ok) {
-            const data = await habitsRes.json();
-            setHabitsData({
-              habits: Array.isArray(data.habits) ? data.habits : [],
-              history: data.history,
-            });
-          }
-
-          if (imagesRes.ok) {
-            const data = await imagesRes.json();
-            setProgressImages(Array.isArray(data) ? data : []);
-          }
+        if (measRes.ok) {
+          const data = await measRes.json();
+          setMeasurements(Array.isArray(data) ? data : []);
         }
-      } catch {
-        if (!cancelled) setQpError("Could not load progress.");
+
+        if (habitsRes.ok) {
+          const h = await habitsRes.json();
+          setHabitsData({
+            habits: h.habits ?? [],
+            streaks: h.streaks ?? {},
+            history: h.history,
+          });
+        }
+
+        if (imagesRes.ok) {
+          const data = await imagesRes.json();
+          setProgressImages(Array.isArray(data) ? data : []);
+        }
+
+        if (historyRes.ok) {
+          const history = await historyRes.json();
+          const scores: CheckInScore[] = (Array.isArray(history) ? history : [])
+            .filter(
+              (row: { score?: number | null; completedAt?: string | null }) =>
+                row.score != null && row.completedAt
+            )
+            .map(
+              (row: {
+                id: string;
+                formTitle?: string;
+                completedAt: string;
+                score: number;
+              }) => ({
+                id: row.id,
+                formTitle: row.formTitle ?? "Check-in",
+                submittedAt: row.completedAt,
+                score: row.score,
+              })
+            );
+          setCheckInScores(scores);
+        }
+
+        if (qpRes.ok) {
+          const qp = await qpRes.json();
+          setQuestionProgress(
+            qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
+              ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
+              : null
+          );
+          setTrafficLightRedMax(typeof qp.trafficLightRedMax === "number" ? qp.trafficLightRedMax : 40);
+          setTrafficLightOrangeMax(
+            typeof qp.trafficLightOrangeMax === "number" ? qp.trafficLightOrangeMax : 70
+          );
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [fetchWithAuth]);
 
-  const chartData = useMemo(() => {
-    if (chartMetric === "arms" || chartMetric === "thighs") return [];
-    const chronological = [...measurementList].filter((m) => m.date).reverse();
-    return chronological
-      .map((m) => {
-        let value: number | null = null;
-        if (chartMetric === "bodyWeight") value = m.bodyWeight ?? null;
-        else value = m.measurements?.[chartMetric] ?? null;
-        if (value == null) return null;
-        return { date: m.date!, value };
-      })
-      .filter((p): p is { date: string; value: number } => p != null);
-  }, [measurementList, chartMetric]);
+  const latest = measurements[0];
+  const baseline = measurements.find((m) => m.isBaseline) ?? measurements[measurements.length - 1];
+  const currentWeight = latest?.bodyWeight ?? null;
+  const baselineWeight = baseline?.bodyWeight ?? null;
+  const weightChange =
+    currentWeight != null && baselineWeight != null ? currentWeight - baselineWeight : null;
 
-  const comparisonChartData = useMemo(() => {
-    if (chartMetric !== "arms" && chartMetric !== "thighs") return [];
-    const keys = chartMetric === "arms" ? (["leftArm", "rightArm"] as const) : (["leftThigh", "rightThigh"] as const);
-    const chronological = [...measurementList]
-      .filter((m) => m.date)
-      .sort((a, b) => (a.date!).localeCompare(b.date!));
-    return chronological
-      .map((m) => {
-        const row: Record<string, number | string | undefined> = { date: m.date! };
-        for (const k of keys) row[k] = m.measurements?.[k] ?? undefined;
-        return row;
-      })
-      .filter((row) => keys.some((k) => row[k] != null));
-  }, [measurementList, chartMetric]);
-
-  const { baselinePhoto, currentPhoto } = useMemo(
-    () => pickBaselineAndCurrentPhoto(progressImages),
-    [progressImages]
+  const latestBodyMeasurements = useMemo(
+    () => getLatestBodyMeasurements(measurements, baseline),
+    [measurements, baseline]
   );
 
-  const comparisonPoseLabel = useMemo(
-    () => progressPhotoPoseLabel(baselinePhoto?.imageType ?? currentPhoto?.imageType ?? null),
-    [baselinePhoto, currentPhoto]
+  const latestScore = checkInScores[0] ?? null;
+  const latestScoreBand = latestScore
+    ? getScoreBand(latestScore.score, trafficLightRedMax, trafficLightOrangeMax)
+    : null;
+
+  const scoreChartData = useMemo(
+    () =>
+      [...checkInScores]
+        .filter((s) => s.submittedAt)
+        .sort((a, b) => a.submittedAt!.localeCompare(b.submittedAt!))
+        .map((s) => ({
+          date: s.submittedAt!.slice(0, 10),
+          score: s.score,
+          label: s.formTitle,
+        })),
+    [checkInScores]
   );
 
-  const compareImages = useMemo(
-    (): ProgressPhotoCompareItem[] =>
-      progressImages.map((img) => ({
-        id: img.id,
-        imageUrl: img.imageUrl,
-        imageType: img.imageType,
-        caption: img.caption,
-        uploadedAt: img.uploadedAt,
-      })),
-    [progressImages]
-  );
+  const avgScore4wk = useMemo(() => {
+    const recent = scoreChartData.slice(-4);
+    if (recent.length === 0) return null;
+    return Math.round(recent.reduce((sum, p) => sum + p.score, 0) / recent.length);
+  }, [scoreChartData]);
 
-  const legacyAssignment = useMemo(
-    () => buildLegacyPoseAssignment(compareImages),
-    [compareImages]
-  );
+  const bestHabitStreak = useMemo(() => {
+    if (!habitsData) return null;
+    let best = { label: "", current: 0 };
+    for (const h of habitsData.habits) {
+      const s = habitsData.streaks[h.id]?.current ?? 0;
+      if (s > best.current) best = { label: h.label, current: s };
+    }
+    return best.current > 0 ? best : null;
+  }, [habitsData]);
 
-  const comparePose = useMemo((): ProgressPhotoPose => {
-    const ref = baselinePhoto ?? currentPhoto;
-    if (!ref) return "front";
-    return resolveProgressPhotoPose(ref) ?? "front";
-  }, [baselinePhoto, currentPhoto]);
+  const daysSinceCheckIn = daysSince(latestScore?.submittedAt ?? null);
 
-  const canComparePhotos = Boolean(
-    baselinePhoto && currentPhoto && baselinePhoto.id !== currentPhoto.id
-  );
+  const allQuestionTrends = useMemo(() => getAllQuestionTrends(questionProgress), [questionProgress]);
+
+  const measurementRangeDays =
+    MEASUREMENT_RANGE_OPTIONS.find((r) => r.key === measurementRange)?.days ?? 180;
+
+  const measurementTrendCards = useMemo((): MeasurementTrendCard[] => {
+    const days = measurementRangeDays;
+    const cards: MeasurementTrendCard[] = [];
+
+    for (const key of ["bodyWeight", "waist", "hips", "chest"] as const) {
+      const all = getAllTrendPoints(measurements, key);
+      const filtered = filterPointsByRange(all, days);
+      cards.push({
+        key,
+        label: MEASUREMENT_LABELS[key] ?? key,
+        seriesLabel: MEASUREMENT_SERIES_LABELS[key] ?? key,
+        kind: "single",
+        slotRows: buildSlotRows(filtered),
+        hasInRange: filtered.length > 0,
+        hasEver: all.length > 0,
+        unit: key === "bodyWeight" ? "kg" : "cm",
+      });
+    }
+
+    const leftThigh = filterPointsByRange(getAllTrendPoints(measurements, "leftThigh"), days);
+    const rightThigh = filterPointsByRange(getAllTrendPoints(measurements, "rightThigh"), days);
+    const thighMerged = mergePairedTrendPoints(leftThigh, rightThigh);
+    cards.push({
+      key: "thighs",
+      label: MEASUREMENT_LABELS.thighs,
+      seriesLabel: MEASUREMENT_SERIES_LABELS.thighs,
+      kind: "paired",
+      slotRows: buildPairedSlotRows(thighMerged),
+      leftLabel: "Left thigh",
+      rightLabel: "Right thigh",
+      hasInRange: thighMerged.some((r) => r.left != null || r.right != null),
+      hasEver:
+        getAllTrendPoints(measurements, "leftThigh").length > 0 ||
+        getAllTrendPoints(measurements, "rightThigh").length > 0,
+      unit: "cm",
+    });
+
+    const leftArm = filterPointsByRange(getAllTrendPoints(measurements, "leftArm"), days);
+    const rightArm = filterPointsByRange(getAllTrendPoints(measurements, "rightArm"), days);
+    const armMerged = mergePairedTrendPoints(leftArm, rightArm);
+    cards.push({
+      key: "arms",
+      label: MEASUREMENT_LABELS.arms,
+      seriesLabel: MEASUREMENT_SERIES_LABELS.arms,
+      kind: "paired",
+      slotRows: buildPairedSlotRows(armMerged),
+      leftLabel: "Left arm",
+      rightLabel: "Right arm",
+      hasInRange: armMerged.some((r) => r.left != null || r.right != null),
+      hasEver:
+        getAllTrendPoints(measurements, "leftArm").length > 0 ||
+        getAllTrendPoints(measurements, "rightArm").length > 0,
+      unit: "cm",
+    });
+
+    return cards;
+  }, [measurements, measurementRangeDays]);
 
   if (authError) {
     return <AuthErrorRetry onRetry={() => window.location.reload()} />;
@@ -225,308 +499,360 @@ export default function ClientProgressPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/client" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Dashboard
-        </Link>
-        <Link
-          href="/client/progress2"
-          className="ml-3 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:underline"
-        >
-          New dashboard (beta) →
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Your Progress</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Question scores, measurements, habits, and photos in one place.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link href="/client" className="text-sm text-[var(--color-primary)] hover:underline">
+            ← Dashboard
+          </Link>
+          <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Your progress</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            Scores, body measurements, habits, and photos at a glance
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="secondary">
+            <Link href="/client/habits">Log habits</Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href="/client/measurements">Measurements</Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href="/client/timeline" className="inline-flex items-center gap-1.5">
+              <TimelineIcon className="h-4 w-4 shrink-0" />
+              Timeline
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      {loading && (
-        <p className="text-[var(--color-text-muted)]">Loading…</p>
-      )}
+      {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
 
       {!loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          {/* Habit trackers: desktop = col 1 row 1 (above question progress) */}
-          <section className="min-w-0 md:col-start-1 md:row-start-1">
-            <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">Habit trackers</h2>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Weight</p>
+              {currentWeight != null ? (
+                <>
+                  <p className="mt-1 text-2xl font-semibold text-[var(--color-text)]">{currentWeight} kg</p>
+                  {weightChange != null && (
+                    <p className={`mt-1 text-sm ${weightChange <= 0 ? BAND_TEXT.green : BAND_TEXT.red}`}>
+                      {weightChange > 0 ? "+" : ""}
+                      {weightChange.toFixed(1)} kg vs baseline
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No weight logged</p>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Latest score</p>
+              {latestScore ? (
+                <>
+                  <p className="mt-1 flex items-center gap-2 text-2xl font-semibold text-[var(--color-text)]">
+                    <span
+                      className={`h-3 w-3 rounded-full ${latestScoreBand ? BAND_DOT[latestScoreBand] : "bg-[var(--color-border)]"}`}
+                      aria-hidden
+                    />
+                    {latestScore.score}%
+                  </p>
+                  {avgScore4wk != null && (
+                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                      {avgScore4wk}% avg (last {Math.min(4, scoreChartData.length)} check-ins)
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No check-ins yet</p>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Habit streak</p>
+              {bestHabitStreak ? (
+                <>
+                  <p className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
+                    🔥 {bestHabitStreak.current} days
+                  </p>
+                  <p className="mt-1 truncate text-sm text-[var(--color-text-muted)]">{bestHabitStreak.label}</p>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No active streak</p>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Last check-in</p>
+              {daysSinceCheckIn != null ? (
+                <>
+                  <p className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
+                    {daysSinceCheckIn === 0 ? "Today" : `${daysSinceCheckIn}d ago`}
+                  </p>
+                  {latestScore?.submittedAt && (
+                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                      {formatDateDisplay(latestScore.submittedAt.slice(0, 10))}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">—</p>
+              )}
+            </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="p-4">
+              <h2 className="font-medium text-[var(--color-text)]">Check-in score trend</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                Your overall traffic-light score over time
+              </p>
+              {scoreChartData.length > 0 ? (
+                <div className="mt-4">
+                  <CheckInScoreTrendChartLazy
+                    data={scoreChartData}
+                    redMax={trafficLightRedMax}
+                    orangeMax={trafficLightOrangeMax}
+                  />
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-[var(--color-text-muted)]">No check-in scores yet.</p>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <h2 className="font-medium text-[var(--color-text)]">Body measurements</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">Latest values with change vs baseline</p>
+              {latestBodyMeasurements.length > 0 ? (
+                <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-[var(--color-text)]">
+                  {latestBodyMeasurements.map((item) => (
+                    <li
+                      key={item.key}
+                      className={`flex min-w-0 flex-wrap items-baseline gap-x-1.5${item.key === "chest" ? " col-span-2" : ""}`}
+                    >
+                      <span className="whitespace-nowrap">
+                        {item.label}: {formatMeasurementNumber(item.value)} cm
+                      </span>
+                      {item.change != null && item.change !== 0 && (
+                        <span
+                          className={
+                            item.change < 0
+                              ? `whitespace-nowrap ${BAND_TEXT.green}`
+                              : `whitespace-nowrap ${BAND_TEXT.red}`
+                          }
+                        >
+                          ({formatMeasurementDelta(item.change)})
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-sm text-[var(--color-text-muted)]">No body measurements logged.</p>
+              )}
+              <a
+                href="#measurement-trends"
+                className="mt-3 inline-block text-sm text-[var(--color-primary)] hover:underline"
+              >
+                View measurement charts ↓
+              </a>
+            </Card>
+          </div>
+
+          <Card className="p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Compare latest, previous, and first upload — Front, Back, and Side
+                </p>
+              </div>
+              <Link
+                href="/client/progress-photos"
+                className="shrink-0 text-sm font-medium text-[var(--color-primary)] hover:underline"
+              >
+                Manage photos →
+              </Link>
+            </div>
+            <div className="mt-4">
+              <ProgressPhotoComparePanel images={progressImages} variant="client" />
+            </div>
+          </Card>
+
+          <Card id="measurement-trends" className="p-4 scroll-mt-6">
+            <h2 className="font-medium text-[var(--color-text)]">Measurement trends</h2>
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Weight and body measurements over time
+            </p>
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">Time range</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {MEASUREMENT_RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setMeasurementRange(opt.key)}
+                  className={`rounded px-3 py-1.5 text-sm ${
+                    measurementRange === opt.key
+                      ? "bg-[var(--color-text)] text-[var(--color-bg)]"
+                      : "bg-[var(--color-bg-elevated)] text-[var(--color-text)] ring-1 ring-[var(--color-border)]"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              Most recent readings in order within the range. Thighs and arms plot left and right together.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {measurementTrendCards.map((card) => (
+                <div
+                  key={card.key}
+                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3"
+                >
+                  <h3 className="text-sm font-medium text-[var(--color-text)]">{card.label}</h3>
+                  <div className="mt-2">
+                    {card.hasInRange ? (
+                      card.kind === "paired" ? (
+                        <MeasurementPairedSlotTrendChartLazy
+                          rows={card.slotRows}
+                          unit={card.unit}
+                          leftLabel={card.leftLabel}
+                          rightLabel={card.rightLabel}
+                          seriesLabel={card.seriesLabel}
+                          fillContainer
+                        />
+                      ) : (
+                        <MeasurementSlotTrendChartLazy
+                          rows={card.slotRows}
+                          unit={card.unit}
+                          seriesLabel={card.seriesLabel}
+                          fillContainer
+                        />
+                      )
+                    ) : (
+                      <p className="flex aspect-[5/4] w-full items-center justify-center text-center text-sm text-[var(--color-text-muted)]">
+                        {card.hasEver ? "No measurements in this time range." : "No data yet."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Link
+              href="/client/measurements"
+              className="mt-4 inline-block text-sm text-[var(--color-primary)] hover:underline"
+            >
+              Log measurements →
+            </Link>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-medium text-[var(--color-text)]">Habit trackers</h2>
+                <p className="text-sm text-[var(--color-text-muted)]">Your daily habit compliance</p>
+              </div>
+              <Link
+                href="/client/habits"
+                className="text-sm text-[var(--color-primary)] hover:underline"
+              >
+                Log habits →
+              </Link>
+            </div>
             {habitsData?.history ? (
               <>
-                <div className="mb-3 flex gap-1 rounded-lg bg-[var(--color-bg)] p-1">
-                  {(["7d", "30d", "all"] as const).map((r) => (
+                <div className="mt-3 flex gap-1 rounded-lg bg-[var(--color-bg)] p-1">
+                  {(["7d", "30d"] as const).map((r) => (
                     <button
                       key={r}
                       type="button"
-                      onClick={() => setStripRange(r)}
+                      onClick={() => setHabitRange(r)}
                       className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                        stripRange === r
+                        habitRange === r
                           ? "bg-[var(--color-bg-elevated)] text-[var(--color-text)] shadow-sm"
                           : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                       }`}
                     >
-                      {r === "7d" ? "This week" : r === "30d" ? "1 month" : "All time"}
+                      {r === "7d" ? "This week" : "Last 30 days"}
                     </button>
                   ))}
                 </div>
-                <HabitWeeklyStrip
-                  habits={habitsData.habits}
-                  byDate={habitsData.history.byDate}
-                  range={stripRange}
-                  historyStart={stripRange === "all" ? habitsData.history.start : undefined}
-                  historyEnd={stripRange === "all" ? habitsData.history.end : undefined}
-                />
-                <Link href="/client/habits" className="mt-3 inline-block text-sm text-[var(--color-primary)] hover:underline">
-                  Log habits →
-                </Link>
+                <div className="mt-3 overflow-x-auto">
+                  <HabitWeeklyStrip
+                    habits={habitsData.habits}
+                    byDate={habitsData.history.byDate}
+                    range={habitRange}
+                    historyStart={habitRange === "30d" ? habitsData.history.start : undefined}
+                    historyEnd={habitRange === "30d" ? habitsData.history.end : undefined}
+                  />
+                </div>
               </>
             ) : (
-              <Card className="p-6">
-                <p className="text-[var(--color-text-muted)]">Log your daily habits to see your streak and history here.</p>
-                <Link href="/client/habits" className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline">
-                  Go to Habits →
-                </Link>
-              </Card>
+              <p className="mt-3 text-sm text-[var(--color-text-muted)]">No habit data yet.</p>
             )}
-          </section>
+          </Card>
 
-          {/* Question progress (check-in): desktop = col 1 row 2 */}
-          <section className="min-w-0 md:col-start-1 md:row-start-2">
-            <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">Question progress over time</h2>
-            {qpError && (
-              <p className="text-sm text-[var(--color-error)]" role="alert">{qpError}</p>
-            )}
-            {!qpError && questions.length > 0 && weeks.length > 0 && (
-              <>
-                <Card className="p-4 mb-3">
-                  <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">
-                    Per-question traffic light (fixed scale 0–10)
-                  </p>
-                  <div className="flex flex-wrap items-center gap-4 text-sm">
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-3 w-3 rounded-full bg-green-500" aria-hidden />
-                      <span className="text-[var(--color-text)]">Good (7–10)</span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-3 w-3 rounded-full bg-amber-500" aria-hidden />
-                      <span className="text-[var(--color-text)]">Moderate (4–6)</span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-3 w-3 rounded-full bg-red-500" aria-hidden />
-                      <span className="text-[var(--color-text)]">Needs attention (0–3)</span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-3 w-3 rounded-full bg-[var(--color-border)]" aria-hidden />
-                      <span className="text-[var(--color-text)]">Not scored</span>
-                    </span>
-                  </div>
-                </Card>
-                <Card className="overflow-x-auto p-0">
-                  <table className="w-full min-w-[600px] border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                        <th className="px-3 py-2 text-left font-medium text-[var(--color-text-muted)]">Question</th>
-                        {weeks.map((w) => (
-                          <th key={w.key} className="px-2 py-2 text-center font-medium text-[var(--color-text-muted)] whitespace-nowrap">
-                            {w.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {questions.map((q) => (
-                        <tr key={q.id} className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]/50">
-                          <td className="px-3 py-2 text-[var(--color-text)] max-w-[200px] truncate" title={q.text}>
-                            {q.text}
-                          </td>
-                          {weeks.map((w) => {
-                            const score = grid[q.id]?.[w.key];
-                            const band = score != null ? getBand(score) : null;
-                            return (
-                              <td key={w.key} className="px-2 py-2 text-center">
-                                <span
-                                  className={`inline-block h-4 w-4 rounded-full ${
-                                    band === "green" ? "bg-green-500"
-                                    : band === "orange" ? "bg-amber-500"
-                                    : band === "red" ? "bg-red-500"
-                                    : "bg-[var(--color-border)]"
-                                  }`}
-                                  title={score != null ? `${score}%` : "Not scored"}
-                                  aria-hidden
-                                />
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <p className="px-3 py-2 text-xs text-[var(--color-text-muted)]">
-                    Scroll horizontally on small screens to see all weeks.
-                  </p>
-                </Card>
-              </>
-            )}
-            {!qpError && (questions.length === 0 || weeks.length === 0) && (
-              <Card className="p-6">
-                <p className="text-[var(--color-text-muted)]">Complete check-ins to see your question progress here.</p>
-                <Link href="/client/check-in/new" className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline">
-                  New check-in →
-                </Link>
-              </Card>
-            )}
-          </section>
-
-          {/* Weight & measurement trends: desktop = col 2 row 1 (so gallery can sit under it) */}
-          <section className="min-w-0 md:col-start-2 md:row-start-1">
-            <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">Weight & measurement trends</h2>
+          {allQuestionTrends.length > 0 && (
             <Card className="p-4">
-              {measurementList.length === 0 ? (
-                <>
-                  <p className="text-[var(--color-text-muted)]">No measurements yet. Add your first entry to see trends.</p>
-                  <Link href="/client/measurements" className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline">
-                    Add measurement →
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <label className="sr-only" htmlFor="progress-chart-metric">Metric</label>
-                  <select
-                    id="progress-chart-metric"
-                    value={chartMetric}
-                    onChange={(e) => setChartMetric(e.target.value as typeof chartMetric)}
-                    className="mb-4 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
-                  >
-                    <option value="bodyWeight">Body weight (kg)</option>
-                    <option value="arms">Arms (L &amp; R)</option>
-                    <option value="thighs">Thighs (L &amp; R)</option>
-                    {MEASUREMENT_KEYS.map((key) => (
-                      <option key={key} value={key}>{measurementLabels[key]} (cm)</option>
-                    ))}
-                  </select>
-                  {chartMetric === "arms" || chartMetric === "thighs" ? (
-                    comparisonChartData.length > 0 ? (
-                      <MeasurementComparisonChartLazy
-                        data={comparisonChartData}
-                        unit="cm"
-                        series={
-                          chartMetric === "arms"
-                            ? [
-                                { dataKey: "leftArm", name: "L arm", color: "var(--color-primary)" },
-                                { dataKey: "rightArm", name: "R arm", color: "#0ea5e9", strokeDasharray: "6 4" },
-                              ]
-                            : [
-                                { dataKey: "leftThigh", name: "L thigh", color: "var(--color-primary)" },
-                                { dataKey: "rightThigh", name: "R thigh", color: "#0ea5e9", strokeDasharray: "6 4" },
-                              ]
-                        }
-                      />
-                    ) : (
-                      <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">No data yet. Add measurements to compare L &amp; R.</p>
-                    )
-                  ) : chartData.length > 0 ? (
-                    <MeasurementLineChartLazy
-                      data={chartData}
-                      unit={chartMetric === "bodyWeight" ? "kg" : "cm"}
-                    />
-                  ) : (
-                    <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">No data for this metric yet.</p>
-                  )}
-                  <Link href="/client/measurements" className="mt-3 inline-block text-sm text-[var(--color-primary)] hover:underline">
-                    View all measurements →
-                  </Link>
-                </>
-              )}
-            </Card>
-          </section>
-
-          {/* Before & current photos: desktop = col 2 row 2 (right underneath the graph) */}
-          <section className="min-w-0 md:col-start-2 md:row-start-2">
-            <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">Before & current photos</h2>
-            <Card className="p-4">
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div>
-                  <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-2">
-                    Baseline / First before{comparisonPoseLabel ? ` (${comparisonPoseLabel})` : ""}
-                  </h3>
-                  {baselinePhoto ? (
-                    <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                      <Image
-                        src={baselinePhoto.imageUrl}
-                        alt={baselinePhoto.caption || "Before"}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 100vw, 50vw"
-                        unoptimized
-                      />
-                      {baselinePhoto.uploadedAt && (
-                        <p className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1 text-xs text-white">
-                          {formatDateDisplay(baselinePhoto.uploadedAt)}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] text-center p-4">
-                      <p className="text-sm text-[var(--color-text-muted)]">No before photo yet</p>
-                      <Link href="/client/progress-photos" className="mt-2 text-sm font-medium text-[var(--color-primary)] hover:underline">
-                        Upload photo
-                      </Link>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-[var(--color-text-muted)] mb-2">
-                    Current{comparisonPoseLabel ? ` (${comparisonPoseLabel})` : ""}
-                  </h3>
-                  {currentPhoto ? (
-                    <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                      <Image
-                        src={currentPhoto.imageUrl}
-                        alt={currentPhoto.caption || "Current"}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 100vw, 50vw"
-                        unoptimized
-                      />
-                      {currentPhoto.uploadedAt && (
-                        <p className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1 text-xs text-white">
-                          {formatDateDisplay(currentPhoto.uploadedAt)}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] text-center p-4">
-                      <p className="text-sm text-[var(--color-text-muted)]">No current photo yet</p>
-                      <Link href="/client/progress-photos" className="mt-2 text-sm font-medium text-[var(--color-primary)] hover:underline">
-                        Upload photo
-                      </Link>
-                    </div>
-                  )}
-                </div>
+              <h2 className="font-medium text-[var(--color-text)]">What&apos;s changed?</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                How each answer moved from your first scored week to your latest
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full border-2 border-amber-500 bg-[var(--color-bg-elevated)]" aria-hidden />
+                  Then (first week)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500" aria-hidden />
+                  Now (latest week)
+                </span>
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                {canComparePhotos && (
-                  <Button type="button" variant="primary" onClick={() => setCompareOpen(true)}>
-                    Compare before &amp; after
-                  </Button>
-                )}
-                <Link href="/client/progress-photos" className="text-sm text-[var(--color-primary)] hover:underline">
-                  Manage all photos →
-                </Link>
+              <div className="mt-4 space-y-2">
+                {allQuestionTrends.map((t) => (
+                  <QuestionTrendGauge
+                    key={t.id}
+                    text={t.text}
+                    earliest={t.earliest}
+                    latest={t.latest}
+                    delta={t.delta}
+                    redMax={trafficLightRedMax}
+                    orangeMax={trafficLightOrangeMax}
+                  />
+                ))}
               </div>
+              <Link
+                href="/client/progress-classic"
+                className="mt-4 inline-block text-sm text-[var(--color-primary)] hover:underline"
+              >
+                Full question grid →
+              </Link>
             </Card>
-          </section>
-        </div>
+          )}
+        </>
       )}
-
-      <ProgressPhotoCompareModal
-        open={compareOpen}
-        onClose={() => setCompareOpen(false)}
-        pose={comparePose}
-        images={compareImages}
-        legacyAssignment={legacyAssignment}
-        initialMilestoneA="first_baseline"
-        initialMilestoneB="latest"
-      />
     </div>
+  );
+}
+
+function TimelineIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 3v18" />
+      <circle cx="12" cy="6" r="2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="18" r="2" fill="currentColor" stroke="none" />
+    </svg>
   );
 }

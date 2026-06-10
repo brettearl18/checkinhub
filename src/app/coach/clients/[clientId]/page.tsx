@@ -318,9 +318,6 @@ export default function CoachClientCheckInsPage() {
             <Link href={`/coach/clients/${clientId}/progress`}>Progress</Link>
           </Button>
           <Button asChild variant="secondary">
-            <Link href={`/coach/clients/${clientId}/progress2`}>Progress (beta)</Link>
-          </Button>
-          <Button asChild variant="secondary">
             <Link href={`/coach/clients/${clientId}/timeline`}>Timeline</Link>
           </Button>
           <Button asChild variant="secondary">

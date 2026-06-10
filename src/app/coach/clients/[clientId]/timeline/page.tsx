@@ -75,7 +75,7 @@ export default function CoachClientTimelinePage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link
-            href={`/coach/clients/${clientId}/progress2`}
+            href={`/coach/clients/${clientId}/progress`}
             className="text-sm text-[var(--color-primary)] hover:underline"
           >
             ← Progress dashboard
@@ -94,7 +94,7 @@ export default function CoachClientTimelinePage() {
             <Link href={`/coach/clients/${clientId}`}>Check-ins</Link>
           </Button>
           <Button asChild variant="secondary">
-            <Link href={`/coach/clients/${clientId}/progress2`}>Progress</Link>
+            <Link href={`/coach/clients/${clientId}/progress`}>Progress</Link>
           </Button>
         </div>
       </div>

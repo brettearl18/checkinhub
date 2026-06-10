@@ -102,7 +102,7 @@ interface SetupStatus {
 
 const QUICK_LINKS = [
   { href: "/client/history", label: "Check-in history", description: "Past check-ins & feedback", emoji: "📋" },
-  { href: "/client/progress", label: "Question progress", description: "Traffic light chart by week", emoji: "📊" },
+  { href: "/client/progress", label: "Progress", description: "Scores, measurements, habits & photos", emoji: "📊" },
   { href: "/client/goals", label: "Goals", description: "Track your progress", emoji: "🎯" },
   { href: "/client/measurements", label: "Measurements", description: "Weight & measurements", emoji: "📏" },
   { href: "/client/progress-photos", label: "Progress photos", description: "Baseline & current by pose", emoji: "📸" },

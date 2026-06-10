@@ -1,19 +1,24 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { CoachLegacyProgressPhotoUpload } from "@/components/coach/CoachLegacyProgressPhotoUpload";
+import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
+import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { HabitWeeklyStrip, type HabitStripRange } from "@/components/client/HabitWeeklyStrip";
+import { CheckInScoreTrendChartLazy } from "@/components/ui/CheckInScoreTrendChartLazy";
 import { MeasurementSlotTrendChartLazy } from "@/components/ui/MeasurementSlotTrendChartLazy";
 import { MeasurementPairedSlotTrendChartLazy } from "@/components/ui/MeasurementPairedSlotTrendChartLazy";
+import { QuestionTrendGauge } from "@/components/ui/QuestionTrendGauge";
+import { getAllQuestionTrends } from "@/lib/question-trends";
 import { MEASUREMENT_SLOT_COUNT, type SlotChartRow } from "@/components/ui/MeasurementSlotTrendChart";
 import type { PairedSlotChartRow } from "@/components/ui/MeasurementPairedSlotTrendChart";
-import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
-import { formatProgressImageTypeLabel } from "@/lib/progress-comparison-photos";
+import type { HabitDefinition } from "@/lib/habits";
 
 interface Measurement {
   id: string;
@@ -21,16 +26,6 @@ interface Measurement {
   bodyWeight: number | null;
   measurements: Record<string, number>;
   isBaseline: boolean;
-}
-
-interface Goal {
-  id: string;
-  title: string;
-  targetValue: number;
-  currentValue: number;
-  unit: string;
-  progress: number;
-  status: string;
 }
 
 interface ProgressImage {
@@ -48,61 +43,40 @@ interface CheckInScore {
   score: number;
 }
 
-interface QuestionProgressWeek {
-  key: string;
-  label: string;
-}
-
 interface QuestionProgress {
   questions: Array<{ id: string; text: string }>;
-  weeks: QuestionProgressWeek[];
+  weeks: Array<{ key: string; label: string }>;
   grid: Record<string, Record<string, number>>;
 }
 
-/** Fixed bands for per-question grid (Good 7–10, Moderate 4–6, Needs attention 0–3). Score is 0–100. */
-function getQuestionBand(score: number): "green" | "orange" | "red" {
-  if (score < 40) return "red";
-  if (score < 70) return "orange";
-  return "green";
+interface HabitsData {
+  habits: HabitDefinition[];
+  streaks: Record<string, { current: number; longest: number; goalMetToday: boolean }>;
+  history?: {
+    start: string;
+    end: string;
+    byDate: Record<string, Record<string, "met" | "missed">>;
+  };
 }
 
-// Traffic light bands for overall score 0–100 (per-client thresholds).
 function getScoreBand(score: number, redMax: number, orangeMax: number): "red" | "orange" | "green" {
   if (score <= redMax) return "red";
   if (score <= orangeMax) return "orange";
   return "green";
 }
 
-const MEASUREMENT_LABELS: Record<string, string> = {
-  bodyWeight: "Body Weight (kg)",
-  waist: "Waist (cm)",
-  hips: "Hips (cm)",
-  chest: "Chest (cm)",
-  thighs: "Thighs (cm)",
-  arms: "Arms (cm)",
+const BAND_DOT: Record<"red" | "orange" | "green", string> = {
+  red: "bg-red-500",
+  orange: "bg-amber-500",
+  green: "bg-green-500",
 };
 
-/** Short names for chart X-axis and tooltips. */
-const MEASUREMENT_SERIES_LABELS: Record<string, string> = {
-  bodyWeight: "Body weight",
-  waist: "Waist",
-  hips: "Hips",
-  chest: "Chest",
-  thighs: "Thigh",
-  arms: "Arm",
+const BAND_TEXT: Record<"red" | "orange" | "green", string> = {
+  red: "text-red-600 dark:text-red-400",
+  orange: "text-amber-600 dark:text-amber-400",
+  green: "text-green-600 dark:text-green-400",
 };
 
-const BODY_MEASUREMENT_KEYS = [
-  "waist",
-  "hips",
-  "chest",
-  "leftThigh",
-  "rightThigh",
-  "leftArm",
-  "rightArm",
-] as const;
-
-/** Two-column summary: waist/hips, chest full width, then L/R thighs and L/R arms paired. */
 const BODY_MEASUREMENT_SUMMARY_ORDER = [
   "waist",
   "hips",
@@ -113,7 +87,7 @@ const BODY_MEASUREMENT_SUMMARY_ORDER = [
   "rightArm",
 ] as const;
 
-const BODY_MEASUREMENT_SUMMARY_LABELS: Record<(typeof BODY_MEASUREMENT_KEYS)[number], string> = {
+const BODY_MEASUREMENT_SUMMARY_LABELS: Record<(typeof BODY_MEASUREMENT_SUMMARY_ORDER)[number], string> = {
   waist: "Waist",
   hips: "Hips",
   chest: "Chest",
@@ -132,13 +106,6 @@ function measurementNumericValue(value: unknown): number | null {
   return null;
 }
 
-type BodyMeasurementSummary = {
-  key: string;
-  label: string;
-  value: number;
-  change: number | null;
-};
-
 function formatMeasurementNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
@@ -148,12 +115,11 @@ function formatMeasurementDelta(delta: number): string {
   return `${sign}${formatMeasurementNumber(delta)} cm`;
 }
 
-/** Latest cm value per body measurement key (newest record with that field wins). */
-function getLatestBodyMeasurementValues(
+function getLatestBodyMeasurements(
   measurements: Measurement[],
   baseline: Measurement | undefined
-): BodyMeasurementSummary[] {
-  const result: BodyMeasurementSummary[] = [];
+): Array<{ key: string; label: string; value: number; change: number | null }> {
+  const result: Array<{ key: string; label: string; value: number; change: number | null }> = [];
   for (const key of BODY_MEASUREMENT_SUMMARY_ORDER) {
     let value: number | null = null;
     for (const m of measurements) {
@@ -164,21 +130,52 @@ function getLatestBodyMeasurementValues(
       }
     }
     if (value == null) continue;
-
     const baselineValue = baseline ? measurementNumericValue(baseline.measurements?.[key]) : null;
-    const change = baselineValue != null ? value - baselineValue : null;
-
     result.push({
       key,
       label: BODY_MEASUREMENT_SUMMARY_LABELS[key],
       value,
-      change,
+      change: baselineValue != null ? value - baselineValue : null,
     });
   }
   return result;
 }
 
-/** All measurements with a value for this metric, oldest → newest. */
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const now = Date.now();
+  return Math.floor((now - then) / (24 * 60 * 60 * 1000));
+}
+
+const MEASUREMENT_LABELS: Record<string, string> = {
+  bodyWeight: "Body Weight (kg)",
+  waist: "Waist (cm)",
+  hips: "Hips (cm)",
+  chest: "Chest (cm)",
+  thighs: "Thighs (cm)",
+  arms: "Arms (cm)",
+};
+
+const MEASUREMENT_SERIES_LABELS: Record<string, string> = {
+  bodyWeight: "Body weight",
+  waist: "Waist",
+  hips: "Hips",
+  chest: "Chest",
+  thighs: "Thigh",
+  arms: "Arm",
+};
+
+type MeasurementRangeKey = "7d" | "30d" | "90d" | "180d";
+
+const MEASUREMENT_RANGE_OPTIONS: { key: MeasurementRangeKey; label: string; days: number }[] = [
+  { key: "7d", label: "7 days", days: 7 },
+  { key: "30d", label: "1 month", days: 30 },
+  { key: "90d", label: "3 months", days: 90 },
+  { key: "180d", label: "6 months", days: 180 },
+];
+
 function getAllTrendPoints(
   measurements: Measurement[],
   key: "bodyWeight" | string
@@ -193,15 +190,6 @@ function getAllTrendPoints(
   }
   return points.sort((a, b) => a.date.localeCompare(b.date));
 }
-
-type MeasurementRangeKey = "7d" | "30d" | "90d" | "180d";
-
-const MEASUREMENT_RANGE_OPTIONS: { key: MeasurementRangeKey; label: string; days: number }[] = [
-  { key: "7d", label: "7 days", days: 7 },
-  { key: "30d", label: "1 month", days: 30 },
-  { key: "90d", label: "3 months", days: 90 },
-  { key: "180d", label: "6 months", days: 180 },
-];
 
 function filterPointsByRange(
   points: { date: string; value: number }[],
@@ -221,11 +209,8 @@ function filterPointsByRange(
 }
 
 function buildSlotRows(points: { date: string; value: number }[]): SlotChartRow[] {
-  // Points are oldest → newest; chart shows the most recent readings in range (incl. check-in weight).
   const take =
-    points.length > MEASUREMENT_SLOT_COUNT
-      ? points.slice(-MEASUREMENT_SLOT_COUNT)
-      : points;
+    points.length > MEASUREMENT_SLOT_COUNT ? points.slice(-MEASUREMENT_SLOT_COUNT) : points;
   const rows: SlotChartRow[] = [];
   for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
     if (i < take.length) {
@@ -243,7 +228,6 @@ interface PairedMeasurementRow {
   right: number | null;
 }
 
-/** One row per date in range, union of left/right series (for thighs or arms). */
 function mergePairedTrendPoints(
   left: { date: string; value: number }[],
   right: { date: string; value: number }[]
@@ -264,9 +248,7 @@ function mergePairedTrendPoints(
 
 function buildPairedSlotRows(merged: PairedMeasurementRow[]): PairedSlotChartRow[] {
   const take =
-    merged.length > MEASUREMENT_SLOT_COUNT
-      ? merged.slice(-MEASUREMENT_SLOT_COUNT)
-      : merged;
+    merged.length > MEASUREMENT_SLOT_COUNT ? merged.slice(-MEASUREMENT_SLOT_COUNT) : merged;
   const rows: PairedSlotChartRow[] = [];
   for (let i = 0; i < MEASUREMENT_SLOT_COUNT; i++) {
     if (i < take.length) {
@@ -306,19 +288,47 @@ type MeasurementTrendCard =
 export default function CoachClientProgressPage() {
   const params = useParams();
   const clientId = params?.clientId as string | undefined;
+  const { fetchWithAuth } = useApiClient();
+
   const [clientName, setClientName] = useState("");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
   const [checkInScores, setCheckInScores] = useState<CheckInScore[]>([]);
   const [questionProgress, setQuestionProgress] = useState<QuestionProgress | null>(null);
+  const [habitsData, setHabitsData] = useState<HabitsData | null>(null);
   const [trafficLightRedMax, setTrafficLightRedMax] = useState(40);
   const [trafficLightOrangeMax, setTrafficLightOrangeMax] = useState(70);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
+  const [habitRange, setHabitRange] = useState<HabitStripRange>("30d");
   const [measurementRange, setMeasurementRange] = useState<MeasurementRangeKey>("180d");
 
-  const { fetchWithAuth } = useApiClient();
+  const applyProgressPayload = useCallback((data: Record<string, unknown>) => {
+    const c = (data.client ?? {}) as { firstName?: string; lastName?: string };
+    setClientName([c.firstName, c.lastName].filter(Boolean).join(" ") || "Client");
+    setMeasurements(Array.isArray(data.measurements) ? data.measurements : []);
+    setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
+    setCheckInScores(Array.isArray(data.checkInScores) ? data.checkInScores : []);
+    const qp = data.questionProgress as QuestionProgress | null | undefined;
+    setQuestionProgress(
+      qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
+        ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
+        : null
+    );
+    setTrafficLightRedMax(typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 40);
+    setTrafficLightOrangeMax(
+      typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 70
+    );
+  }, []);
+
+  const reloadProgressImages = useCallback(async () => {
+    if (!clientId) return;
+    const progressRes = await fetchWithAuth(`/api/coach/clients/${clientId}/progress`);
+    if (progressRes.ok) {
+      const data = await progressRes.json();
+      setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
+    }
+  }, [clientId, fetchWithAuth]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -326,41 +336,83 @@ export default function CoachClientProgressPage() {
       setLoading(true);
       setAuthError(false);
       try {
-        const res = await fetchWithAuth(`/api/coach/clients/${clientId}/progress`);
-        if (res.status === 401) {
+        const [progressRes, habitsRes] = await Promise.all([
+          fetchWithAuth(`/api/coach/clients/${clientId}/progress`),
+          fetchWithAuth(`/api/coach/clients/${clientId}/habits`),
+        ]);
+        if (progressRes.status === 401 || habitsRes.status === 401) {
           setAuthError(true);
           return;
         }
-        if (res.status === 403 || res.status === 404) {
-          setMeasurements([]);
-          setGoals([]);
-          setProgressImages([]);
-          return;
+        if (progressRes.ok) {
+          applyProgressPayload(await progressRes.json());
         }
-        if (res.ok) {
-          const data = await res.json();
-          const c = data.client ?? {};
-          setClientName([c.firstName, c.lastName].filter(Boolean).join(" ") || "Client");
-          setMeasurements(Array.isArray(data.measurements) ? data.measurements : []);
-          setGoals(Array.isArray(data.goals) ? data.goals : []);
-          setProgressImages(Array.isArray(data.progressImages) ? data.progressImages : []);
-          setCheckInScores(Array.isArray(data.checkInScores) ? data.checkInScores : []);
-          const qp = data.questionProgress;
-          setQuestionProgress(
-            qp && Array.isArray(qp.questions) && Array.isArray(qp.weeks) && qp.grid != null
-              ? { questions: qp.questions, weeks: qp.weeks, grid: qp.grid }
-              : null
-          );
-          setTrafficLightRedMax(typeof data.trafficLightRedMax === "number" ? data.trafficLightRedMax : 40);
-          setTrafficLightOrangeMax(typeof data.trafficLightOrangeMax === "number" ? data.trafficLightOrangeMax : 70);
+        if (habitsRes.ok) {
+          const h = await habitsRes.json();
+          setHabitsData({
+            habits: h.habits ?? [],
+            streaks: h.streaks ?? {},
+            history: h.history,
+          });
         }
       } finally {
         setLoading(false);
       }
     })();
-  }, [clientId, fetchWithAuth]);
+  }, [clientId, fetchWithAuth, applyProgressPayload]);
 
-  const measurementRangeDays = MEASUREMENT_RANGE_OPTIONS.find((r) => r.key === measurementRange)?.days ?? 180;
+  const latest = measurements[0];
+  const baseline = measurements.find((m) => m.isBaseline) ?? measurements[measurements.length - 1];
+  const currentWeight = latest?.bodyWeight ?? null;
+  const baselineWeight = baseline?.bodyWeight ?? null;
+  const weightChange =
+    currentWeight != null && baselineWeight != null ? currentWeight - baselineWeight : null;
+
+  const latestBodyMeasurements = useMemo(
+    () => getLatestBodyMeasurements(measurements, baseline),
+    [measurements, baseline]
+  );
+
+  const latestScore = checkInScores[0] ?? null;
+  const latestScoreBand = latestScore
+    ? getScoreBand(latestScore.score, trafficLightRedMax, trafficLightOrangeMax)
+    : null;
+
+  const scoreChartData = useMemo(
+    () =>
+      [...checkInScores]
+        .filter((s) => s.submittedAt)
+        .sort((a, b) => a.submittedAt!.localeCompare(b.submittedAt!))
+        .map((s) => ({
+          date: s.submittedAt!.slice(0, 10),
+          score: s.score,
+          label: s.formTitle,
+        })),
+    [checkInScores]
+  );
+
+  const avgScore4wk = useMemo(() => {
+    const recent = scoreChartData.slice(-4);
+    if (recent.length === 0) return null;
+    return Math.round(recent.reduce((sum, p) => sum + p.score, 0) / recent.length);
+  }, [scoreChartData]);
+
+  const bestHabitStreak = useMemo(() => {
+    if (!habitsData) return null;
+    let best = { label: "", current: 0 };
+    for (const h of habitsData.habits) {
+      const s = habitsData.streaks[h.id]?.current ?? 0;
+      if (s > best.current) best = { label: h.label, current: s };
+    }
+    return best.current > 0 ? best : null;
+  }, [habitsData]);
+
+  const daysSinceCheckIn = daysSince(latestScore?.submittedAt ?? null);
+
+  const allQuestionTrends = useMemo(() => getAllQuestionTrends(questionProgress), [questionProgress]);
+
+  const measurementRangeDays =
+    MEASUREMENT_RANGE_OPTIONS.find((r) => r.key === measurementRange)?.days ?? 180;
 
   const measurementTrendCards = useMemo((): MeasurementTrendCard[] => {
     const days = measurementRangeDays;
@@ -420,30 +472,12 @@ export default function CoachClientProgressPage() {
     return cards;
   }, [measurements, measurementRangeDays]);
 
-  const latest = measurements[0];
-  const baseline = measurements.find((m) => m.isBaseline) ?? measurements[measurements.length - 1];
-  const currentWeight = latest?.bodyWeight ?? null;
-  const baselineWeight = baseline?.bodyWeight ?? null;
-  const weightChange =
-    currentWeight != null && baselineWeight != null ? currentWeight - baselineWeight : null;
-  const latestBodyMeasurements = useMemo(
-    () => getLatestBodyMeasurementValues(measurements, baseline),
-    [measurements, baseline]
-  );
-  const hasBodyMeasurementBaseline = latestBodyMeasurements.some((item) => item.change != null);
   if (!clientId) {
-    return (
-      <div className="space-y-6">
-        <Link href="/coach/clients" className="text-sm text-[var(--color-primary)] hover:underline">
-          ← Clients
-        </Link>
-        <p className="text-[var(--color-text-muted)]">Invalid client.</p>
-      </div>
-    );
+    return <p className="text-[var(--color-text-muted)]">Invalid client.</p>;
   }
 
   if (authError) {
-    return <AuthErrorRetry onRetry={() => clientId && window.location.reload()} />;
+    return <AuthErrorRetry onRetry={() => window.location.reload()} />;
   }
 
   return (
@@ -460,19 +494,18 @@ export default function CoachClientProgressPage() {
             Progress: {loading ? "…" : clientName.toUpperCase()}
           </h1>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            Question-level progress over time
+            Scores, body measurements, habits, and photos at a glance
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild>
-            <Link href={clientId ? `/coach/clients/${clientId}/progress2` : "#"}>
-              Try new dashboard
-            </Link>
+          <Button asChild variant="secondary">
+            <Link href={`/coach/clients/${clientId}/timeline`}>Timeline</Link>
           </Button>
           <Button asChild variant="secondary">
-            <Link href={clientId ? `/coach/clients/${clientId}/settings` : "#"}>
-              Settings
-            </Link>
+            <Link href={`/coach/clients/${clientId}`}>Check-ins</Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href={`/coach/clients/${clientId}/settings`}>Settings</Link>
           </Button>
         </div>
       </div>
@@ -481,271 +514,178 @@ export default function CoachClientProgressPage() {
 
       {!loading && (
         <>
-          {/* Traffic light legend (per-client thresholds) */}
-          <Card className="p-3">
-            <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Traffic light system</p>
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-green-500" aria-hidden />
-                <span className="text-[var(--color-text)]">Good</span>
-                <span className="text-[var(--color-text-muted)]">({trafficLightOrangeMax + 1}–100%)</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-amber-500" aria-hidden />
-                <span className="text-[var(--color-text)]">Moderate</span>
-                <span className="text-[var(--color-text-muted)]">({trafficLightRedMax + 1}–{trafficLightOrangeMax}%)</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full bg-red-500" aria-hidden />
-                <span className="text-[var(--color-text)]">Needs attention</span>
-                <span className="text-[var(--color-text-muted)]">(0–{trafficLightRedMax}%)</span>
-              </span>
-            </div>
-          </Card>
-
-          <div className="grid gap-4 sm:grid-cols-3">
+          {/* KPI strip */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="p-4">
-              <h3 className="text-sm font-medium text-[var(--color-text-muted)]">Weight</h3>
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Weight</p>
               {currentWeight != null ? (
                 <>
-                  <p className="mt-1 text-xl font-semibold text-[var(--color-text)]">
-                    {currentWeight} kg
-                  </p>
-                  {weightChange != null && baselineWeight != null && (
-                    <p className="text-sm flex items-center gap-2">
-                      <span
-                        className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${
-                          weightChange < 0
-                            ? "bg-green-500"
-                            : weightChange > 0
-                              ? "bg-red-500"
-                              : "bg-amber-500"
-                        }`}
-                        aria-hidden
-                      />
-                      <span
-                        className={
-                          weightChange < 0
-                            ? "text-green-600 dark:text-green-400"
-                            : weightChange > 0
-                              ? "text-red-600 dark:text-red-400"
-                              : "text-amber-600 dark:text-amber-400"
-                        }
-                      >
-                        {weightChange > 0 ? "+" : ""}
-                        {weightChange.toFixed(1)} kg from baseline
-                      </span>
-                    </p>
-                  )}
-                  {baselineWeight != null && (
-                    <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                      Baseline: {baselineWeight} kg
+                  <p className="mt-1 text-2xl font-semibold text-[var(--color-text)]">{currentWeight} kg</p>
+                  {weightChange != null && (
+                    <p className={`mt-1 text-sm ${weightChange <= 0 ? BAND_TEXT.green : BAND_TEXT.red}`}>
+                      {weightChange > 0 ? "+" : ""}
+                      {weightChange.toFixed(1)} kg vs baseline
                     </p>
                   )}
                 </>
               ) : (
-                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No weight recorded</p>
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No weight logged</p>
               )}
             </Card>
 
             <Card className="p-4">
-              <h3 className="text-sm font-medium text-[var(--color-text-muted)]">Body measurements</h3>
-              {latestBodyMeasurements.length > 0 ? (
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Latest score</p>
+              {latestScore ? (
                 <>
-                  <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-[var(--color-text)]">
-                    {latestBodyMeasurements.map((item) => (
-                      <li
-                        key={item.key}
-                        className={`flex min-w-0 flex-wrap items-baseline gap-x-1.5${item.key === "chest" ? " col-span-2" : ""}`}
-                      >
-                        <span className="whitespace-nowrap">
-                          {item.label}: {formatMeasurementNumber(item.value)} cm
-                        </span>
-                        {item.change != null && item.change !== 0 && (
-                          <span
-                            className={
-                              item.change < 0
-                                ? "whitespace-nowrap text-green-600 dark:text-green-400"
-                                : item.change > 0
-                                  ? "whitespace-nowrap text-red-600 dark:text-red-400"
-                                  : "whitespace-nowrap text-amber-600 dark:text-amber-400"
-                            }
-                          >
-                            ({formatMeasurementDelta(item.change)})
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  {hasBodyMeasurementBaseline && (
-                    <p className="mt-2 text-xs text-[var(--color-text-muted)]">Change vs baseline</p>
+                  <p className="mt-1 flex items-center gap-2 text-2xl font-semibold text-[var(--color-text)]">
+                    <span
+                      className={`h-3 w-3 rounded-full ${latestScoreBand ? BAND_DOT[latestScoreBand] : "bg-[var(--color-border)]"}`}
+                      aria-hidden
+                    />
+                    {latestScore.score}%
+                  </p>
+                  {avgScore4wk != null && (
+                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                      {avgScore4wk}% avg (last {Math.min(4, scoreChartData.length)} check-ins)
+                    </p>
                   )}
                 </>
               ) : (
-                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No measurements</p>
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No check-ins yet</p>
               )}
             </Card>
 
             <Card className="p-4">
-              <h3 className="text-sm font-medium text-[var(--color-text-muted)]">Goals</h3>
-              {goals.filter((g) => g.status === "active").length > 0 ? (
-                <ul className="mt-2 space-y-2 text-sm">
-                  {goals
-                    .filter((g) => g.status === "active")
-                    .slice(0, 3)
-                    .map((g) => (
-                      <li key={g.id} className="text-[var(--color-text)]">
-                        {g.title}: {g.currentValue} / {g.targetValue} {g.unit}
-                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
-                          <div
-                            className="h-full bg-[var(--color-primary)]"
-                            style={{ width: `${Math.min(100, g.progress ?? 0)}%` }}
-                          />
-                        </div>
-                      </li>
-                    ))}
-                </ul>
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Habit streak</p>
+              {bestHabitStreak ? (
+                <>
+                  <p className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
+                    🔥 {bestHabitStreak.current} days
+                  </p>
+                  <p className="mt-1 truncate text-sm text-[var(--color-text-muted)]">{bestHabitStreak.label}</p>
+                </>
               ) : (
-                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No goals set</p>
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">No active streak</p>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Last check-in</p>
+              {daysSinceCheckIn != null ? (
+                <>
+                  <p className="mt-1 text-2xl font-semibold text-[var(--color-text)]">
+                    {daysSinceCheckIn === 0 ? "Today" : `${daysSinceCheckIn}d ago`}
+                  </p>
+                  {latestScore?.submittedAt && (
+                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                      {formatDateDisplay(latestScore.submittedAt.slice(0, 10))}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">—</p>
               )}
             </Card>
           </div>
 
-          {/* Check-in scores (traffic light) */}
-          {checkInScores.length > 0 && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Score trend */}
             <Card className="p-4">
-              <h3 className="font-medium text-[var(--color-text)]">Check-in scores</h3>
+              <h2 className="font-medium text-[var(--color-text)]">Check-in score trend</h2>
               <p className="text-sm text-[var(--color-text-muted)]">
-                Overall score per check-in (traffic light)
+                Overall traffic-light score over time (dashed lines = client thresholds)
               </p>
-              <div className="mt-3 flex flex-wrap gap-3">
-                {checkInScores.map((r) => {
-                  const band = getScoreBand(r.score, trafficLightRedMax, trafficLightOrangeMax);
-                  const bandClass =
-                    band === "green"
-                      ? "bg-green-500"
-                      : band === "orange"
-                        ? "bg-amber-500"
-                        : "bg-red-500";
-                  const textClass =
-                    band === "green"
-                      ? "text-green-700 dark:text-green-300"
-                      : band === "orange"
-                        ? "text-amber-700 dark:text-amber-300"
-                        : "text-red-700 dark:text-red-300";
-                  return (
-                    <Link
-                      key={r.id}
-                      href={`/coach/clients/${clientId}/responses/${r.id}`}
-                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-sm hover:border-[var(--color-primary-muted)] hover:bg-[var(--color-primary-subtle)]/30"
-                    >
-                      <span
-                        className={`h-4 w-4 flex-shrink-0 rounded-full ${bandClass}`}
-                        aria-hidden
-                      />
-                      <span className={`font-medium tabular-nums ${textClass}`}>
-                        {r.score}%
-                      </span>
-                      <span className="text-[var(--color-text-muted)]">
-                        {r.formTitle}
-                        {r.submittedAt && (
-                          <> · {formatDateDisplay(r.submittedAt)}</>
-                        )}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
-
-          {/* Question progress table (per-question traffic light grid) */}
-          {questionProgress && questionProgress.questions.length > 0 && questionProgress.weeks.length > 0 && (
-            <Card className="overflow-x-auto p-0">
-              <div className="p-4 pb-2">
-                <h3 className="font-medium text-[var(--color-text)]">Question progress over time</h3>
-                <p className="text-sm text-[var(--color-text-muted)]">
-                  Per-question score by week (fixed scale: Good 7–10, Moderate 4–6, Needs attention 0–3)
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-[var(--color-text-muted)]">
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-full bg-green-500" aria-hidden />
-                    Good (7–10)
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-full bg-amber-500" aria-hidden />
-                    Moderate (4–6)
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-full bg-red-500" aria-hidden />
-                    Needs attention (0–3)
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-full bg-[var(--color-border)]" aria-hidden />
-                    Not scored
-                  </span>
+              {scoreChartData.length > 0 ? (
+                <div className="mt-4">
+                  <CheckInScoreTrendChartLazy
+                    data={scoreChartData}
+                    redMax={trafficLightRedMax}
+                    orangeMax={trafficLightOrangeMax}
+                  />
                 </div>
-              </div>
-              <table className="w-full min-w-[600px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
-                    <th className="sticky left-0 z-10 min-w-[120px] bg-[var(--color-bg-elevated)] px-3 py-2 text-left font-medium text-[var(--color-text-muted)] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)]">
-                      Question
-                    </th>
-                    {questionProgress.weeks.map((w) => (
-                      <th
-                        key={w.key}
-                        className="px-2 py-2 text-center font-medium text-[var(--color-text-muted)] whitespace-nowrap"
-                      >
-                        {w.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {questionProgress.questions.map((q) => (
-                    <tr
-                      key={q.id}
-                      className="group border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-bg-elevated)]/50"
-                    >
-                      <td className="sticky left-0 z-10 min-w-[120px] max-w-[200px] bg-[var(--color-bg)] px-3 py-2 text-[var(--color-text)] truncate shadow-[4px_0_8px_-2px_rgba(0,0,0,0.06)] group-hover:bg-[var(--color-bg-elevated)]/50" title={q.text}>
-                        {q.text}
-                      </td>
-                      {questionProgress.weeks.map((w) => {
-                        const score = questionProgress.grid[q.id]?.[w.key];
-                        const band = score != null ? getQuestionBand(score) : null;
-                        return (
-                          <td key={w.key} className="px-2 py-2 text-center">
-                            <span
-                              className={`inline-block h-4 w-4 rounded-full ${
-                                band === "green"
-                                  ? "bg-green-500"
-                                  : band === "orange"
-                                    ? "bg-amber-500"
-                                    : band === "red"
-                                      ? "bg-red-500"
-                                      : "bg-[var(--color-border)]"
-                              }`}
-                              title={score != null ? `${score}%` : "Not scored"}
-                              aria-hidden
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="px-3 py-2 text-xs text-[var(--color-text-muted)]">
-                Scroll horizontally on small screens to see all weeks.
-              </p>
+              ) : (
+                <p className="mt-4 text-sm text-[var(--color-text-muted)]">No check-in scores yet.</p>
+              )}
             </Card>
-          )}
 
+            {/* Body measurements snapshot */}
+            <Card className="p-4">
+              <h2 className="font-medium text-[var(--color-text)]">Body measurements</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">Latest values with change vs baseline</p>
+              {latestBodyMeasurements.length > 0 ? (
+                <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-[var(--color-text)]">
+                  {latestBodyMeasurements.map((item) => (
+                    <li
+                      key={item.key}
+                      className={`flex min-w-0 flex-wrap items-baseline gap-x-1.5${item.key === "chest" ? " col-span-2" : ""}`}
+                    >
+                      <span className="whitespace-nowrap">
+                        {item.label}: {formatMeasurementNumber(item.value)} cm
+                      </span>
+                      {item.change != null && item.change !== 0 && (
+                        <span
+                          className={
+                            item.change < 0
+                              ? `whitespace-nowrap ${BAND_TEXT.green}`
+                              : `whitespace-nowrap ${BAND_TEXT.red}`
+                          }
+                        >
+                          ({formatMeasurementDelta(item.change)})
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-sm text-[var(--color-text-muted)]">No body measurements logged.</p>
+              )}
+              <a
+                href="#measurement-trends"
+                className="mt-3 inline-block text-sm text-[var(--color-primary)] hover:underline"
+              >
+                View measurement charts ↓
+              </a>
+            </Card>
+          </div>
+
+          {/* Progress photos — pose + milestone comparison */}
           <Card className="p-4">
-            <h3 className="font-medium text-[var(--color-text)]">Measurement trends</h3>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Latest, previous, and first upload — Front, Back, and Side
+                </p>
+              </div>
+              {clientId && (
+                <Link
+                  href={`/coach/gallery?client=${clientId}`}
+                  className="shrink-0 text-sm font-medium text-[var(--color-primary)] hover:underline"
+                >
+                  Photo gallery →
+                </Link>
+              )}
+            </div>
+            <div className="mt-4 space-y-4">
+              {clientId && (
+                <CoachLegacyProgressPhotoUpload
+                  clientId={clientId}
+                  onUploaded={reloadProgressImages}
+                />
+              )}
+              <ProgressPhotoComparePanel
+                images={progressImages}
+                clientName={clientName}
+                clientId={clientId}
+              />
+            </div>
+          </Card>
+
+          {/* Measurement trend charts — 3 columns × 2 rows */}
+          <Card id="measurement-trends" className="p-4 scroll-mt-6">
+            <h2 className="font-medium text-[var(--color-text)]">Measurement trends</h2>
             <p className="text-sm text-[var(--color-text-muted)]">
-              Track weight and body measurements over time
+              Weight and body measurements over time
             </p>
             <p className="mt-3 text-xs text-[var(--color-text-muted)]">Time range</p>
             <div className="mt-1 flex flex-wrap gap-2">
@@ -754,23 +694,26 @@ export default function CoachClientProgressPage() {
                   key={opt.key}
                   type="button"
                   onClick={() => setMeasurementRange(opt.key)}
-                  className={`rounded px-3 py-1.5 text-sm ${measurementRange === opt.key ? "bg-[var(--color-text)] text-[var(--color-bg)]" : "bg-[var(--color-bg-elevated)] text-[var(--color-text)] ring-1 ring-[var(--color-border)]"}`}
+                  className={`rounded px-3 py-1.5 text-sm ${
+                    measurementRange === opt.key
+                      ? "bg-[var(--color-text)] text-[var(--color-bg)]"
+                      : "bg-[var(--color-bg-elevated)] text-[var(--color-text)] ring-1 ring-[var(--color-border)]"
+                  }`}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
             <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              Measurements in order within the range (not stretched by calendar gaps). Charts scale to your data so changes are easier to see.
-              Thighs and arms plot left and right together; each point # is a day with at least one side logged.
+              Most recent readings in order within the range. Thighs and arms plot left and right together.
             </p>
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {measurementTrendCards.map((card) => (
                 <div
                   key={card.key}
                   className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3"
                 >
-                  <h4 className="text-sm font-medium text-[var(--color-text)]">{card.label}</h4>
+                  <h3 className="text-sm font-medium text-[var(--color-text)]">{card.label}</h3>
                   <div className="mt-2">
                     {card.hasInRange ? (
                       card.kind === "paired" ? (
@@ -803,46 +746,91 @@ export default function CoachClientProgressPage() {
             </div>
           </Card>
 
+          {/* Habits */}
           <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="font-medium text-[var(--color-text)]">Progress photos</h3>
-                <p className="text-sm text-[var(--color-text-muted)]">
-                  Visual progress tracking over time
-                </p>
+                <h2 className="font-medium text-[var(--color-text)]">Habit trackers</h2>
+                <p className="text-sm text-[var(--color-text-muted)]">Client habit compliance (read-only)</p>
               </div>
+              <Link
+                href={`/coach/clients/${clientId}/habits`}
+                className="text-sm text-[var(--color-primary)] hover:underline"
+              >
+                Full habits view →
+              </Link>
             </div>
-            {progressImages.length > 0 ? (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {progressImages.map((img) => (
-                  <div key={img.id} className="overflow-hidden rounded border border-[var(--color-border)]">
-                    <div className="relative aspect-[3/4] bg-[var(--color-bg-elevated)]">
-                      <Image
-                        src={img.imageUrl}
-                        alt={img.caption || img.imageType || "Progress"}
-                        fill
-                        className="object-cover"
-                        sizes="200px"
-                        unoptimized
-                      />
-                    </div>
-                    <div className="p-2">
-                      <p className="text-xs font-medium text-[var(--color-text-muted)]">
-                        {formatProgressImageTypeLabel(img.imageType)}
-                      </p>
-                      {img.uploadedAt && (
-                        <p className="text-xs text-[var(--color-text-muted)]">
-                          {formatDateDisplay(img.uploadedAt)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {habitsData?.history ? (
+              <>
+                <div className="mt-3 flex gap-1 rounded-lg bg-[var(--color-bg)] p-1">
+                  {(["7d", "30d"] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setHabitRange(r)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        habitRange === r
+                          ? "bg-[var(--color-bg-elevated)] text-[var(--color-text)] shadow-sm"
+                          : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                      }`}
+                    >
+                      {r === "7d" ? "This week" : "Last 30 days"}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 overflow-x-auto">
+                  <HabitWeeklyStrip
+                    habits={habitsData.habits}
+                    byDate={habitsData.history.byDate}
+                    range={habitRange}
+                    historyStart={habitRange === "30d" ? habitsData.history.start : undefined}
+                    historyEnd={habitRange === "30d" ? habitsData.history.end : undefined}
+                  />
+                </div>
+              </>
             ) : (
-              <p className="mt-3 text-sm text-[var(--color-text-muted)]">No progress photos yet</p>
+              <p className="mt-3 text-sm text-[var(--color-text-muted)]">No habit data for this client.</p>
             )}
           </Card>
+
+          {/* Question insights */}
+          {allQuestionTrends.length > 0 && (
+            <Card className="p-4">
+              <h2 className="font-medium text-[var(--color-text)]">What&apos;s changed?</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                How each answer moved from first scored week to latest
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full border-2 border-amber-500 bg-[var(--color-bg-elevated)]" aria-hidden />
+                  Then (first week)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500" aria-hidden />
+                  Now (latest week)
+                </span>
+              </div>
+              <div className="mt-4 space-y-2">
+                {allQuestionTrends.map((t) => (
+                  <QuestionTrendGauge
+                    key={t.id}
+                    text={t.text}
+                    earliest={t.earliest}
+                    latest={t.latest}
+                    delta={t.delta}
+                    redMax={trafficLightRedMax}
+                    orangeMax={trafficLightOrangeMax}
+                  />
+                ))}
+              </div>
+              <Link
+                href={`/coach/clients/${clientId}/progress-classic`}
+                className="mt-4 inline-block text-sm text-[var(--color-primary)] hover:underline"
+              >
+                Full question grid →
+              </Link>
+            </Card>
+          )}
         </>
       )}
     </div>

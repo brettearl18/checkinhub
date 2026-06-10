@@ -516,7 +516,7 @@ export default function CoachViewResponsePage() {
               See weight, measurements, habits, and trends for {clientName || "this client"}.
             </p>
             <Button asChild variant="secondary">
-              <Link href={`/coach/clients/${clientId}/progress2`}>View progress</Link>
+              <Link href={`/coach/clients/${clientId}/progress`}>View progress</Link>
             </Button>
           </div>
         </Card>

@@ -42,19 +42,19 @@ export function coachTimelineLinks(clientId: string): TimelineLinks {
       return base;
     },
     measurementHref() {
-      return `${base}/progress2#measurement-trends`;
+      return `${base}/progress#measurement-trends`;
     },
     photosHref: `/coach/gallery?client=${clientId}`,
     habitsHref: `${base}/habits`,
     emptyCheckInHref: base,
-    emptyMeasurementsHref: `${base}/progress2#measurement-trends`,
+    emptyMeasurementsHref: `${base}/progress#measurement-trends`,
     emptyPhotosHref: `/coach/gallery?client=${clientId}`,
     weekPrimaryHref(week) {
       if (week.checkIn) {
         if (week.checkIn.responseId) return `${base}/responses/${week.checkIn.responseId}`;
         return base;
       }
-      if (week.measurement) return `${base}/progress2#measurement-trends`;
+      if (week.measurement) return `${base}/progress#measurement-trends`;
       if (week.photos.length > 0) return `/coach/gallery?client=${clientId}`;
       if (week.habits) return `${base}/habits`;
       return null;

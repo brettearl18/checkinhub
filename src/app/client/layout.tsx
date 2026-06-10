@@ -32,7 +32,7 @@ const NAV_SECTIONS = [
   {
     label: "Progress",
     links: [
-      { href: "/client/progress2", label: "Progress" },
+      { href: "/client/progress", label: "Progress" },
       { href: "/client/timeline", label: "Timeline" },
       { href: "/client/measurements", label: "Measurements" },
       { href: "/client/goals", label: "Goals" },
@@ -58,7 +58,7 @@ const BOTTOM_NAV = [
   { href: "/client", label: "Home", short: "Home" },
   { href: "/client/program", label: "Program", short: "Workouts" },
   { href: "/client/check-in/new", label: "New check-in", short: "Check-in" },
-  { href: "/client/progress2", label: "Progress", short: "Progress" },
+  { href: "/client/progress", label: "Progress", short: "Progress" },
 ] as const;
 
 const MORE_LINKS = NAV_LINKS.filter(
@@ -165,7 +165,12 @@ export default function ClientLayout({
 
   const isActive = (href: string) => {
     if (href === "/client") return pathname === "/client";
-    if (href === "/client/progress2") return pathname?.startsWith("/client/progress");
+    if (href === "/client/progress") {
+      return (
+        pathname === "/client/progress" ||
+        pathname?.startsWith("/client/progress-classic")
+      );
+    }
     return pathname?.startsWith(href);
   };
 

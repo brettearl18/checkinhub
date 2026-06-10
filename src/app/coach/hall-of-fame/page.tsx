@@ -219,7 +219,7 @@ export default function CoachHallOfFamePage() {
           {entries.map((entry) => (
             <Card key={entry.id} className="overflow-hidden p-0">
               <div className="relative aspect-[4/5] bg-[var(--color-bg-elevated)]">
-                <Link href={`/coach/clients/${entry.clientId}/progress2`} className="block h-full">
+                <Link href={`/coach/clients/${entry.clientId}/progress`} className="block h-full">
                   <Image
                     src={entry.imageUrl}
                     alt={`${entry.clientName} ${entry.pose} highlight`}
