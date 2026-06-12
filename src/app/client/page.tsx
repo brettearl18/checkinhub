@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { ClientDashboardBadges } from "@/components/client/ClientDashboardBadges";
 import { HabitWeeklyStrip } from "@/components/client/HabitWeeklyStrip";
 import { CheckInProgressChart } from "@/components/ui/CheckInProgressChart";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
@@ -14,6 +15,7 @@ import { useApiClient } from "@/lib/api-client";
 import { formatDateDdMmYyyy, formatDateTimeDisplay } from "@/lib/format-date";
 import { pickBaselineAndCurrentPhoto, progressPhotoPoseLabel } from "@/lib/progress-comparison-photos";
 import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
+import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
 
 interface Assignment {
   id: string;
@@ -496,6 +498,8 @@ export default function ClientPortalPage() {
         </div>
       </header>
 
+      {!authError && <ClientDashboardBadges className="mt-5" />}
+
       {!authError && !loading && markMissedError && (
         <div
           className="mt-4 rounded-lg border border-[var(--color-error)]/40 bg-[var(--color-error)]/10 px-3 py-2 text-sm text-[var(--color-error)]"
@@ -786,36 +790,17 @@ export default function ClientPortalPage() {
               <h3 className="vana-section-label mb-2">
                 Meal plan
               </h3>
-              {profile?.mealPlanLinks && profile.mealPlanLinks.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {profile.mealPlanLinks.slice(0, 3).map((link, i) => (
-                    <li key={i}>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-[var(--color-primary)] hover:underline"
-                      >
-                        {link.label || "Meal plan"} →
-                      </a>
-                    </li>
-                  ))}
-                  {profile.mealPlanLinks.length > 3 && (
-                    <li className="text-xs text-[var(--color-text-muted)]">
-                      +{profile.mealPlanLinks.length - 3} more
-                    </li>
-                  )}
-                </ul>
-              ) : (
-                <p className="text-sm text-[var(--color-text-muted)]">
-                  No meal plan assigned. Your coach can add one in your settings.
-                </p>
-              )}
-              {profile?.mealPlanJson && (
-                <Link href="/client/profile/meal-plan" className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline">
-                  Open in-app meal plan →
-                </Link>
-              )}
+              <a
+                href={RECIPE_HUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-[var(--color-primary)] hover:underline"
+              >
+                {profile?.mealPlanLinks?.[0]?.label?.trim() || "Open meal plan"} →
+              </a>
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                Recipes and meal ideas at meals.vanahealth.com.au
+              </p>
             </Card>
           </div>
         </section>
@@ -858,16 +843,16 @@ export default function ClientPortalPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
             {/* Check-in progress: weekly % line chart with client-specific traffic-light bands */}
-            <Card className="vana-card flex flex-col min-h-[172px] p-4">
+            <Card className="vana-card flex flex-col min-h-[280px] p-4">
               <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Check-in progress</h3>
               {checkInWeeklySeries.length > 0 && questionProgress ? (
                 <>
-                  <div className="flex-1 min-h-[140px] w-full min-w-0">
+                  <div className="flex-1 min-h-[200px] w-full min-w-0">
                     <CheckInProgressChart
                       data={checkInWeeklySeries}
                       redMax={questionProgress.trafficLightRedMax ?? 40}
                       orangeMax={questionProgress.trafficLightOrangeMax ?? 70}
-                      height={140}
+                      height={200}
                     />
                   </div>
                   {questionProgressSummary && (
@@ -882,14 +867,14 @@ export default function ClientPortalPage() {
             </Card>
 
             {/* Weight (compact chart) – row 1 */}
-            <Card className="vana-card flex flex-col min-h-[172px] p-4">
+            <Card className="vana-card flex flex-col min-h-[280px] p-4">
               <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Weight</h3>
               {progressSnapshotChartData.length > 0 ? (
-                <div className="flex-1 min-h-[120px] w-full min-w-0">
+                <div className="flex-1 min-h-[200px] w-full min-w-0">
                   <MeasurementLineChartLazy
                     data={progressSnapshotChartData}
                     unit="kg"
-                    height={120}
+                    height={200}
                   />
                 </div>
               ) : (
@@ -898,7 +883,7 @@ export default function ClientPortalPage() {
             </Card>
 
             {/* Habit trackers – row 2 */}
-            <Card className="vana-card flex flex-col min-h-[140px] p-4">
+            <Card className="vana-card flex flex-col min-h-[280px] p-4">
               <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Habits this week</h3>
               {habitsData?.history?.byDate ? (
                 <div className="scale-90 origin-top-left w-[111%] min-w-0 flex-1 min-h-0">
@@ -914,7 +899,7 @@ export default function ClientPortalPage() {
             </Card>
 
             {/* Before & current photos – row 2 */}
-            <Card className="vana-card flex flex-col min-h-[140px] p-4">
+            <Card className="vana-card flex flex-col min-h-[280px] p-4">
               <h3 className="vana-section-label mb-2 normal-case tracking-normal text-stone-600">Before & current</h3>
               {baselinePhoto || currentPhoto ? (
                 <div className="flex gap-3 w-full flex-1 min-h-0">

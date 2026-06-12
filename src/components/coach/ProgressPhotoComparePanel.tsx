@@ -88,6 +88,16 @@ function canDownloadSocialPost(
   return Boolean(before && after && before.id !== after.id);
 }
 
+function clientMilestoneBadgeClass(milestone: ProgressPhotoMilestone): string {
+  if (milestone === "latest") {
+    return "border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)]";
+  }
+  if (milestone === "first_baseline") {
+    return "border border-stone-200 bg-stone-50 text-stone-500";
+  }
+  return "border border-stone-200 bg-white text-stone-600";
+}
+
 function PhotoThumb({
   image,
   pose,
@@ -95,6 +105,7 @@ function PhotoThumb({
   onCompare,
   onDownload,
   downloading,
+  variant = "coach",
 }: {
   image: ProgressPhotoCompareItem | null;
   pose: ProgressPhotoPose;
@@ -102,9 +113,93 @@ function PhotoThumb({
   onCompare?: () => void;
   onDownload?: () => void;
   downloading?: boolean;
+  variant?: "coach" | "client";
 }) {
+  const isClient = variant === "client";
   const hasImage = Boolean(image);
   const canCompare = Boolean(image && onCompare);
+  const imageFit = isClient ? "object-cover" : "object-contain";
+
+  if (isClient) {
+    return (
+      <div className="group overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm ring-1 ring-black/[0.03] transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-[var(--color-primary-muted)]">
+        <div className="relative aspect-[3/4] w-full bg-stone-100">
+          {hasImage ? (
+            canCompare ? (
+              <button
+                type="button"
+                onClick={onCompare}
+                className="absolute inset-0 h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
+                aria-label={`Compare ${progressPhotoPoseTabLabel(pose)} ${progressPhotoMilestoneLabel(milestone)}`}
+              >
+                <Image
+                  src={image!.imageUrl}
+                  alt={`${progressPhotoPoseTabLabel(pose)} progress photo`}
+                  fill
+                  className={imageFit}
+                  sizes="(max-width: 768px) 33vw, 220px"
+                  unoptimized
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-3 pb-3 pt-12 text-left">
+                  <p className="text-sm font-medium text-white">{progressPhotoPoseTabLabel(pose)}</p>
+                  {image?.uploadedAt && (
+                    <p className="text-xs text-white/80">
+                      {formatDateDisplay(image.uploadedAt.slice(0, 10))}
+                    </p>
+                  )}
+                  <span className="mt-2 inline-flex items-center rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm">
+                    Compare
+                  </span>
+                </div>
+              </button>
+            ) : (
+              <>
+                <Image
+                  src={image!.imageUrl}
+                  alt={`${progressPhotoPoseTabLabel(pose)} progress photo`}
+                  fill
+                  className={imageFit}
+                  sizes="(max-width: 768px) 33vw, 220px"
+                  unoptimized
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-3 pb-3 pt-10 text-left">
+                  <p className="text-sm font-medium text-white">{progressPhotoPoseTabLabel(pose)}</p>
+                  {image?.uploadedAt && (
+                    <p className="text-xs text-white/80">
+                      {formatDateDisplay(image.uploadedAt.slice(0, 10))}
+                    </p>
+                  )}
+                </div>
+              </>
+            )
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
+              <span className="text-2xl text-stone-300" aria-hidden>
+                —
+              </span>
+              <p className="text-[11px] text-stone-400">No {progressPhotoPoseTabLabel(pose).toLowerCase()} photo</p>
+            </div>
+          )}
+
+          {hasImage && onDownload && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownload();
+              }}
+              disabled={downloading}
+              title="Download photo"
+              aria-label={`Download ${progressPhotoPoseTabLabel(pose)} photo`}
+              className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/40 bg-black/45 text-white shadow-sm backdrop-blur-sm transition hover:bg-black/65 disabled:opacity-60"
+            >
+              <DownloadIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="group overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
@@ -121,7 +216,7 @@ function PhotoThumb({
                 src={image!.imageUrl}
                 alt={`${progressPhotoPoseTabLabel(pose)} progress photo`}
                 fill
-                className="object-contain"
+                className={imageFit}
                 sizes="(max-width: 768px) 33vw, 200px"
                 unoptimized
               />
@@ -136,7 +231,7 @@ function PhotoThumb({
               src={image!.imageUrl}
               alt={`${progressPhotoPoseTabLabel(pose)} progress photo`}
               fill
-              className="object-contain"
+              className={imageFit}
               sizes="(max-width: 768px) 33vw, 200px"
               unoptimized
             />
@@ -184,6 +279,7 @@ function CompareRow({
   onOpenCompare,
   onDownloadPhoto,
   downloadingImageId,
+  variant = "coach",
 }: {
   images: ProgressPhotoCompareItem[];
   milestone: ProgressPhotoMilestone;
@@ -191,13 +287,32 @@ function CompareRow({
   onOpenCompare: (pose: ProgressPhotoPose, clicked: ProgressPhotoMilestone) => void;
   onDownloadPhoto: (image: ProgressPhotoCompareItem, pose: ProgressPhotoPose, milestone: ProgressPhotoMilestone) => void;
   downloadingImageId: string | null;
+  variant?: "coach" | "client";
 }) {
+  const isClient = variant === "client";
+
   return (
-    <div className="grid grid-cols-[minmax(5rem,7rem)_1fr] items-start gap-3 sm:gap-4">
-      <p className="pt-2 text-sm font-semibold text-[var(--color-text)]">
-        {progressPhotoMilestoneLabel(milestone)}
-      </p>
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+    <div
+      className={
+        isClient
+          ? "grid grid-cols-[minmax(4.5rem,5.5rem)_1fr] items-start gap-3 sm:grid-cols-[minmax(5.5rem,6.5rem)_1fr] sm:gap-5"
+          : "grid grid-cols-[minmax(5rem,7rem)_1fr] items-start gap-3 sm:gap-4"
+      }
+    >
+      <div className={isClient ? "pt-3 sm:pt-4" : "pt-2"}>
+        {isClient ? (
+          <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${clientMilestoneBadgeClass(milestone)}`}
+          >
+            {progressPhotoMilestoneLabel(milestone)}
+          </span>
+        ) : (
+          <p className="text-sm font-semibold text-[var(--color-text)]">
+            {progressPhotoMilestoneLabel(milestone)}
+          </p>
+        )}
+      </div>
+      <div className={`grid grid-cols-3 ${isClient ? "gap-2.5 sm:gap-4" : "gap-2 sm:gap-3"}`}>
         {PROGRESS_PHOTO_POSES.map((pose) => {
           const image = getProgressPhotoForMilestone(images, pose, milestone, legacyAssignment);
           return (
@@ -206,6 +321,7 @@ function CompareRow({
               pose={pose}
               milestone={milestone}
               image={image}
+              variant={variant}
               onCompare={image ? () => onOpenCompare(pose, milestone) : undefined}
               onDownload={image ? () => onDownloadPhoto(image, pose, milestone) : undefined}
               downloading={image ? downloadingImageId === image.id : false}
@@ -368,28 +484,56 @@ export function ProgressPhotoComparePanel({
     );
   }
 
+  const isClient = variant === "client";
+
   return (
     <>
-      <div className="space-y-5">
-        <div className="hidden grid-cols-[minmax(5rem,7rem)_1fr] gap-3 sm:grid sm:gap-4">
+      <div className={isClient ? "space-y-6 sm:space-y-7" : "space-y-5"}>
+        <div
+          className={
+            isClient
+              ? "grid grid-cols-[minmax(4.5rem,5.5rem)_1fr] gap-3 sm:grid-cols-[minmax(5.5rem,6.5rem)_1fr] sm:gap-5"
+              : "hidden grid-cols-[minmax(5rem,7rem)_1fr] gap-3 sm:grid sm:gap-4"
+          }
+        >
           <span />
-          <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] sm:gap-3">
+          <div
+            className={
+              isClient
+                ? "grid grid-cols-3 gap-2.5 sm:gap-4"
+                : "grid grid-cols-3 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] sm:gap-3"
+            }
+          >
             {PROGRESS_PHOTO_POSES.map((pose) => (
-              <span key={pose}>{progressPhotoPoseTabLabel(pose)}</span>
+              <span
+                key={pose}
+                className={
+                  isClient
+                    ? "text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400"
+                    : undefined
+                }
+              >
+                {progressPhotoPoseTabLabel(pose)}
+              </span>
             ))}
           </div>
         </div>
 
-        {PROGRESS_PHOTO_COMPARE_ROWS.map((milestone) => (
-          <CompareRow
+        {PROGRESS_PHOTO_COMPARE_ROWS.map((milestone, index) => (
+          <div
             key={milestone}
-            images={images}
-            milestone={milestone}
-            legacyAssignment={legacyAssignment}
-            onOpenCompare={openCompare}
-            onDownloadPhoto={handlePhotoDownload}
-            downloadingImageId={downloadingImageId}
-          />
+            className={isClient && index > 0 ? "border-t border-stone-200/70 pt-6 sm:pt-7" : undefined}
+          >
+            <CompareRow
+              images={images}
+              milestone={milestone}
+              legacyAssignment={legacyAssignment}
+              onOpenCompare={openCompare}
+              onDownloadPhoto={handlePhotoDownload}
+              downloadingImageId={downloadingImageId}
+              variant={variant}
+            />
+          </div>
         ))}
 
         {isCoach && (
@@ -440,11 +584,11 @@ export function ProgressPhotoComparePanel({
           <p className="text-xs text-rose-600">{downloadError}</p>
         )}
 
-        <p className="text-xs text-[var(--color-text-muted)]">
-          {isCoach
-            ? "Click a photo to compare, or use the download icon on each thumbnail. Latest = most recent upload. Previous = upload before that. Baseline = first upload for that pose."
-            : "Tap any photo to open the compare view — align and swipe between before and after. Latest = most recent. Baseline = your first photo for that pose."}
-        </p>
+        {!isClient && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Click a photo to compare, or use the download icon on each thumbnail. Latest = most recent upload. Previous = upload before that. Baseline = first upload for that pose.
+          </p>
+        )}
       </div>
 
       {isCoach && (

@@ -671,7 +671,9 @@ export default function CoachClientSettingsPage() {
                       setConfirmPassword("");
                       setResetPasswordMessage({
                         type: "success",
-                        text: "Password updated. Share the new password with your client.",
+                        text: data.created
+                          ? "Login account created. Share the email and password with your client."
+                          : "Password updated. Share the new password with your client.",
                       });
                     } else {
                       setResetPasswordMessage({

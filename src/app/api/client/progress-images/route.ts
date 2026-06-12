@@ -15,6 +15,24 @@ function toDate(v: unknown): string | null {
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ALLOWED_IMAGE_TYPES = new Set([
+  "before_front",
+  "before_side",
+  "before_back",
+  "after_front",
+  "after_side",
+  "after_back",
+  "before",
+  "progress",
+  "after",
+  "other",
+]);
+
+function parsePhotoDate(value: string | null | undefined): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return null;
+  const d = new Date(`${value.trim()}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 // GET: list progress images for this client.
 export async function GET(request: Request) {
@@ -95,7 +113,28 @@ export async function POST(request: Request) {
   }
 
   const imageType = (formData.get("imageType") as string)?.trim() || "other";
+  if (!ALLOWED_IMAGE_TYPES.has(imageType)) {
+    return NextResponse.json({ error: "Invalid image type" }, { status: 400 });
+  }
+
   const caption = (formData.get("caption") as string)?.trim() || null;
+  const isBaselineImport = imageType.startsWith("before_");
+  const parsedPhotoDate = parsePhotoDate(formData.get("photoDate") as string | null);
+
+  if (isBaselineImport && !parsedPhotoDate) {
+    return NextResponse.json(
+      { error: "photoDate is required for baseline photos (YYYY-MM-DD)" },
+      { status: 400 }
+    );
+  }
+
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (parsedPhotoDate && parsedPhotoDate > today) {
+    return NextResponse.json({ error: "Photo date cannot be in the future" }, { status: 400 });
+  }
+
+  const recordedAt = parsedPhotoDate ?? new Date();
 
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
   const safeExt = ["jpg", "jpeg", "png", "webp", "gif"].includes(ext) ? ext : "jpg";
@@ -121,7 +160,8 @@ export async function POST(request: Request) {
       imageUrl,
       imageType,
       caption,
-      uploadedAt: now,
+      uploadedAt: recordedAt,
+      ...(isBaselineImport ? { importedBeforeCheckinHUB: true } : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -133,7 +173,7 @@ export async function POST(request: Request) {
       imageUrl,
       imageType,
       caption,
-      uploadedAt: now.toISOString(),
+      uploadedAt: recordedAt.toISOString(),
       newlyEarned,
     });
   } catch (err) {

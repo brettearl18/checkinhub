@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateTimeDisplay, formatDateDisplay } from "@/lib/format-date";
+import { formatDateTimeDisplay, formatDateDisplay, toLocalDateString } from "@/lib/format-date";
 
 interface Measurement {
   id: string;
@@ -51,7 +51,7 @@ export default function ClientProfilePage() {
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", timezone: "" });
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [weightInput, setWeightInput] = useState("");
-  const [weightDate, setWeightDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [weightDate, setWeightDate] = useState(() => toLocalDateString(new Date()));
   const [weightSaving, setWeightSaving] = useState(false);
   const [weightError, setWeightError] = useState<string | null>(null);
 
@@ -151,7 +151,7 @@ export default function ClientProfilePage() {
         body: JSON.stringify({
           date: weightDate,
           bodyWeight: w,
-          isBaseline: measurements.length === 0,
+          importHistorical: weightDate < toLocalDateString(new Date()),
         }),
       });
       if (res.status === 401) {
@@ -163,7 +163,7 @@ export default function ClientProfilePage() {
         return;
       }
       setWeightInput("");
-      setWeightDate(new Date().toISOString().slice(0, 10));
+      setWeightDate(toLocalDateString(new Date()));
       await loadMeasurements();
     } catch {
       setWeightError("Could not save weight.");
@@ -222,8 +222,8 @@ export default function ClientProfilePage() {
       <Card className="p-6" id="body-weight">
         <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Body weight</h2>
         <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-          Log your weight here — it’s saved to your progress stats. Same calendar day updates your entry. For waist/hips
-          and charts, use the link below.
+          Log your weight here — it’s saved to your progress stats. Pick any past date to backfill a starting weight from
+          before CheckinHUB. Same calendar day updates your entry. For waist/hips and charts, use the link below.
         </p>
         {weightStats ? (
           <div className="mb-4 grid gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3 text-sm sm:grid-cols-3">
@@ -276,6 +276,7 @@ export default function ClientProfilePage() {
             <Input
               label="Date"
               type="date"
+              max={toLocalDateString(new Date())}
               value={weightDate}
               onChange={(e) => setWeightDate(e.target.value)}
             />

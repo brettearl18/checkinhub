@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
-import type { Firestore } from "firebase-admin/firestore";
+import type { DocumentReference, Firestore } from "firebase-admin/firestore";
 import type admin from "firebase-admin";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminAuth, getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 
 const MIN_PASSWORD_LENGTH = 8;
+
+function firebaseErrorCode(err: unknown): string | null {
+  if (err && typeof err === "object" && "code" in err && typeof (err as { code: unknown }).code === "string") {
+    return (err as { code: string }).code;
+  }
+  return null;
+}
 
 async function resolveClientAuthUid(
   clientId: string,
@@ -30,16 +37,39 @@ async function resolveClientAuthUid(
     const user = await auth.getUserByEmail(email);
     return user.uid;
   } catch {
-    // No Firebase Auth user for this email
+    // No Firebase Auth user for this email yet
   }
 
   const usersSnap = await db.collection("users").where("email", "==", email).limit(1).get();
   if (!usersSnap.empty) return usersSnap.docs[0].id;
 
+  const clientsByEmail = await db.collection("clients").where("email", "==", email).limit(5).get();
+  for (const doc of clientsByEmail.docs) {
+    const linkedUid = doc.data().authUid;
+    if (typeof linkedUid === "string" && linkedUid.trim()) {
+      return linkedUid.trim();
+    }
+  }
+
   return null;
 }
 
-/** POST: coach sets a new password for an active client's login. */
+async function linkAuthUidToClient(
+  clientRef: DocumentReference,
+  authUid: string
+): Promise<void> {
+  await clientRef.update({
+    authUid,
+    status: "active",
+    canStartCheckIns: true,
+    onboardingStatus: "completed",
+    onboardingToken: null,
+    tokenExpiry: null,
+    updatedAt: new Date(),
+  });
+}
+
+/** POST: coach sets a new password for a client's login (creates account if needed). */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ clientId: string }> }
@@ -84,6 +114,8 @@ export async function POST(
     status?: string;
     authUid?: string | null;
     email?: string;
+    firstName?: string;
+    lastName?: string;
   };
   if (data.coachId !== coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -98,30 +130,67 @@ export async function POST(
     );
   }
 
-  const authUid = await resolveClientAuthUid(clientId, data, db, auth);
-  if (!authUid) {
+  const email = (data.email ?? "").trim().toLowerCase();
+  if (!email) {
     return NextResponse.json(
-      {
-        error:
-          "No login account found for this client. They may need to complete onboarding first.",
-      },
+      { error: "Client has no email. Add an email in Profile first." },
       { status: 400 }
     );
   }
 
-  try {
-    await auth.updateUser(authUid, { password });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to update password";
-    return NextResponse.json({ error: message }, { status: 400 });
+  let authUid = await resolveClientAuthUid(clientId, data, db, auth);
+  let created = false;
+
+  if (!authUid) {
+    const firstName = data.firstName ?? "";
+    const lastName = data.lastName ?? "";
+    const displayName = [firstName, lastName].filter(Boolean).join(" ").trim() || email;
+
+    try {
+      const userRecord = await auth.createUser({ email, password, displayName });
+      authUid = userRecord.uid;
+      created = true;
+
+      await auth.setCustomUserClaims(authUid, { role: "client", coachId });
+
+      await db.collection("users").doc(authUid).set(
+        {
+          uid: authUid,
+          email,
+          role: "client",
+          profile: { firstName, lastName },
+          metadata: { invitedBy: coachId },
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      if (firebaseErrorCode(err) === "auth/email-already-exists") {
+        try {
+          const existing = await auth.getUserByEmail(email);
+          authUid = existing.uid;
+          await auth.updateUser(authUid, { password });
+        } catch (linkErr) {
+          const message = linkErr instanceof Error ? linkErr.message : "Failed to update password";
+          return NextResponse.json({ error: message }, { status: 400 });
+        }
+      } else {
+        const message = err instanceof Error ? err.message : "Failed to create login account";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+    }
+  } else {
+    try {
+      await auth.updateUser(authUid, { password });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update password";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
   }
 
-  if (!data.authUid) {
-    await clientRef.update({
-      authUid,
-      updatedAt: new Date(),
-    });
+  if (!data.authUid || data.authUid !== authUid) {
+    await linkAuthUidToClient(clientRef, authUid);
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, created });
 }

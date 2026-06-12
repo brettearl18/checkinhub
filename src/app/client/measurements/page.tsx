@@ -10,7 +10,7 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
 import { MeasurementComparisonChartLazy } from "@/components/ui/MeasurementComparisonChartLazy";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDisplay } from "@/lib/format-date";
+import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
 
 interface Measurement {
   id: string;
@@ -46,12 +46,23 @@ export default function ClientMeasurementsPage() {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [showImportForm, setShowImportForm] = useState(false);
+  const [date, setDate] = useState(() => toLocalDateString(new Date()));
+  const [importDate, setImportDate] = useState("");
   const [bodyWeight, setBodyWeight] = useState("");
+  const [importBodyWeight, setImportBodyWeight] = useState("");
   const [measurements, setMeasurements] = useState<Record<string, string>>({
     waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "",
   });
+  const [importMeasurements, setImportMeasurements] = useState<Record<string, string>>({
+    waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "",
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const todayKey = toLocalDateString(new Date());
   const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number] | "arms" | "thighs">("bodyWeight");
   const chartData = useMemo(() => {
     if (chartMetric === "arms" || chartMetric === "thighs") return [];
@@ -119,39 +130,109 @@ export default function ClientMeasurementsPage() {
     if (!loading && list.length > 0) scrollToHashEntry();
   }, [loading, list.length, scrollToHashEntry]);
 
+  const buildMeasurementsPayload = (source: Record<string, string>) => {
+    const measurementsNum: Record<string, number> = {};
+    for (const [key, value] of Object.entries(source)) {
+      const n = value.trim() ? Number(value) : undefined;
+      if (n != null && !Number.isNaN(n)) measurementsNum[key] = n;
+    }
+    return measurementsNum;
+  };
+
+  const submitMeasurement = async ({
+    entryDate,
+    weight,
+    measurementFields,
+    importHistorical,
+  }: {
+    entryDate: string;
+    weight: string;
+    measurementFields: Record<string, string>;
+    importHistorical: boolean;
+  }) => {
+    const measurementsNum = buildMeasurementsPayload(measurementFields);
+    const weightNum = weight.trim() ? Number(weight) : undefined;
+    const hasWeight = weightNum != null && !Number.isNaN(weightNum);
+    const hasMeasurements = Object.keys(measurementsNum).length > 0;
+
+    if (!entryDate) {
+      throw new Error("Choose a date for this entry.");
+    }
+    if (!hasWeight && !hasMeasurements) {
+      throw new Error("Add weight and/or at least one body measurement.");
+    }
+
+    const res = await fetchWithAuth("/api/client/measurements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: entryDate,
+        bodyWeight: hasWeight ? weightNum : undefined,
+        measurements: hasMeasurements ? measurementsNum : undefined,
+        importHistorical,
+      }),
+    });
+
+    if (res.status === 401) {
+      setAuthError(true);
+      return false;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body.error as string) || "Could not save entry.");
+    }
+
+    await res.json();
+    return true;
+  };
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdding(true);
+    setFormError(null);
     try {
-      const measurementsNum: Record<string, number> = {};
-      for (const [key, value] of Object.entries(measurements)) {
-        const n = value.trim() ? Number(value) : undefined;
-        if (n != null && !Number.isNaN(n)) measurementsNum[key] = n;
-      }
-      const res = await fetchWithAuth("/api/client/measurements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date,
-          bodyWeight: bodyWeight ? Number(bodyWeight) : undefined,
-          measurements: Object.keys(measurementsNum).length ? measurementsNum : undefined,
-          isBaseline: list.length === 0, // First measurement = baseline
-        }),
+      const ok = await submitMeasurement({
+        entryDate: date,
+        weight: bodyWeight,
+        measurementFields: measurements,
+        importHistorical: false,
       });
-      if (res.status === 401) {
-        setAuthError(true);
-        return;
-      }
-      if (res.ok) {
-        await res.json();
+      if (ok) {
         setShowForm(false);
         setBodyWeight("");
         setMeasurements({ waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "" });
-        setDate(new Date().toISOString().slice(0, 10));
+        setDate(toLocalDateString(new Date()));
         await load();
       }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Could not save entry.");
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImporting(true);
+    setImportError(null);
+    setImportSuccess(null);
+    try {
+      const ok = await submitMeasurement({
+        entryDate: importDate,
+        weight: importBodyWeight,
+        measurementFields: importMeasurements,
+        importHistorical: true,
+      });
+      if (ok) {
+        setImportBodyWeight("");
+        setImportMeasurements({ waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "" });
+        setImportSuccess("Historical entry saved. The earliest date becomes your baseline in charts.");
+        await load();
+      }
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Could not save entry.");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -177,22 +258,102 @@ export default function ClientMeasurementsPage() {
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--color-text)]">Measurements</h1>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              Track your weight and body measurements over time.
+            <h1 className="vana-page-title">Measurements</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-600">
+              Log weight and tape measurements over time. Import older entries from before CheckinHUB with the real date — your earliest entry becomes the baseline in progress charts.
             </p>
           </div>
-          <Button variant="primary" onClick={() => setShowForm(!showForm)}>
-            {showForm ? "Cancel" : "Add measurement"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={showImportForm ? "secondary" : "primary"}
+              onClick={() => {
+                setShowImportForm((open) => !open);
+                setImportError(null);
+                setImportSuccess(null);
+              }}
+            >
+              {showImportForm ? "Close import" : "Import before CheckinHUB"}
+            </Button>
+            <Button
+              variant={showForm ? "secondary" : "primary"}
+              onClick={() => setShowForm(!showForm)}
+            >
+              {showForm ? "Cancel" : "Add today"}
+            </Button>
+          </div>
         </div>
       </div>
 
+      {showImportForm && (
+        <Card className="vana-card border-dashed border-[var(--color-primary-muted)] p-6">
+          <h2 className="text-lg font-medium text-[var(--color-text)]">Import before CheckinHUB</h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            Add a starting weight or measurements from an old spreadsheet, app, or coach records. Pick the date it was actually taken.
+          </p>
+          <form onSubmit={handleImport} className="mt-4 space-y-4">
+            <Input
+              label="Date taken"
+              type="date"
+              required
+              max={todayKey}
+              value={importDate}
+              onChange={(e) => setImportDate(e.target.value)}
+            />
+            <Input
+              label="Body weight (kg)"
+              type="number"
+              step="0.1"
+              value={importBodyWeight}
+              onChange={(e) => setImportBodyWeight(e.target.value)}
+              placeholder="e.g. 78.2"
+            />
+            <div>
+              <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Body measurements (cm) – optional</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {MEASUREMENT_KEYS.map((key) => (
+                  <Input
+                    key={key}
+                    label={formLabels[key]}
+                    type="number"
+                    step="0.1"
+                    value={importMeasurements[key] ?? ""}
+                    onChange={(e) => setImportMeasurements((prev) => ({ ...prev, [key]: e.target.value }))}
+                    placeholder="—"
+                  />
+                ))}
+              </div>
+            </div>
+            {importError && (
+              <p className="text-sm text-[var(--color-error)]" role="alert">
+                {importError}
+              </p>
+            )}
+            {importSuccess && (
+              <p className="text-sm text-emerald-600" role="status">
+                {importSuccess}
+              </p>
+            )}
+            <Button type="submit" variant="primary" disabled={importing}>
+              {importing ? "Saving…" : "Save historical entry"}
+            </Button>
+          </form>
+        </Card>
+      )}
+
       {showForm && (
-        <Card className="p-6">
-          <h2 className="text-lg font-medium text-[var(--color-text)]">New entry</h2>
+        <Card className="vana-card p-6">
+          <h2 className="text-lg font-medium text-[var(--color-text)]">Log today</h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            For current check-ins. Same calendar day updates your existing entry.
+          </p>
           <form onSubmit={handleAdd} className="mt-4 space-y-4">
-            <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input
+              label="Date"
+              type="date"
+              max={todayKey}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
             <Input label="Body weight (kg)" type="number" step="0.1" value={bodyWeight} onChange={(e) => setBodyWeight(e.target.value)} placeholder="e.g. 72.5" />
             <div>
               <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Body measurements (cm) – optional</p>
@@ -210,6 +371,11 @@ export default function ClientMeasurementsPage() {
                 ))}
               </div>
             </div>
+            {formError && (
+              <p className="text-sm text-[var(--color-error)]" role="alert">
+                {formError}
+              </p>
+            )}
             <Button type="submit" variant="primary" disabled={adding}>{adding ? "Adding…" : "Add"}</Button>
           </form>
         </Card>
@@ -219,9 +385,9 @@ export default function ClientMeasurementsPage() {
       {!loading && list.length === 0 && (
         <EmptyState
           title="No measurements yet"
-          description="Add your first body weight or measurement to track progress."
-          actionLabel="Add measurement"
-          onAction={() => setShowForm(true)}
+          description="Import a starting weight from before CheckinHUB, or log today's measurement."
+          actionLabel="Import before CheckinHUB"
+          onAction={() => setShowImportForm(true)}
         />
       )}
       {!loading && list.length > 0 && (
