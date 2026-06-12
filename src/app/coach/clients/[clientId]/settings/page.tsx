@@ -146,6 +146,10 @@ export default function CoachClientSettingsPage() {
   const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
   const [reminderLoading, setReminderLoading] = useState(false);
   const [reminderMessage, setReminderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetPasswordMessage, setResetPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [resendOnboardingLoading, setResendOnboardingLoading] = useState(false);
   const [resendOnboardingMessage, setResendOnboardingMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [allocationForms, setAllocationForms] = useState<{ id: string; title?: string }[]>([]);
@@ -601,6 +605,99 @@ export default function CoachClientSettingsPage() {
               </div>
             </div>
           </Card>
+
+          {/* Reset password */}
+          {form.status !== "pending" && (
+            <Card className="p-6">
+              <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Reset password</h2>
+              <p className="text-sm text-[var(--color-text-muted)] mb-4">
+                Set a new login password for this client. Share it with them securely — they sign in with the email in Profile above.
+              </p>
+              <div className="space-y-4 max-w-lg">
+                <Input
+                  label="New password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    setResetPasswordMessage(null);
+                  }}
+                  minLength={8}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                />
+                <Input
+                  label="Confirm password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setResetPasswordMessage(null);
+                  }}
+                  minLength={8}
+                  placeholder="Re-enter the new password"
+                  autoComplete="new-password"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="mt-4"
+                disabled={resetPasswordLoading || !newPassword || !confirmPassword}
+                onClick={async () => {
+                  setResetPasswordMessage(null);
+                  if (newPassword.length < 8) {
+                    setResetPasswordMessage({ type: "error", text: "Password must be at least 8 characters." });
+                    return;
+                  }
+                  if (newPassword !== confirmPassword) {
+                    setResetPasswordMessage({ type: "error", text: "Passwords do not match." });
+                    return;
+                  }
+                  setResetPasswordLoading(true);
+                  try {
+                    const res = await fetchWithAuth(`/api/coach/clients/${clientId}/reset-password`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ password: newPassword }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.status === 401) {
+                      setAuthError(true);
+                      return;
+                    }
+                    if (res.ok) {
+                      setNewPassword("");
+                      setConfirmPassword("");
+                      setResetPasswordMessage({
+                        type: "success",
+                        text: "Password updated. Share the new password with your client.",
+                      });
+                    } else {
+                      setResetPasswordMessage({
+                        type: "error",
+                        text: (data.error as string) || "Failed to update password",
+                      });
+                    }
+                  } catch {
+                    setResetPasswordMessage({ type: "error", text: "Request failed" });
+                  } finally {
+                    setResetPasswordLoading(false);
+                  }
+                }}
+              >
+                {resetPasswordLoading ? "Updating…" : "Update password"}
+              </Button>
+              {resetPasswordMessage && (
+                <p
+                  className={`mt-3 text-sm ${resetPasswordMessage.type === "success" ? "text-green-600 dark:text-green-400" : "text-[var(--color-error)]"}`}
+                  role="status"
+                >
+                  {resetPasswordMessage.text}
+                </p>
+              )}
+            </Card>
+          )}
 
           {/* Send check-in reminder email */}
           <Card className="p-6">
