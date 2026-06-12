@@ -25,6 +25,7 @@ const COLLECTION = "client_achievements";
 const PENDING_COLLECTION = "pending_achievements";
 
 const BEFORE_POSES = ["before_front", "before_back", "before_side"] as const;
+const AFTER_POSES = ["after_front", "after_back", "after_side"] as const;
 
 function docId(clientId: string, achievementId: string): string {
   return `${clientId}_${achievementId}`;
@@ -73,30 +74,116 @@ function hasTripleThreatDay(byHabit: Map<string, Map<string, string>>): boolean 
   return false;
 }
 
-function maxHabitCurrentStreak(byHabit: Map<string, Map<string, string>>): number {
+function habitCurrentStreak(
+  habitId: string,
+  byHabit: Map<string, Map<string, string>>
+): number {
   const today = todayDate();
   const todayEntries: Record<string, string> = {};
-  for (const h of HABIT_DEFINITIONS) {
-    const v = byHabit.get(h.id)?.get(today);
-    if (v) todayEntries[h.id] = v;
-  }
+  const v = byHabit.get(habitId)?.get(today);
+  if (v) todayEntries[habitId] = v;
+  const entries = byHabit.get(habitId) ?? new Map();
+  return computeStreakFromEntries(habitId, entries, todayEntries).current;
+}
+
+function habitCurrentStreakMax(byHabit: Map<string, Map<string, string>>): number {
   let max = 0;
   for (const h of HABIT_DEFINITIONS) {
-    const entries = byHabit.get(h.id) ?? new Map();
-    const streak = computeStreakFromEntries(h.id, entries, todayEntries);
-    if (streak.current > max) max = streak.current;
+    const streak = habitCurrentStreak(h.id, byHabit);
+    if (streak > max) max = streak;
+  }
+  return max;
+}
+
+function isDayAllHabitsMet(date: string, byHabit: Map<string, Map<string, string>>): boolean {
+  return HABIT_DEFINITIONS.every((h) => {
+    const value = byHabit.get(h.id)?.get(date);
+    return value != null && isGoalMet(h.id, value);
+  });
+}
+
+/** Seven consecutive calendar days with all habit goals met. */
+export function hasPerfectHabitWeek(byHabit: Map<string, Map<string, string>>): boolean {
+  const allDates = new Set<string>();
+  for (const h of HABIT_DEFINITIONS) {
+    const map = byHabit.get(h.id);
+    if (map) {
+      for (const date of map.keys()) allDates.add(date);
+    }
+  }
+  if (allDates.size === 0) return false;
+
+  const sorted = [...allDates].sort();
+  const start = new Date(`${sorted[0]}T12:00:00`);
+  const end = new Date(`${sorted[sorted.length - 1]}T12:00:00`);
+
+  let run = 0;
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const dateStr = cursor.toISOString().slice(0, 10);
+    if (isDayAllHabitsMet(dateStr, byHabit)) {
+      run++;
+      if (run >= 7) return true;
+    } else {
+      run = 0;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return false;
+}
+
+function goalProgressPercent(data: Record<string, unknown>): number | null {
+  const progress = data.progress;
+  if (typeof progress === "number" && Number.isFinite(progress)) return progress;
+  const target = data.targetValue;
+  const current = data.currentValue;
+  if (typeof target === "number" && typeof current === "number" && target > 0) {
+    return (current / target) * 100;
+  }
+  return null;
+}
+
+function isGoalCompleted(data: Record<string, unknown>): boolean {
+  if (data.status === "completed") return true;
+  const progress = goalProgressPercent(data);
+  if (progress != null && progress >= 100) return true;
+  return false;
+}
+
+function maxConsecutiveGreenScores(
+  scores: Array<{ score: number; at: string }>,
+  redMax: number,
+  orangeMax: number
+): number {
+  let max = 0;
+  let run = 0;
+  for (const row of scores) {
+    if (getScoreBand(row.score, redMax, orangeMax) === "green") {
+      run++;
+      max = Math.max(max, run);
+    } else {
+      run = 0;
+    }
   }
   return max;
 }
 
 interface EvalContext {
   completedWeeks: string[];
+  completedCheckInCount: number;
+  consecutiveCheckInWeeks: number;
   hasGreenScore: boolean;
+  hasOrangeScore: boolean;
+  maxConsecutiveGreen: number;
   measurementCount: number;
-  beforePoseTypes: Set<string>;
-  hasCompletedGoal: boolean;
+  weightLogCount: number;
+  photoPoseTypes: Set<string>;
+  completedGoalCount: number;
+  hasHalfwayGoal: boolean;
   maxHabitStreak: number;
+  sleepHabitStreak: number;
   hasTripleThreat: boolean;
+  hasPerfectWeek: boolean;
 }
 
 async function loadEvalContext(db: Firestore, clientId: string): Promise<EvalContext> {
@@ -111,7 +198,7 @@ async function loadEvalContext(db: Firestore, clientId: string): Promise<EvalCon
   ] = await Promise.all([
     db.collection("check_in_assignments").where("clientId", "==", clientId).get(),
     db.collection("formResponses").where("clientId", "==", clientId).limit(200).get(),
-    db.collection("client_measurements").where("clientId", "==", clientId).limit(50).get(),
+    db.collection("client_measurements").where("clientId", "==", clientId).limit(100).get(),
     db.collection("progress_images").where("clientId", "==", clientId).get(),
     db.collection("clientGoals").where("clientId", "==", clientId).get(),
     fetchClientHabitEntries(db, clientId),
@@ -119,10 +206,14 @@ async function loadEvalContext(db: Firestore, clientId: string): Promise<EvalCon
   ]);
 
   const completedWeeks: string[] = [];
+  let completedCheckInCount = 0;
   for (const d of assignmentsSnap.docs) {
     const data = d.data();
-    if (data.status === "completed" && data.reflectionWeekStart) {
-      completedWeeks.push(data.reflectionWeekStart as string);
+    if (data.status === "completed") {
+      completedCheckInCount++;
+      if (data.reflectionWeekStart) {
+        completedWeeks.push(data.reflectionWeekStart as string);
+      }
     }
   }
 
@@ -131,43 +222,50 @@ async function loadEvalContext(db: Firestore, clientId: string): Promise<EvalCon
     : undefined;
   const { redMax, orangeMax } = resolveThresholds({ clientScoring });
 
-  let hasGreenScore = false;
+  const scoredResponses: Array<{ score: number; at: string }> = [];
   for (const d of responsesSnap.docs) {
-    const score = d.data().score;
-    if (typeof score === "number" && getScoreBand(score, redMax, orangeMax) === "green") {
-      hasGreenScore = true;
-      break;
+    const data = d.data();
+    const score = data.score;
+    const at = toIso(data.completedAt) ?? toIso(data.submittedAt);
+    if (typeof score === "number" && at) {
+      scoredResponses.push({ score, at });
     }
   }
+  scoredResponses.sort((a, b) => a.at.localeCompare(b.at));
 
-  const beforePoseTypes = new Set<string>();
+  let hasGreenScore = false;
+  let hasOrangeScore = false;
+  for (const row of scoredResponses) {
+    const band = getScoreBand(row.score, redMax, orangeMax);
+    if (band === "green") hasGreenScore = true;
+    if (band === "orange") hasOrangeScore = true;
+  }
+
+  const photoPoseTypes = new Set<string>();
   for (const d of photosSnap.docs) {
     const t = (d.data().imageType as string | undefined)?.toLowerCase();
-    if (t) beforePoseTypes.add(t);
+    if (t) photoPoseTypes.add(t);
   }
 
-  let hasCompletedGoal = false;
+  let completedGoalCount = 0;
+  let hasHalfwayGoal = false;
   for (const d of goalsSnap.docs) {
-    const data = d.data();
-    if (data.status === "completed") {
-      hasCompletedGoal = true;
-      break;
+    const data = d.data() as Record<string, unknown>;
+    if (isGoalCompleted(data)) {
+      completedGoalCount++;
+      continue;
     }
-    const progress = data.progress;
-    const target = data.targetValue;
-    const current = data.currentValue;
-    if (typeof progress === "number" && progress >= 100) {
-      hasCompletedGoal = true;
-      break;
+    const progress = goalProgressPercent(data);
+    if (progress != null && progress >= 50) {
+      hasHalfwayGoal = true;
     }
-    if (
-      typeof target === "number" &&
-      typeof current === "number" &&
-      target > 0 &&
-      current >= target
-    ) {
-      hasCompletedGoal = true;
-      break;
+  }
+
+  let weightLogCount = 0;
+  for (const d of measurementsSnap.docs) {
+    const bodyWeight = d.data().bodyWeight;
+    if (typeof bodyWeight === "number" && Number.isFinite(bodyWeight)) {
+      weightLogCount++;
     }
   }
 
@@ -175,21 +273,29 @@ async function loadEvalContext(db: Firestore, clientId: string): Promise<EvalCon
 
   return {
     completedWeeks,
+    completedCheckInCount,
+    consecutiveCheckInWeeks: maxConsecutiveCheckInWeeks(completedWeeks),
     hasGreenScore,
+    hasOrangeScore,
+    maxConsecutiveGreen: maxConsecutiveGreenScores(scoredResponses, redMax, orangeMax),
     measurementCount: measurementsSnap.size,
-    beforePoseTypes,
-    hasCompletedGoal,
-    maxHabitStreak: maxHabitCurrentStreak(byHabit),
+    weightLogCount,
+    photoPoseTypes,
+    completedGoalCount,
+    hasHalfwayGoal,
+    maxHabitStreak: habitCurrentStreakMax(byHabit),
+    sleepHabitStreak: habitCurrentStreak("sleep", byHabit),
     hasTripleThreat: hasTripleThreatDay(byHabit),
+    hasPerfectWeek: hasPerfectHabitWeek(byHabit),
   };
 }
 
 function isEligible(id: string, ctx: EvalContext): boolean {
   switch (id) {
     case "first_checkin":
-      return ctx.completedWeeks.length >= 1;
+      return ctx.completedCheckInCount >= 1;
     case "four_week_streak":
-      return maxConsecutiveCheckInWeeks(ctx.completedWeeks) >= 4;
+      return ctx.consecutiveCheckInWeeks >= 4;
     case "green_week":
       return ctx.hasGreenScore;
     case "habit_spark_7":
@@ -199,9 +305,39 @@ function isEligible(id: string, ctx: EvalContext): boolean {
     case "baseline_builder":
       return ctx.measurementCount >= 1;
     case "photo_ready":
-      return BEFORE_POSES.every((p) => ctx.beforePoseTypes.has(p));
+      return BEFORE_POSES.every((p) => ctx.photoPoseTypes.has(p));
     case "goal_getter":
-      return ctx.hasCompletedGoal;
+      return ctx.completedGoalCount >= 1;
+    case "orange_zone":
+      return ctx.hasOrangeScore;
+    case "checkin_10":
+      return ctx.completedCheckInCount >= 10;
+    case "eight_week_streak":
+      return ctx.consecutiveCheckInWeeks >= 8;
+    case "twelve_week_streak":
+      return ctx.consecutiveCheckInWeeks >= 12;
+    case "green_machine":
+      return ctx.maxConsecutiveGreen >= 3;
+    case "habit_spark_14":
+      return ctx.maxHabitStreak >= 14;
+    case "habit_anchor_21":
+      return ctx.maxHabitStreak >= 21;
+    case "habit_unstoppable_30":
+      return ctx.maxHabitStreak >= 30;
+    case "perfect_week_habits":
+      return ctx.hasPerfectWeek;
+    case "sleep_steward_7":
+      return ctx.sleepHabitStreak >= 7;
+    case "tape_tracker_5":
+      return ctx.measurementCount >= 5;
+    case "scale_regular_10":
+      return ctx.weightLogCount >= 10;
+    case "progress_shots":
+      return AFTER_POSES.every((p) => ctx.photoPoseTypes.has(p));
+    case "halfway_hero":
+      return ctx.hasHalfwayGoal;
+    case "double_down_goals":
+      return ctx.completedGoalCount >= 2;
     default:
       return false;
   }

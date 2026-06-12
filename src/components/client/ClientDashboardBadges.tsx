@@ -13,34 +13,20 @@ import { formatDateDisplay } from "@/lib/format-date";
 
 function BadgeTile({
   badge,
-  earned,
   earnedAt,
 }: {
   badge: AchievementDefinition;
-  earned: boolean;
   earnedAt: string | null;
 }) {
-  const dateHint = earned && earnedAt ? ` · ${formatDateDisplay(earnedAt.slice(0, 10))}` : "";
+  const dateHint = earnedAt ? ` · ${formatDateDisplay(earnedAt.slice(0, 10))}` : "";
 
   return (
     <div
-      className={`group relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl transition sm:h-14 sm:w-14 sm:text-2xl ${
-        earned
-          ? "border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] shadow-sm"
-          : "border border-dashed border-stone-200 bg-stone-100/80"
-      }`}
-      title={`${badge.name}${earned ? " — earned" : " — not yet earned"}${dateHint}`}
+      className="group relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] text-sm transition sm:h-8 sm:w-8"
+      title={`${badge.name} — earned${dateHint}`}
     >
-      <span
-        className={earned ? "" : "opacity-30 grayscale"}
-        aria-hidden
-      >
-        {badge.emoji}
-      </span>
-      <span className="sr-only">
-        {badge.name}
-        {earned ? ", earned" : ", locked"}
-      </span>
+      <span aria-hidden>{badge.emoji}</span>
+      <span className="sr-only">{badge.name}, earned</span>
     </div>
   );
 }
@@ -83,6 +69,9 @@ export function ClientDashboardBadges({ className = "" }: { className?: string }
   if (!achievements?.length) return null;
 
   const byId = new Map(achievements.map((a) => [a.id, a]));
+  const earnedBadges = BADGES_BY_DIFFICULTY.filter((def) => byId.get(def.id)?.earned);
+
+  if (earnedBadges.length === 0) return null;
 
   return (
     <section className={className}>
@@ -90,7 +79,10 @@ export function ClientDashboardBadges({ className = "" }: { className?: string }
         <div>
           <h2 className="vana-section-label">Your badges</h2>
           <p className="mt-1 text-xs text-stone-500">
-            {earnedCount} of {achievements.length} earned — keep going to fill the board
+            {earnedCount} earned
+            {achievements.length > earnedCount
+              ? ` · ${achievements.length - earnedCount} more to unlock`
+              : ""}
           </p>
         </div>
         <Link
@@ -100,15 +92,14 @@ export function ClientDashboardBadges({ className = "" }: { className?: string }
           View all →
         </Link>
       </div>
-      <Card className="vana-card p-4">
-        <div className="flex flex-wrap justify-center gap-2 sm:justify-start sm:gap-2.5">
-          {BADGES_BY_DIFFICULTY.map((def) => {
+      <Card className="vana-card p-2.5 sm:p-3">
+        <div className="flex flex-wrap gap-1.5">
+          {earnedBadges.map((def) => {
             const item = byId.get(def.id);
             return (
               <BadgeTile
                 key={def.id}
                 badge={def}
-                earned={item?.earned ?? false}
                 earnedAt={item?.earnedAt ?? null}
               />
             );
