@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
+import { resolveClientOwnerIds } from "@/lib/client-assignment-ownership";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 
@@ -20,9 +21,6 @@ export async function GET(request: Request) {
   const authResult = await requireClient(request);
   if ("error" in authResult) return authResult.error;
   const { identity } = authResult;
-  const clientId = identity.clientId!;
-  const uid = identity.uid;
-
   if (!isAdminConfigured()) {
     return NextResponse.json([
       {
@@ -36,11 +34,9 @@ export async function GET(request: Request) {
     ]);
   }
 
-  const idsToQuery = [clientId];
-  if (uid && uid !== clientId) idsToQuery.push(uid);
-
   try {
     const db = getAdminDb();
+    const idsToQuery = [...(await resolveClientOwnerIds(db, identity))];
     const allDocs: { id: string; data: () => Record<string, unknown> }[] = [];
     for (const id of idsToQuery) {
       const snap = await db

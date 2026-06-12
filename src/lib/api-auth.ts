@@ -30,15 +30,16 @@ export async function getIdentityFromToken(token: string): Promise<ResolvedIdent
   let clientId: string | null = null;
   let coachId: string | null = null;
   if (role === "client") {
-    const clientByUid = await db.collection("clients").doc(uid).get();
-    if (clientByUid.exists) clientId = clientByUid.id;
-    else {
-      const byAuthUid = await db
-        .collection("clients")
-        .where("authUid", "==", uid)
-        .limit(1)
-        .get();
-      if (!byAuthUid.empty) clientId = byAuthUid.docs[0].id;
+    const byAuthUid = await db
+      .collection("clients")
+      .where("authUid", "==", uid)
+      .limit(1)
+      .get();
+    if (!byAuthUid.empty) {
+      clientId = byAuthUid.docs[0].id;
+    } else {
+      const clientByUid = await db.collection("clients").doc(uid).get();
+      if (clientByUid.exists) clientId = clientByUid.id;
     }
   } else if (role === "coach") {
     coachId = uid;

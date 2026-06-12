@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
+import { assignmentBelongsToClient } from "@/lib/client-assignment-ownership";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
@@ -10,7 +11,7 @@ export async function GET(
 ) {
   const authResult = await requireClient(request);
   if ("error" in authResult) return authResult.error;
-  const clientId = authResult.identity.clientId!;
+  const { identity } = authResult;
   const { assignmentId } = await params;
 
   if (!isAdminConfigured()) {
@@ -36,7 +37,9 @@ export async function GET(
     return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
   }
   const assignmentData = assignmentSnap.data()!;
-  if (assignmentData.clientId !== clientId) {
+  const assignClientId = (assignmentData.clientId as string) ?? "";
+  const owns = await assignmentBelongsToClient(db, assignClientId, identity);
+  if (!owns) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

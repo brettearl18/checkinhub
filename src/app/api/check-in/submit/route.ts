@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireClient } from "@/lib/api-auth";
+import { assignmentBelongsToClient } from "@/lib/client-assignment-ownership";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
@@ -48,7 +49,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
   }
   const assignmentData = assignmentSnap.data()!;
-  if (assignmentData.clientId !== clientId) {
+  const assignClientId = (assignmentData.clientId as string) ?? "";
+  const owns = await assignmentBelongsToClient(db, assignClientId, identity);
+  if (!owns) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (assignmentData.responseId) {
