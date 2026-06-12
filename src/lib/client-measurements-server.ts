@@ -1,8 +1,11 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { todayPerth } from "@/lib/perth-date";
 
 export function parseMeasurementDateString(value: string | null | undefined): Date | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return null;
-  const d = new Date(`${value.trim()}T12:00:00`);
+  const key = value.trim();
+  // Noon Perth keeps the calendar day stable in Firestore regardless of server TZ.
+  const d = new Date(`${key}T12:00:00+08:00`);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -18,10 +21,9 @@ export function measurementDateKeyFromFirestore(dateVal: unknown): string | null
   return null;
 }
 
-export function isMeasurementDateInFuture(date: Date): boolean {
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  return date > today;
+export function isMeasurementDateInFuture(dateKey: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return true;
+  return dateKey > todayPerth();
 }
 
 /** Earliest dated entry becomes the single baseline for charts and progress deltas. */

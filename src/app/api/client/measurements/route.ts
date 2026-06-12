@@ -9,6 +9,7 @@ import {
   parseMeasurementDateString,
   reconcileMeasurementBaselines,
 } from "@/lib/client-measurements-server";
+import { todayPerth } from "@/lib/perth-date";
 
 export async function GET(request: Request) {
   const authResult = await requireClient(request);
@@ -59,12 +60,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const dateStr = (body.date ?? new Date().toISOString().slice(0, 10)).trim();
+  const dateStr = (body.date ?? todayPerth()).trim();
   const date = parseMeasurementDateString(dateStr);
   if (!date) {
     return NextResponse.json({ error: "date is required (YYYY-MM-DD)" }, { status: 400 });
   }
-  if (isMeasurementDateInFuture(date)) {
+  if (isMeasurementDateInFuture(dateStr)) {
     return NextResponse.json({ error: "Measurement date cannot be in the future" }, { status: 400 });
   }
 
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
   }
 
   const now = new Date();
-  const todayKey = now.toISOString().slice(0, 10);
+  const todayKey = todayPerth();
   const importHistorical = body.importHistorical === true || dateStr < todayKey;
 
   if (!isAdminConfigured()) {

@@ -10,7 +10,8 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
 import { MeasurementComparisonChartLazy } from "@/components/ui/MeasurementComparisonChartLazy";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
+import { formatDateDisplay } from "@/lib/format-date";
+import { todayPerth } from "@/lib/perth-date";
 
 interface Measurement {
   id: string;
@@ -49,7 +50,7 @@ export default function ClientMeasurementsPage() {
   const [importing, setImporting] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showImportForm, setShowImportForm] = useState(false);
-  const [date, setDate] = useState(() => toLocalDateString(new Date()));
+  const [date, setDate] = useState(() => todayPerth());
   const [importDate, setImportDate] = useState("");
   const [bodyWeight, setBodyWeight] = useState("");
   const [importBodyWeight, setImportBodyWeight] = useState("");
@@ -62,7 +63,7 @@ export default function ClientMeasurementsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
-  const todayKey = toLocalDateString(new Date());
+  const todayKey = todayPerth();
   const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number] | "arms" | "thighs">("bodyWeight");
   const chartData = useMemo(() => {
     if (chartMetric === "arms" || chartMetric === "thighs") return [];
@@ -201,7 +202,7 @@ export default function ClientMeasurementsPage() {
         setShowForm(false);
         setBodyWeight("");
         setMeasurements({ waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "" });
-        setDate(toLocalDateString(new Date()));
+        setDate(todayPerth());
         await load();
       }
     } catch (err) {

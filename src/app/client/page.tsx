@@ -445,7 +445,15 @@ export default function ClientPortalPage() {
 
   return (
     <div className="min-h-[60vh]">
-      <p className="vana-section-label mb-2">Dashboard</p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="vana-section-label">Dashboard</p>
+        <Link
+          href="/client2"
+          className="inline-flex items-center rounded-full border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary)] transition hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+        >
+          Try the new dashboard →
+        </Link>
+      </div>
 
       {/* Hero: welcoming, motivational + check-in % highlight */}
       <header className="vana-hero p-5 sm:p-6">
