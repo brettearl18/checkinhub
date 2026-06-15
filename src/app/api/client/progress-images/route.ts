@@ -4,6 +4,10 @@ import { getAdminDb, getAdminStorage } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { getDownloadURL } from "firebase-admin/storage";
 import { evaluateAndAwardAchievements } from "@/lib/award-achievements";
+import {
+  isProgressPhotoDateInFuture,
+  parseProgressPhotoDateString,
+} from "@/lib/progress-photo-dates";
 
 function toDate(v: unknown): string | null {
   if (!v) return null;
@@ -29,9 +33,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 ]);
 
 function parsePhotoDate(value: string | null | undefined): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return null;
-  const d = new Date(`${value.trim()}T12:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return parseProgressPhotoDateString(value);
 }
 
 // GET: list progress images for this client.
@@ -119,7 +121,8 @@ export async function POST(request: Request) {
 
   const caption = (formData.get("caption") as string)?.trim() || null;
   const isBaselineImport = imageType.startsWith("before_");
-  const parsedPhotoDate = parsePhotoDate(formData.get("photoDate") as string | null);
+  const photoDateKey = (formData.get("photoDate") as string | null)?.trim() ?? "";
+  const parsedPhotoDate = photoDateKey ? parsePhotoDate(photoDateKey) : null;
 
   if (isBaselineImport && !parsedPhotoDate) {
     return NextResponse.json(
@@ -128,9 +131,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (parsedPhotoDate && parsedPhotoDate > today) {
+  if (photoDateKey && isProgressPhotoDateInFuture(photoDateKey)) {
     return NextResponse.json({ error: "Photo date cannot be in the future" }, { status: 400 });
   }
 

@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { ProgressPhotoEditForm } from "@/components/coach/ProgressPhotoEditForm";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDisplay } from "@/lib/format-date";
-import { formatProgressImageTypeLabel } from "@/lib/progress-comparison-photos";
+import { formatProgressPhotoDate } from "@/lib/progress-photo-dates";
+import { formatProgressImageTypeLabel, getLatestProgressPhotoPerPose, sortProgressPhotosByPoseThenDate } from "@/lib/progress-comparison-photos";
 
 interface GalleryImage {
   id: string;
@@ -30,6 +32,7 @@ export default function CoachGalleryPage() {
   const [filterClient, setFilterClient] = useState<string>(
     () => searchParams.get("client") ?? ""
   );
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     const client = searchParams.get("client");
@@ -61,9 +64,13 @@ export default function CoachGalleryPage() {
   }, [fetchWithAuth]);
 
   const clientIds = Array.from(new Set(images.map((i) => i.clientId)));
-  const filtered = filterClient
-    ? images.filter((i) => i.clientId === filterClient)
-    : images;
+  const filtered = useMemo(() => {
+    const list = filterClient ? images.filter((i) => i.clientId === filterClient) : images;
+    if (filterClient) {
+      return getLatestProgressPhotoPerPose(list);
+    }
+    return sortProgressPhotosByPoseThenDate(list);
+  }, [images, filterClient]);
 
   if (authError) {
     return <AuthErrorRetry onRetry={load} />;
@@ -79,7 +86,9 @@ export default function CoachGalleryPage() {
           Progress photos
         </h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Progress photos from your clients. View by client or see all.
+          {filterClient
+            ? "Latest photo per angle — front, back, then side."
+            : "Progress photos from your clients. View by client or see all."}
         </p>
       </div>
 
@@ -121,11 +130,11 @@ export default function CoachGalleryPage() {
       )}
 
       {!loading && filtered.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((img) => (
             <Card key={img.id} className="overflow-hidden p-0">
-              <Link href={`/coach/clients/${img.clientId}/progress`} className="block">
-                <div className="relative aspect-[3/4] bg-[var(--color-bg-elevated)]">
+              <div className="relative aspect-[3/4] bg-[var(--color-bg-elevated)]">
+                <Link href={`/coach/clients/${img.clientId}/progress`} className="block h-full">
                   <Image
                     src={img.imageUrl}
                     alt={img.caption || img.imageType || "Progress photo"}
@@ -134,13 +143,18 @@ export default function CoachGalleryPage() {
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     unoptimized
                   />
-                </div>
-                <div className="p-3">
+                </Link>
+              </div>
+              <div className="p-3">
+                <Link
+                  href={`/coach/clients/${img.clientId}/progress`}
+                  className="block hover:opacity-90"
+                >
                   <p className="font-medium text-[var(--color-text)]">{img.clientName}</p>
                   <p className="text-xs text-[var(--color-text-muted)]">
                     {formatProgressImageTypeLabel(img.imageType)}
                     {img.uploadedAt && (
-                      <> · {formatDateDisplay(img.uploadedAt)}</>
+                      <> · {formatProgressPhotoDate(img.uploadedAt)}</>
                     )}
                   </p>
                   {img.caption && (
@@ -148,8 +162,33 @@ export default function CoachGalleryPage() {
                       {img.caption}
                     </p>
                   )}
-                </div>
-              </Link>
+                </Link>
+                {editingId === img.id ? (
+                  <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+                    <ProgressPhotoEditForm
+                      patchUrl={`/api/coach/clients/${img.clientId}/progress-images/${img.id}`}
+                      initialImageType={img.imageType}
+                      initialUploadedAt={img.uploadedAt}
+                      initialCaption={img.caption}
+                      compact
+                      onSaved={() => {
+                        setEditingId(null);
+                        load();
+                      }}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="mt-3 min-h-9 w-full py-1.5 text-xs"
+                    onClick={() => setEditingId(img.id)}
+                  >
+                    Edit date & angle
+                  </Button>
+                )}
+              </div>
             </Card>
           ))}
         </div>

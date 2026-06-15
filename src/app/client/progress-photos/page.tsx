@@ -9,13 +9,16 @@ import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
+import { ProgressPhotoEditForm } from "@/components/coach/ProgressPhotoEditForm";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDisplay, toLocalDateString } from "@/lib/format-date";
+import { formatProgressPhotoDate } from "@/lib/progress-photo-dates";
+import { todayPerth } from "@/lib/perth-date";
 import {
   buildLegacyPoseAssignment,
   formatProgressImageTypeLabel,
   getProgressPhotoForMilestone,
   PROGRESS_PHOTO_POSES,
+  sortProgressPhotosByPoseThenDate,
   type ProgressPhotoMilestone,
 } from "@/lib/progress-comparison-photos";
 
@@ -29,8 +32,8 @@ interface ProgressImage {
 
 const CURRENT_IMAGE_TYPES = [
   { value: "after_front", label: "Current (front)" },
-  { value: "after_side", label: "Current (side)" },
   { value: "after_back", label: "Current (back)" },
+  { value: "after_side", label: "Current (side)" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -66,10 +69,12 @@ export default function ProgressPhotosPage() {
   const [baselineUploading, setBaselineUploading] = useState(false);
   const [baselineError, setBaselineError] = useState<string | null>(null);
   const [baselineSuccess, setBaselineSuccess] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const baselineFileInputRef = useRef<HTMLInputElement>(null);
 
   const poseCount = useMemo(() => countPosesWithPhotos(list), [list]);
+  const sortedList = useMemo(() => sortProgressPhotosByPoseThenDate(list), [list]);
 
   const missingBaselines = useMemo(
     () => BASELINE_IMAGE_TYPES.filter((t) => !list.some((img) => img.imageType === t.value)),
@@ -345,7 +350,7 @@ export default function ProgressPhotosPage() {
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((img) => (
+            {sortedList.map((img) => (
               <article
                 key={img.id}
                 className="overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm ring-1 ring-black/[0.03] transition hover:shadow-md"
@@ -364,7 +369,7 @@ export default function ProgressPhotosPage() {
                       {formatProgressImageTypeLabel(img.imageType)}
                     </p>
                     {img.uploadedAt && (
-                      <p className="text-xs text-white/80">{formatDateDisplay(img.uploadedAt)}</p>
+                      <p className="text-xs text-white/80">{formatProgressPhotoDate(img.uploadedAt)}</p>
                     )}
                   </div>
                 </div>
@@ -373,6 +378,31 @@ export default function ProgressPhotosPage() {
                     <p className="text-sm text-stone-600">{img.caption}</p>
                   </div>
                 )}
+                <div className="border-t border-stone-100 px-3 py-2.5">
+                  {editingId === img.id ? (
+                    <ProgressPhotoEditForm
+                      patchUrl={`/api/client/progress-images/${img.id}`}
+                      initialImageType={img.imageType}
+                      initialUploadedAt={img.uploadedAt}
+                      initialCaption={img.caption}
+                      compact
+                      onSaved={() => {
+                        setEditingId(null);
+                        load();
+                      }}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="min-h-9 w-full py-1.5 text-xs"
+                      onClick={() => setEditingId(img.id)}
+                    >
+                      Edit date & angle
+                    </Button>
+                  )}
+                </div>
               </article>
             ))}
           </div>
@@ -425,7 +455,7 @@ export default function ProgressPhotosPage() {
                     <input
                       type="date"
                       required
-                      max={toLocalDateString(new Date())}
+                      max={todayPerth()}
                       value={baselineDate}
                       onChange={(e) => setBaselineDate(e.target.value)}
                       className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-2 text-sm text-stone-800"

@@ -86,41 +86,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ id: "mock-measurement-1", ok: true, updated: false });
   }
 
-  const db = getAdminDb();
-  const snap = await db
-    .collection("client_measurements")
-    .where("clientId", "==", clientId)
-    .orderBy("date", "desc")
-    .limit(100)
-    .get();
+  try {
+    const db = getAdminDb();
+    const snap = await db
+      .collection("client_measurements")
+      .where("clientId", "==", clientId)
+      .orderBy("date", "desc")
+      .limit(100)
+      .get();
 
-  const sameDay = snap.docs.find((d) => measurementDateKeyFromFirestore(d.data().date) === dateStr);
+    const sameDay = snap.docs.find((d) => measurementDateKeyFromFirestore(d.data().date) === dateStr);
 
-  if (sameDay) {
-    const cur = sameDay.data();
-    const payload: Record<string, unknown> = { updatedAt: now };
-    if (hasWeight) payload.bodyWeight = body.bodyWeight;
-    if (hasMeasurements) {
-      payload.measurements = { ...(cur.measurements ?? {}), ...body.measurements };
+    if (sameDay) {
+      const cur = sameDay.data();
+      const payload: Record<string, unknown> = { updatedAt: now };
+      if (hasWeight) payload.bodyWeight = body.bodyWeight;
+      if (hasMeasurements) {
+        payload.measurements = { ...(cur.measurements ?? {}), ...body.measurements };
+      }
+      if (importHistorical) payload.importedBeforeCheckinHUB = true;
+      await sameDay.ref.update(payload);
+      await reconcileMeasurementBaselines(db, clientId);
+      const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+      return NextResponse.json({ id: sameDay.id, ok: true, updated: true, newlyEarned });
     }
-    if (importHistorical) payload.importedBeforeCheckinHUB = true;
-    await sameDay.ref.update(payload);
+
+    const ref = await db.collection("client_measurements").add({
+      clientId,
+      date,
+      bodyWeight: hasWeight ? body.bodyWeight : null,
+      measurements: hasMeasurements ? body.measurements : {},
+      isBaseline: false,
+      ...(importHistorical ? { importedBeforeCheckinHUB: true } : {}),
+      createdAt: now,
+      updatedAt: now,
+    });
     await reconcileMeasurementBaselines(db, clientId);
     const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
-    return NextResponse.json({ id: sameDay.id, ok: true, updated: true, newlyEarned });
+    return NextResponse.json({ id: ref.id, ok: true, updated: false, newlyEarned });
+  } catch (err) {
+    console.error("[client/measurements POST]", err);
+    return NextResponse.json({ error: "Could not save measurement. Please try again." }, { status: 500 });
   }
-
-  const ref = await db.collection("client_measurements").add({
-    clientId,
-    date,
-    bodyWeight: hasWeight ? body.bodyWeight : null,
-    measurements: hasMeasurements ? body.measurements : {},
-    isBaseline: false,
-    ...(importHistorical ? { importedBeforeCheckinHUB: true } : {}),
-    createdAt: now,
-    updatedAt: now,
-  });
-  await reconcileMeasurementBaselines(db, clientId);
-  const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
-  return NextResponse.json({ id: ref.id, ok: true, updated: false, newlyEarned });
 }

@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
-import { formatDateDisplay } from "@/lib/format-date";
+import { ProgressPhotoEmptySlot } from "@/components/coach/ProgressPhotoEmptySlot";
 import { useApiClient } from "@/lib/api-client";
+import { formatProgressPhotoDate, progressPhotoCalendarKey } from "@/lib/progress-photo-dates";
 import { downloadProgressPhotoFile } from "@/lib/progress-photo-social-export";
 import {
   ProgressPhotoShareExportModal,
@@ -144,7 +145,7 @@ function PhotoThumb({
                   <p className="text-sm font-medium text-white">{progressPhotoPoseTabLabel(pose)}</p>
                   {image?.uploadedAt && (
                     <p className="text-xs text-white/80">
-                      {formatDateDisplay(image.uploadedAt.slice(0, 10))}
+                      {formatProgressPhotoDate(image.uploadedAt)}
                     </p>
                   )}
                   <span className="mt-2 inline-flex items-center rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm">
@@ -166,19 +167,14 @@ function PhotoThumb({
                   <p className="text-sm font-medium text-white">{progressPhotoPoseTabLabel(pose)}</p>
                   {image?.uploadedAt && (
                     <p className="text-xs text-white/80">
-                      {formatDateDisplay(image.uploadedAt.slice(0, 10))}
+                      {formatProgressPhotoDate(image.uploadedAt)}
                     </p>
                   )}
                 </div>
               </>
             )
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center">
-              <span className="text-2xl text-stone-300" aria-hidden>
-                —
-              </span>
-              <p className="text-[11px] text-stone-400">No {progressPhotoPoseTabLabel(pose).toLowerCase()} photo</p>
-            </div>
+            <ProgressPhotoEmptySlot label={`No ${progressPhotoPoseTabLabel(pose).toLowerCase()} photo`} />
           )}
 
           {hasImage && onDownload && (
@@ -237,9 +233,7 @@ function PhotoThumb({
             />
           )
         ) : (
-          <div className="flex h-full items-center justify-center px-2 text-center text-xs text-[var(--color-text-muted)]">
-            —
-          </div>
+          <ProgressPhotoEmptySlot label={`No ${progressPhotoPoseTabLabel(pose).toLowerCase()} photo`} />
         )}
 
         {hasImage && onDownload && (
@@ -264,7 +258,7 @@ function PhotoThumb({
         </p>
         {image?.uploadedAt && (
           <p className="text-[10px] text-[var(--color-text-muted)]">
-            {formatDateDisplay(image.uploadedAt.slice(0, 10))}
+            {formatProgressPhotoDate(image.uploadedAt)}
           </p>
         )}
       </div>
@@ -290,6 +284,14 @@ function CompareRow({
   variant?: "coach" | "client";
 }) {
   const isClient = variant === "client";
+
+  const rowDateKeys = PROGRESS_PHOTO_POSES.map((pose) => {
+    const image = getProgressPhotoForMilestone(images, pose, milestone, legacyAssignment);
+    return progressPhotoCalendarKey(image?.uploadedAt ?? null);
+  }).filter((d): d is string => Boolean(d));
+  const uniqueRowDates = [...new Set(rowDateKeys)];
+  const showLatestDateNote =
+    milestone === "latest" && uniqueRowDates.length > 1;
 
   return (
     <div
@@ -329,6 +331,11 @@ function CompareRow({
           );
         })}
       </div>
+      {showLatestDateNote && (
+        <p className="col-span-full text-xs text-[var(--color-text-muted)]">
+          Latest photos were taken on different dates — upload a matching front, back, and side set for a fair comparison.
+        </p>
+      )}
     </div>
   );
 }

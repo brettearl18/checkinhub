@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Card } from "@/components/ui/Card";
+import { ProgressPhotoEmptySlot } from "@/components/coach/ProgressPhotoEmptySlot";
 import { CheckInScoreTrendChartLazy } from "@/components/ui/CheckInScoreTrendChartLazy";
 import { MeasurementSlotTrendChartLazy } from "@/components/ui/MeasurementSlotTrendChartLazy";
 import { MeasurementPairedSlotTrendChartLazy } from "@/components/ui/MeasurementPairedSlotTrendChartLazy";
@@ -226,7 +227,7 @@ function CompactLatestPhotos({ images }: { images: ProgressImage[] }) {
                   unoptimized
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-stone-300">—</div>
+                <ProgressPhotoEmptySlot compact />
               )}
               <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-4 text-center text-[9px] font-semibold uppercase tracking-wide text-white">
                 {progressPhotoPoseTabLabel(pose)}

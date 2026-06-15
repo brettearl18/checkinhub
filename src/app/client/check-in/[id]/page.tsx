@@ -14,7 +14,8 @@ import {
   type CheckInQuestion as Question,
 } from "@/components/client/CheckInFormFields";
 import { useApiClient } from "@/lib/api-client";
-import { formatDateDdMmYyyy, toLocalDateString } from "@/lib/format-date";
+import { formatDateDdMmYyyy } from "@/lib/format-date";
+import { todayPerth } from "@/lib/perth-date";
 export default function CheckInFormPage() {
   const router = useRouter();
   const params = useParams();
@@ -87,7 +88,7 @@ export default function CheckInFormPage() {
         if (!res.ok) return;
         const list = (await res.json()) as Array<{ date?: string | null; bodyWeight?: number | null }>;
         if (cancelled) return;
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayPerth();
         const todayRow = list.find((m) => m.date === today && m.bodyWeight != null);
         const latestRow = list.find((m) => m.bodyWeight != null);
         const prefill = todayRow?.bodyWeight ?? latestRow?.bodyWeight ?? null;
@@ -109,7 +110,7 @@ export default function CheckInFormPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: toLocalDateString(new Date()),
+          date: todayPerth(),
           bodyWeight: bodyWeightKg,
         }),
       });

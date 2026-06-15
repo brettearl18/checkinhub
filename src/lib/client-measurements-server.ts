@@ -11,12 +11,18 @@ export function parseMeasurementDateString(value: string | null | undefined): Da
 
 export function measurementDateKeyFromFirestore(dateVal: unknown): string | null {
   if (dateVal == null) return null;
-  if (dateVal && typeof (dateVal as { toDate?: () => Date }).toDate === "function") {
-    return (dateVal as { toDate: () => Date }).toDate().toISOString().slice(0, 10);
+  if (typeof dateVal === "string") {
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(dateVal.trim());
+    return match ? match[1]! : null;
   }
-  if (dateVal instanceof Date) return dateVal.toISOString().slice(0, 10);
-  if (typeof dateVal === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
-    return dateVal.slice(0, 10);
+  if (dateVal && typeof (dateVal as { toDate?: () => Date }).toDate === "function") {
+    const iso = (dateVal as { toDate: () => Date }).toDate().toISOString();
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
+    return match ? match[1]! : null;
+  }
+  if (dateVal instanceof Date) {
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(dateVal.toISOString());
+    return match ? match[1]! : null;
   }
   return null;
 }
@@ -31,7 +37,7 @@ export async function reconcileMeasurementBaselines(db: Firestore, clientId: str
   const snap = await db
     .collection("client_measurements")
     .where("clientId", "==", clientId)
-    .orderBy("date", "asc")
+    .orderBy("date", "desc")
     .limit(200)
     .get();
 

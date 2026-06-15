@@ -1,8 +1,8 @@
 /** Same pose: before_* with matching after_* (front with front, etc.). */
 const ANGLE_PAIRS = [
   { before: "before_front", after: "after_front" },
-  { before: "before_side", after: "after_side" },
   { before: "before_back", after: "after_back" },
+  { before: "before_side", after: "after_side" },
 ] as const;
 
 const BEFORE_TYPES = new Set<string>(ANGLE_PAIRS.map((p) => p.before));
@@ -33,7 +33,7 @@ function newestDifferentUrl<T extends ProgressImageLike>(sortedAsc: T[], exclude
   return null;
 }
 
-/** First angle (front → side → back) where both before and after exist for that pose. */
+/** First angle (front → back → side) where both before and after exist for that pose. */
 function pickMatchedAnglePair<T extends ProgressImageLike>(
   images: T[]
 ): { baselinePhoto: T; currentPhoto: T } | null {
@@ -166,8 +166,48 @@ export type ProgressPhotoPose = "front" | "side" | "back";
 
 export type ProgressPhotoMilestone = "latest" | "previous" | "first_baseline";
 
-/** Column order for compare grid */
+/** Column order for compare grid and gallery rows */
 export const PROGRESS_PHOTO_POSES: ProgressPhotoPose[] = ["front", "back", "side"];
+
+const POSE_SORT_ORDER: Record<ProgressPhotoPose, number> = {
+  front: 0,
+  back: 1,
+  side: 2,
+};
+
+function poseSortIndexForImage<T extends ProgressImageLike>(
+  image: T,
+  legacyAssignment: Map<string, ProgressPhotoPose>
+): number {
+  const pose = resolveProgressPhotoPose(image) ?? legacyAssignment.get(image.id);
+  if (pose) return POSE_SORT_ORDER[pose];
+  const type = (image.imageType ?? "").toLowerCase();
+  if (type.includes("front")) return 0;
+  if (type.includes("back")) return 1;
+  if (type.includes("side")) return 2;
+  return 99;
+}
+
+/** Sort photos front → back → side, then newest first within each angle. */
+export function sortProgressPhotosByPoseThenDate<T extends ProgressImageLike>(images: T[]): T[] {
+  const legacyAssignment = buildLegacyPoseAssignment(images);
+  return [...images].sort((a, b) => {
+    const poseDiff =
+      poseSortIndexForImage(a, legacyAssignment) - poseSortIndexForImage(b, legacyAssignment);
+    if (poseDiff !== 0) return poseDiff;
+    const ta = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+    const tb = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+/** Latest photo for each pose in front → back → side order (max 3). */
+export function getLatestProgressPhotoPerPose<T extends ProgressImageLike>(images: T[]): T[] {
+  const legacyAssignment = buildLegacyPoseAssignment(images);
+  return PROGRESS_PHOTO_POSES.map((pose) =>
+    getProgressPhotoForMilestone(images, pose, "latest", legacyAssignment)
+  ).filter((img): img is T => img != null);
+}
 
 /** Row order for compare grid (newest milestones first) */
 export const PROGRESS_PHOTO_COMPARE_ROWS: ProgressPhotoMilestone[] = [

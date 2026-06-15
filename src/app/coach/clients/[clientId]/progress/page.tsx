@@ -654,7 +654,7 @@ export default function CoachClientProgressPage() {
               <div>
                 <h2 className="font-medium text-[var(--color-text)]">Progress photos</h2>
                 <p className="text-sm text-[var(--color-text-muted)]">
-                  Latest, previous, and first upload — Front, Back, and Side
+                  Latest photo per angle — Front, Back, and Side
                 </p>
               </div>
               {clientId && (

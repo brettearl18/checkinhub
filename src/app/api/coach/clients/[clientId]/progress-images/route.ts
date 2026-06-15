@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb, getAdminStorage, isAdminConfigured } from "@/lib/firebase-admin";
 import { getDownloadURL } from "firebase-admin/storage";
+import {
+  isProgressPhotoDateInFuture,
+  parseProgressPhotoDateString,
+} from "@/lib/progress-photo-dates";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -19,9 +23,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
 ]);
 
 function parsePhotoDate(value: string | null | undefined): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return null;
-  const d = new Date(`${value.trim()}T12:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return parseProgressPhotoDateString(value);
 }
 
 async function assertCoachOwnsClient(coachId: string, clientId: string) {
@@ -79,7 +81,8 @@ export async function POST(
     return NextResponse.json({ error: "Invalid image type" }, { status: 400 });
   }
 
-  const photoDate = parsePhotoDate(formData.get("photoDate") as string | null);
+  const photoDateKey = (formData.get("photoDate") as string | null)?.trim() ?? "";
+  const photoDate = parsePhotoDate(photoDateKey);
   if (!photoDate) {
     return NextResponse.json(
       { error: "photoDate is required (YYYY-MM-DD)" },
@@ -87,9 +90,7 @@ export async function POST(
     );
   }
 
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (photoDate > today) {
+  if (isProgressPhotoDateInFuture(photoDateKey)) {
     return NextResponse.json({ error: "Photo date cannot be in the future" }, { status: 400 });
   }
 
