@@ -58,6 +58,8 @@ export async function POST(request: Request) {
   for (const doc of toMark) {
     await db.collection("check_in_assignments").doc(doc.id).update({
       status: "skipped",
+      statusBeforeSkipped: doc.status,
+      skippedAt: now,
       updatedAt: now,
     });
   }

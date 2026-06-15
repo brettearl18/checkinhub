@@ -26,6 +26,12 @@ interface Assignment {
   dueDate: string | null;
 }
 
+interface MissedAssignment {
+  id: string;
+  formTitle: string | null;
+  reflectionWeekStart: string | null;
+}
+
 interface Profile {
   firstName: string;
   lastName: string;
@@ -155,6 +161,8 @@ export default function ClientPortalPage() {
   } | null>(null);
   const [markingMissedId, setMarkingMissedId] = useState<string | null>(null);
   const [markMissedError, setMarkMissedError] = useState<string | null>(null);
+  const [missedAssignments, setMissedAssignments] = useState<MissedAssignment[]>([]);
+  const [undoingMissedId, setUndoingMissedId] = useState<string | null>(null);
   const markAssignmentMissed = useCallback(
     async (assignmentId: string) => {
       const a = assignments.find((x) => x.id === assignmentId);
@@ -163,8 +171,8 @@ export default function ClientPortalPage() {
         ? `the week of ${formatDateDdMmYyyy(a.reflectionWeekStart)}`
         : "this check-in";
       const msg = started
-        ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list.`
-        : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list.`;
+        ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list. You can undo this from your dashboard if you tapped by mistake.`
+        : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list. You can undo this from your dashboard if you tapped by mistake.`;
       if (!window.confirm(msg)) return;
       setMarkMissedError(null);
       setMarkingMissedId(assignmentId);
@@ -176,6 +184,16 @@ export default function ClientPortalPage() {
           return;
         }
         setAssignments((prev) => prev.filter((x) => x.id !== assignmentId));
+        if (a) {
+          setMissedAssignments((prev) => [
+            {
+              id: a.id,
+              formTitle: a.formTitle,
+              reflectionWeekStart: a.reflectionWeekStart ?? null,
+            },
+            ...prev.filter((m) => m.id !== assignmentId),
+          ]);
+        }
       } catch {
         setMarkMissedError("Could not mark as missed.");
       } finally {
@@ -213,7 +231,7 @@ export default function ClientPortalPage() {
     setError(null);
     setMarkMissedError(null);
     try {
-      const [profileRes, assignmentsRes, historyRes, imagesRes, setupRes, habitsRes, qpRes, measRes] = await Promise.all([
+      const [profileRes, assignmentsRes, historyRes, imagesRes, setupRes, habitsRes, qpRes, measRes, missedRes] = await Promise.all([
         fetchWithAuth("/api/client/profile"),
         fetchWithAuth("/api/check-in/assignments"),
         fetchWithAuth("/api/client/history"),
@@ -222,6 +240,7 @@ export default function ClientPortalPage() {
         fetchWithAuth("/api/client/habits"),
         fetchWithAuth("/api/client/question-progress"),
         fetchWithAuth("/api/client/measurements"),
+        fetchWithAuth("/api/check-in/missed-assignments"),
       ]);
       if (profileRes.status === 401 || assignmentsRes.status === 401 || historyRes.status === 401 || imagesRes.status === 401 || habitsRes.status === 401 || qpRes.status === 401 || measRes.status === 401) {
         setAuthError(true);
@@ -255,6 +274,12 @@ export default function ClientPortalPage() {
       } else {
         const body = await assignmentsRes.json().catch(() => ({}));
         setError((body && typeof body.error === "string") ? body.error : "Could not load check-ins.");
+      }
+      if (missedRes.ok) {
+        const missed = await missedRes.json();
+        setMissedAssignments(Array.isArray(missed) ? missed : []);
+      } else {
+        setMissedAssignments([]);
       }
       if (historyRes.ok) {
         const history = await historyRes.json();
@@ -323,6 +348,27 @@ export default function ClientPortalPage() {
       setLoading(false);
     }
   };
+
+  const undoMissedAssignment = useCallback(
+    async (assignmentId: string) => {
+      setMarkMissedError(null);
+      setUndoingMissedId(assignmentId);
+      try {
+        const res = await fetchWithAuth(`/api/check-in/${assignmentId}/undo-missed`, { method: "POST" });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setMarkMissedError(typeof body?.error === "string" ? body.error : "Could not undo missed check-in.");
+          return;
+        }
+        await loadData();
+      } catch {
+        setMarkMissedError("Could not undo missed check-in.");
+      } finally {
+        setUndoingMissedId(null);
+      }
+    },
+    [fetchWithAuth]
+  );
 
   useEffect(() => {
     loadData();
@@ -515,6 +561,48 @@ export default function ClientPortalPage() {
         >
           {markMissedError}
         </div>
+      )}
+
+      {!authError && !loading && missedAssignments.length > 0 && (
+        <section className="mt-4">
+          <Card className="vana-card border border-stone-200/80 p-4">
+            <h2 className="text-sm font-medium text-stone-800">Marked as missed</h2>
+            <p className="mt-1 text-xs text-stone-500">
+              Tapped by mistake? Undo to put a check-in back on your to-do list.
+            </p>
+            <ul className="mt-3 space-y-2">
+              {missedAssignments.map((m) => {
+                const weekLabel = m.reflectionWeekStart
+                  ? formatDateDdMmYyyy(m.reflectionWeekStart)
+                  : null;
+                return (
+                  <li
+                    key={m.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-200/80 bg-stone-50/80 px-3 py-2"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-stone-800">
+                        {m.formTitle ?? "Check-in"}
+                      </p>
+                      {weekLabel && (
+                        <p className="text-xs text-stone-500">Week of {weekLabel}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="min-h-9 py-1.5 text-xs"
+                      disabled={undoingMissedId === m.id}
+                      onClick={() => undoMissedAssignment(m.id)}
+                    >
+                      {undoingMissedId === m.id ? "Restoring…" : "Undo missed"}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        </section>
       )}
 
       {/* First-time setup: baseline measurements, photos, notifications */}

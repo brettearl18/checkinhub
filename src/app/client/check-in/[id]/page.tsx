@@ -40,6 +40,7 @@ export default function CheckInFormPage() {
   } | null>(null);
   const [markingMissed, setMarkingMissed] = useState(false);
   const [markedMissed, setMarkedMissed] = useState(false);
+  const [undoingMissed, setUndoingMissed] = useState(false);
   const [weightGateReady, setWeightGateReady] = useState(false);
   const [weightGatePrefill, setWeightGatePrefill] = useState<number | null>(null);
   const [weightGateSaving, setWeightGateSaving] = useState(false);
@@ -234,8 +235,8 @@ export default function CheckInFormPage() {
     const weekPhrase = rw ? `the week of ${formatDateDdMmYyyy(rw)}` : "this check-in";
     const started = data.assignment.status === "started";
     const msg = started
-      ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list.`
-      : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list.`;
+      ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list. You can undo this from your dashboard if you tapped by mistake.`
+      : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list. You can undo this from your dashboard if you tapped by mistake.`;
     if (!window.confirm(msg)) return;
     setMarkingMissed(true);
     setError(null);
@@ -252,6 +253,33 @@ export default function CheckInFormPage() {
       setError("Could not mark as missed.");
     } finally {
       setMarkingMissed(false);
+    }
+  };
+
+  const handleUndoMissed = async () => {
+    setUndoingMissed(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/check-in/${assignmentId}/undo-missed`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(typeof body?.error === "string" ? body.error : "Could not undo missed check-in.");
+        return;
+      }
+      const reload = await fetchWithAuth(`/api/check-in/${assignmentId}`);
+      if (reload.ok) {
+        const json = await reload.json();
+        setData(json);
+        setMarkedMissed(false);
+        setWeightGateReady(false);
+      } else {
+        router.push(`/client/check-in/${assignmentId}`);
+        router.refresh();
+      }
+    } catch {
+      setError("Could not undo missed check-in.");
+    } finally {
+      setUndoingMissed(false);
     }
   };
 
@@ -349,9 +377,27 @@ export default function CheckInFormPage() {
           <p className="text-[var(--color-text-secondary)]">
             You marked this week’s check-in as missed.
           </p>
-          <Button asChild variant="secondary">
-            <Link href="/client">Back to dashboard</Link>
-          </Button>
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+            Tapped by mistake? Undo to continue this check-in.
+          </p>
+          {error && (
+            <p className="mt-3 text-sm text-[var(--color-error)]" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button
+              type="button"
+              variant="primary"
+              disabled={undoingMissed}
+              onClick={handleUndoMissed}
+            >
+              {undoingMissed ? "Restoring…" : "Undo — complete check-in"}
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/client">Back to dashboard</Link>
+            </Button>
+          </div>
         </Card>
       </div>
     );

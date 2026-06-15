@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { assignmentBelongsToClient } from "@/lib/client-assignment-ownership";
+import { statusAfterUndoSkipped } from "@/lib/check-in-assignment-status";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
-/** POST: client marks this assignment as missed (skipped). Removes it from their to-do list and stops it counting as overdue. */
+/** POST: client undoes marking a check-in as missed — returns it to their to-do list. */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ assignmentId: string }> }
@@ -16,7 +17,7 @@ export async function POST(
   const { assignmentId } = await params;
 
   if (!isAdminConfigured()) {
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, status: "pending" });
   }
 
   try {
@@ -26,40 +27,40 @@ export async function POST(
     if (!assignmentSnap.exists) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
     }
+
     const data = assignmentSnap.data()!;
     const assignClientId = (data.clientId as string) ?? "";
-
     const owns = await assignmentBelongsToClient(db, assignClientId, identity);
     if (!owns) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const status = (data.status as string) ?? "pending";
-    if (status === "completed") {
+    if (status !== "skipped") {
       return NextResponse.json(
-        { error: "This check-in is already completed." },
+        { error: "This check-in is not marked as missed." },
         { status: 400 }
       );
     }
-    if (status === "skipped") {
-      return NextResponse.json({ ok: true });
-    }
+
+    const restoredStatus = statusAfterUndoSkipped({
+      statusBeforeSkipped: data.statusBeforeSkipped as string | undefined,
+      dueDate: data.dueDate,
+    });
 
     const now = new Date();
     await assignmentRef.update({
-      status: "skipped",
-      statusBeforeSkipped: status,
-      skippedAt: now,
-      draftResponses: FieldValue.delete(),
-      draftUpdatedAt: FieldValue.delete(),
+      status: restoredStatus,
+      statusBeforeSkipped: FieldValue.delete(),
+      skippedAt: FieldValue.delete(),
       updatedAt: now,
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, status: restoredStatus });
   } catch (err) {
-    console.error("[check-in/mark-missed]", assignmentId, err);
+    console.error("[check-in/undo-missed]", assignmentId, err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to mark as missed" },
+      { error: err instanceof Error ? err.message : "Failed to undo missed check-in" },
       { status: 500 }
     );
   }
