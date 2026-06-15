@@ -11,6 +11,21 @@ import {
 } from "@/lib/client-measurements-server";
 import { todayPerth } from "@/lib/perth-date";
 
+async function safeReconcileAndAward(db: ReturnType<typeof getAdminDb>, clientId: string) {
+  let newlyEarned: Awaited<ReturnType<typeof evaluateAndAwardAchievements>> = [];
+  try {
+    await reconcileMeasurementBaselines(db, clientId);
+  } catch (err) {
+    console.error("[client/measurements] reconcile baselines failed", clientId, err);
+  }
+  try {
+    newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+  } catch (err) {
+    console.error("[client/measurements] award achievements failed", clientId, err);
+  }
+  return newlyEarned;
+}
+
 export async function GET(request: Request) {
   const authResult = await requireClient(request);
   if ("error" in authResult) return authResult.error;
@@ -106,8 +121,7 @@ export async function POST(request: Request) {
       }
       if (importHistorical) payload.importedBeforeCheckinHUB = true;
       await sameDay.ref.update(payload);
-      await reconcileMeasurementBaselines(db, clientId);
-      const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+      const newlyEarned = await safeReconcileAndAward(db, clientId);
       return NextResponse.json({ id: sameDay.id, ok: true, updated: true, newlyEarned });
     }
 
@@ -121,8 +135,7 @@ export async function POST(request: Request) {
       createdAt: now,
       updatedAt: now,
     });
-    await reconcileMeasurementBaselines(db, clientId);
-    const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+    const newlyEarned = await safeReconcileAndAward(db, clientId);
     return NextResponse.json({ id: ref.id, ok: true, updated: false, newlyEarned });
   } catch (err) {
     console.error("[client/measurements POST]", err);

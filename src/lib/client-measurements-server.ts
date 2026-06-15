@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { todayPerth } from "@/lib/perth-date";
+import { todayPerth, toPerthDateString } from "@/lib/perth-date";
 
 export function parseMeasurementDateString(value: string | null | undefined): Date | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return null;
@@ -16,13 +16,10 @@ export function measurementDateKeyFromFirestore(dateVal: unknown): string | null
     return match ? match[1]! : null;
   }
   if (dateVal && typeof (dateVal as { toDate?: () => Date }).toDate === "function") {
-    const iso = (dateVal as { toDate: () => Date }).toDate().toISOString();
-    const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
-    return match ? match[1]! : null;
+    return toPerthDateString((dateVal as { toDate: () => Date }).toDate());
   }
   if (dateVal instanceof Date) {
-    const match = /^(\d{4}-\d{2}-\d{2})/.exec(dateVal.toISOString());
-    return match ? match[1]! : null;
+    return toPerthDateString(dateVal);
   }
   return null;
 }

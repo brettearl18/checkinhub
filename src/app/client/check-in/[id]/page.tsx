@@ -91,8 +91,13 @@ export default function CheckInFormPage() {
         if (cancelled) return;
         const today = todayPerth();
         const todayRow = list.find((m) => m.date === today && m.bodyWeight != null);
+        if (todayRow) {
+          setWeightGatePrefill(todayRow.bodyWeight ?? null);
+          setWeightGateReady(true);
+          return;
+        }
         const latestRow = list.find((m) => m.bodyWeight != null);
-        const prefill = todayRow?.bodyWeight ?? latestRow?.bodyWeight ?? null;
+        const prefill = latestRow?.bodyWeight ?? null;
         setWeightGatePrefill(typeof prefill === "number" ? prefill : null);
       } catch {
         if (!cancelled) setWeightGatePrefill(null);
@@ -107,22 +112,37 @@ export default function CheckInFormPage() {
     setWeightGateSaving(true);
     setWeightGateError(null);
     try {
+      const today = todayPerth();
+      const existing = await fetchWithAuth("/api/client/measurements");
+      if (existing.ok) {
+        const list = (await existing.json()) as Array<{ date?: string | null; bodyWeight?: number | null }>;
+        const todayRow = list.find((m) => m.date === today && m.bodyWeight != null);
+        if (todayRow && todayRow.bodyWeight === bodyWeightKg) {
+          setWeightGateReady(true);
+          return;
+        }
+      }
+
       const res = await fetchWithAuth("/api/client/measurements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: todayPerth(),
+          date: today,
           bodyWeight: bodyWeightKg,
         }),
       });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setWeightGateError(typeof body?.error === "string" ? body.error : "Could not save weight.");
+        setWeightGateError(
+          typeof (body as { error?: string }).error === "string"
+            ? (body as { error: string }).error
+            : "Could not save weight."
+        );
         return;
       }
       setWeightGateReady(true);
     } catch {
-      setWeightGateError("Could not save weight.");
+      setWeightGateError("Could not save weight. Check your connection and try again.");
     } finally {
       setWeightGateSaving(false);
     }

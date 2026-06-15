@@ -10,6 +10,11 @@ export function todayPerth(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: PERTH_TZ });
 }
 
+/** Format any Date as YYYY-MM-DD in Perth (stable calendar day for stored timestamps). */
+export function toPerthDateString(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: PERTH_TZ });
+}
+
 /**
  * [start, end) UTC instants for a calendar day in Australia/Perth (YYYY-MM-DD).
  * For querying Firestore `date` fields for “this Perth day”.
@@ -24,22 +29,6 @@ export function getPerthDayBoundsUtc(yyyyMmDd: string): { start: Date; end: Date
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   return { start, end };
-}
-
-/** Format a Date as YYYY-MM-DD in Perth timezone (avoids UTC date shift). */
-function toPerthDateString(d: Date): string {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: PERTH_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(d);
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
-  const year = get("year");
-  const month = get("month");
-  const day = get("day");
-  return `${year}-${month}-${day}`;
 }
 
 /** Next Monday in Perth (YYYY-MM-DD). Used for "check-in open" Friday run: week starting next Monday. */
