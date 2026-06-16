@@ -30,10 +30,12 @@ export default function CoachHabitsOverviewPage() {
   const [clients, setClients] = useState<ClientHabitRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     setAuthError(false);
+    setLoadError(null);
     try {
       const res = await fetchWithAuth("/api/coach/habits");
       if (res.status === 401) {
@@ -43,7 +45,14 @@ export default function CoachHabitsOverviewPage() {
       if (res.ok) {
         const data = await res.json();
         setClients(Array.isArray(data.clients) ? data.clients : []);
+        return;
       }
+      const body = await res.json().catch(() => ({}));
+      setLoadError(typeof body?.error === "string" ? body.error : "Could not load habit data.");
+      setClients([]);
+    } catch {
+      setLoadError("Could not load habit data.");
+      setClients([]);
     } finally {
       setLoading(false);
     }
@@ -71,9 +80,18 @@ export default function CoachHabitsOverviewPage() {
 
       {loading && <p className="text-[var(--color-text-muted)]">Loading…</p>}
 
-      {!loading && clients.length === 0 && (
+      {loadError && (
+        <div className="rounded-lg border border-[var(--color-error)]/40 bg-[var(--color-error)]/10 px-3 py-2 text-sm text-[var(--color-error)]" role="alert">
+          {loadError}
+        </div>
+      )}
+
+      {!loading && !loadError && clients.length === 0 && (
         <Card className="p-8 text-center">
-          <p className="text-[var(--color-text-muted)]">No clients yet. Habit data will appear here once clients log habits.</p>
+          <p className="text-[var(--color-text-muted)]">No clients on your roster yet.</p>
+          <Link href="/coach/clients" className="mt-3 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline">
+            View clients →
+          </Link>
         </Card>
       )}
 

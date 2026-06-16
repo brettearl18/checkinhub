@@ -34,14 +34,34 @@ async function getCoachHabitsOverview(coachId: string): Promise<{ clients: Clien
     return { clients: [] };
   }
 
+  /** habit entries may be stored under client doc id or legacy auth uid */
+  const ownerIdsByClient = new Map<string, string[]>();
+  const allOwnerIds = new Set<string>();
+  for (const doc of clientsSnap.docs) {
+    const ids = new Set<string>([doc.id]);
+    const authUid = (doc.data() as { authUid?: string }).authUid;
+    if (typeof authUid === "string" && authUid.trim()) ids.add(authUid.trim());
+    const list = [...ids];
+    ownerIdsByClient.set(doc.id, list);
+    list.forEach((id) => allOwnerIds.add(id));
+  }
+
   const today = todayDate();
-  const entriesByClient = await fetchClientHabitEntriesBatch(db, clientIds);
+  const entriesByOwnerId = await fetchClientHabitEntriesBatch(db, [...allOwnerIds]);
   const clients: ClientHabitSummary[] = [];
 
   for (const doc of clientsSnap.docs) {
     const clientId = doc.id;
     const data = doc.data() as { firstName?: string; lastName?: string };
-    const docs = entriesByClient.get(clientId) ?? [];
+    const ownerIds = ownerIdsByClient.get(clientId) ?? [clientId];
+    const seenEntryKeys = new Set<string>();
+    const docs = ownerIds.flatMap((ownerId) => entriesByOwnerId.get(ownerId) ?? []).filter((entry) => {
+      const d = entry.data();
+      const key = `${d.habitId ?? ""}_${d.date ?? ""}`;
+      if (!d.habitId || !d.date || seenEntryKeys.has(key)) return false;
+      seenEntryKeys.add(key);
+      return true;
+    });
     const byHabit = entriesByHabitAndDate(docs);
 
     const todayEntries: Record<string, string> = {};
@@ -113,11 +133,12 @@ export async function GET(request: Request) {
     });
   }
 
-  const cached = await unstable_cache(
+  const cachedGetOverview = unstable_cache(
     async () => getCoachHabitsOverview(coachId),
     ["coach-habits", coachId],
     { revalidate: 60 }
   );
 
-  return NextResponse.json(cached);
+  const overview = await cachedGetOverview();
+  return NextResponse.json(overview);
 }

@@ -6,7 +6,7 @@ import { HABIT_DEFINITIONS, isGoalMet } from "@/lib/habits";
 import {
   entriesByHabitAndDate,
   computeStreakFromEntries,
-  fetchClientHabitEntries,
+  fetchClientHabitEntriesForOwners,
   todayDate,
 } from "@/lib/habits-streaks";
 
@@ -47,13 +47,17 @@ export async function GET(
   if (!clientSnap.exists) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
-  const clientData = clientSnap.data() as { coachId?: string };
+  const clientData = clientSnap.data() as { coachId?: string; authUid?: string };
   if (clientData.coachId !== coachId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const today = todayDate();
-  const docs = await fetchClientHabitEntries(db, clientId);
+  const ownerIds = [clientId];
+  if (typeof clientData.authUid === "string" && clientData.authUid.trim()) {
+    ownerIds.push(clientData.authUid.trim());
+  }
+  const docs = await fetchClientHabitEntriesForOwners(db, ownerIds);
   const byHabit = entriesByHabitAndDate(docs);
 
   const todayEntries: Record<string, string> = {};

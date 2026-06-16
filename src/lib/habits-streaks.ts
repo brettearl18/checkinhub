@@ -114,6 +114,29 @@ export async function fetchClientHabitEntries(
   return snap.docs as unknown as HabitEntryDoc[];
 }
 
+/** Merge habit entries stored under client doc id and/or legacy auth uid. */
+export async function fetchClientHabitEntriesForOwners(
+  db: Firestore,
+  ownerIds: string[]
+): Promise<HabitEntryDoc[]> {
+  const uniqueIds = [...new Set(ownerIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  const seen = new Set<string>();
+  const merged: HabitEntryDoc[] = [];
+  for (const ownerId of uniqueIds) {
+    const docs = await fetchClientHabitEntries(db, ownerId);
+    for (const doc of docs) {
+      const data = doc.data();
+      const key = `${data.habitId ?? ""}_${data.date ?? ""}`;
+      if (!data.habitId || !data.date || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(doc);
+    }
+  }
+  return merged;
+}
+
 const FIRESTORE_IN_QUERY_LIMIT = 30;
 
 /**
