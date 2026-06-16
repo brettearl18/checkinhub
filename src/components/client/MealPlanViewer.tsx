@@ -1,6 +1,12 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
+import {
+  formatMacroTargets,
+  groupMealPlanBySlot,
+  type MealPlanMacros,
+  type NormalizedMealOption,
+} from "@/lib/meal-plan-view";
 
 type AnyObj = Record<string, unknown>;
 
@@ -41,8 +47,8 @@ const WEIGHT_GUIDANCE_FIELDS: { key: string; label: string }[] = [
   { key: "oilsAndSpreads", label: "Oils and spreads" },
 ];
 
-function MacroGrid({ obj }: { obj: AnyObj }) {
-  const entries = Object.entries(obj);
+function MacroGrid({ obj }: { obj: AnyObj | MealPlanMacros }) {
+  const entries = Object.entries(obj).filter(([, v]) => v != null && v !== "");
   if (!entries.length) return null;
   return (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -52,6 +58,70 @@ function MacroGrid({ obj }: { obj: AnyObj }) {
           <p className="text-sm font-semibold text-[var(--color-text)]">{renderValue(v)}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function MealOptionCard({ meal }: { meal: NormalizedMealOption }) {
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
+          {meal.option ? `Option ${meal.option}` : "Meal option"}
+        </p>
+        {meal.isCustom && (
+          <span className="rounded-full bg-[var(--color-accent-muted)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-accent)]">
+            Custom
+          </span>
+        )}
+      </div>
+      <h3 className="mt-1 text-base font-semibold text-[var(--color-text)]">{meal.name}</h3>
+      {meal.whyThisMeal && (
+        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{meal.whyThisMeal}</p>
+      )}
+      {meal.macros && (
+        <div className="mt-3">
+          <MacroGrid obj={meal.macros} />
+        </div>
+      )}
+      {meal.ingredients.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Ingredients</p>
+          <ul className="space-y-2 text-sm text-[var(--color-text-secondary)]">
+            {meal.ingredients.map((ing, idx) => {
+              const notePart = ing.note != null && String(ing.note).trim() ? ` (${String(ing.note).trim()})` : "";
+              const showWeightType = nonEmptyString(ing.weightType);
+              return (
+                <li key={idx} className="leading-snug">
+                  <div>
+                    <span className="text-[var(--color-text)]">{renderValue(ing.item)}</span>
+                    <span className="text-[var(--color-text-secondary)]">
+                      {" "}
+                      — {renderValue(ing.qty)} {renderValue(ing.unit)}
+                      {notePart}
+                    </span>
+                  </div>
+                  {showWeightType && (
+                    <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                      Weight: {String(ing.weightType).trim()}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {meal.method.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Method</p>
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-[var(--color-text-secondary)]">
+            {meal.method.map((step, idx) => (
+              <li key={idx}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }
@@ -71,7 +141,7 @@ export function MealPlanViewer({ plan }: { plan: AnyObj }) {
   const mealSchedule = asObj(plan.mealSchedule);
   const mealBreakdown = asList(mealSchedule?.breakdown);
   const mealRules = asList(plan.mealRules).filter((x): x is string => typeof x === "string");
-  const meals = asList(plan.meals).map((m) => asObj(m)).filter((m): m is AnyObj => Boolean(m));
+  const mealSlotGroups = groupMealPlanBySlot(plan);
   const shoppingList = asObj(plan.shoppingList);
   const supplementSchedule = asObj(plan.supplementSchedule);
 
@@ -166,64 +236,41 @@ export function MealPlanViewer({ plan }: { plan: AnyObj }) {
         </Card>
       )}
 
-      {meals.length > 0 && (
+      {mealSlotGroups.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-lg font-medium text-[var(--color-text)]">Meal options</h2>
-          {meals.map((m, i) => {
-            const ingredients = asList(m.ingredients).map((x) => asObj(x)).filter((x): x is AnyObj => Boolean(x));
-            const method = asList(m.method).filter((x): x is string => typeof x === "string");
-            const macros = asObj(m.macros);
+          {mealSlotGroups.map((slot) => {
+            const targetSummary = formatMacroTargets(slot.targets);
             return (
-              <Card key={String(m.mealId ?? i)} className="p-6">
-                <p className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
-                  {String(m.meal ?? "")} {m.option ? `Option ${String(m.option)}` : ""}
-                </p>
-                <h3 className="mt-1 text-lg font-semibold text-[var(--color-text)]">{String(m.name ?? "Meal option")}</h3>
-                {typeof m.whyThisMeal === "string" && (
-                  <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{m.whyThisMeal}</p>
-                )}
-                {macros && (
-                  <div className="mt-3">
-                    <MacroGrid obj={macros} />
+              <Card key={slot.key} className="p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] pb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[var(--color-text)]">{slot.label}</h3>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[var(--color-text-muted)]">
+                      {slot.splitPct != null && <span>{renderValue(slot.splitPct)}% of daily intake</span>}
+                      {slot.suggestedTime && <span>Suggested: {slot.suggestedTime}</span>}
+                    </div>
                   </div>
-                )}
-                {ingredients.length > 0 && (
+                  {targetSummary && (
+                    <p className="text-sm font-medium text-[var(--color-accent)]">Target: {targetSummary}</p>
+                  )}
+                </div>
+                {slot.targets && (
                   <div className="mt-4">
-                    <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Ingredients</p>
-                    <ul className="space-y-2 text-sm text-[var(--color-text-secondary)]">
-                      {ingredients.map((ing, idx) => {
-                        const notePart = ing.note != null && String(ing.note).trim() ? ` (${String(ing.note).trim()})` : "";
-                        const showWeightType = nonEmptyString(ing.weightType);
-                        return (
-                          <li key={idx} className="leading-snug">
-                            <div>
-                              <span className="text-[var(--color-text)]">{renderValue(ing.item)}</span>
-                              <span className="text-[var(--color-text-secondary)]">
-                                {" "}
-                                — {renderValue(ing.qty)} {renderValue(ing.unit)}
-                                {notePart}
-                              </span>
-                            </div>
-                            {showWeightType && (
-                              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-                                Weight: {String(ing.weightType).trim()}
-                              </p>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                      Slot targets
+                    </p>
+                    <MacroGrid obj={slot.targets} />
                   </div>
                 )}
-                {method.length > 0 && (
-                  <div className="mt-4">
-                    <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Method</p>
-                    <ol className="list-decimal space-y-1 pl-5 text-sm text-[var(--color-text-secondary)]">
-                      {method.map((step, idx) => (
-                        <li key={idx}>{step}</li>
-                      ))}
-                    </ol>
+                {slot.options.length > 0 ? (
+                  <div className={`space-y-3 ${slot.targets ? "mt-4" : "mt-4"}`}>
+                    {slot.options.map((meal) => (
+                      <MealOptionCard key={meal.id} meal={meal} />
+                    ))}
                   </div>
+                ) : (
+                  <p className="mt-4 text-sm text-[var(--color-text-muted)]">No meal options added for this slot yet.</p>
                 )}
               </Card>
             );
