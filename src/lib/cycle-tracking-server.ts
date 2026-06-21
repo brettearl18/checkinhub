@@ -35,6 +35,7 @@ function cycleProfileToFirestore(profile: CycleProfile, now: Date): Record<strin
     computedCycleLengthMax: profile.computedCycleLengthMax,
     setupCompleted: profile.setupCompleted,
     cyclePromoDismissedAt: profile.cyclePromoDismissedAt,
+    cycleDashboardBannerDismissedAt: profile.cycleDashboardBannerDismissedAt,
     optedInAt: profile.optedInAt ?? null,
     setupCompletedAt: profile.setupCompletedAt ?? null,
     createdAt: profile.createdAt ?? now,
@@ -84,6 +85,11 @@ function profileFromDoc(clientId: string, data: DocumentData | undefined): Cycle
     cyclePromoDismissedAt:
       typeof data.cyclePromoDismissedAt === "string" && data.cyclePromoDismissedAt.trim()
         ? data.cyclePromoDismissedAt.trim()
+        : null,
+    cycleDashboardBannerDismissedAt:
+      typeof data.cycleDashboardBannerDismissedAt === "string" &&
+      data.cycleDashboardBannerDismissedAt.trim()
+        ? data.cycleDashboardBannerDismissedAt.trim()
         : null,
     optedInAt:
       typeof data.optedInAt === "string" && data.optedInAt.trim() ? data.optedInAt.trim() : null,

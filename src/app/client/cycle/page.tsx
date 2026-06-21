@@ -343,6 +343,8 @@ export default function ClientCyclePage() {
       setShowSetupRedo(false);
       setSuccess(variant === "redo" ? "Cycle setup updated" : "Cycle tracking is ready");
       setTimeout(() => setSuccess(null), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save setup");
     } finally {
       setSaving(false);
     }

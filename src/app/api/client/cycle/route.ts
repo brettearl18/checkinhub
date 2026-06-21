@@ -186,6 +186,10 @@ export async function PATCH(request: Request) {
     patch.cyclePromoDismissedAt = today;
   }
 
+  if (body.dismissCycleDashboardBanner === true) {
+    patch.cycleDashboardBannerDismissedAt = today;
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }

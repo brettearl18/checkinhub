@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { ClientDashboardBadges } from "@/components/client/ClientDashboardBadges";
+import { CycleTrackerDashboardBanner } from "@/components/client/CycleTrackerDashboardBanner";
 import { HabitWeeklyStrip } from "@/components/client/HabitWeeklyStrip";
 import { CheckInProgressChart } from "@/components/ui/CheckInProgressChart";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
@@ -513,6 +514,8 @@ export default function ClientPortalPage() {
           )}
         </div>
       </header>
+
+      {!authError && <CycleTrackerDashboardBanner />}
 
       {!authError && <ClientDashboardBadges className="mt-5" />}
 

@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
+import { getFirebaseAuthErrorMessage, isFirebaseAuthError } from "@/lib/firebase-auth-errors";
 
 export type Role = "client" | "coach" | "admin" | null;
 
@@ -106,7 +107,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getToken = useCallback(
     async (forceRefresh = false): Promise<string | null> => {
       if (!user) return null;
-      return user.getIdToken(forceRefresh);
+      try {
+        return await user.getIdToken(forceRefresh);
+      } catch (err) {
+        if (isFirebaseAuthError(err)) {
+          throw new Error(getFirebaseAuthErrorMessage(err));
+        }
+        throw err;
+      }
     },
     [user]
   );

@@ -131,6 +131,7 @@ export default function CoachClientCyclePage() {
                 computedCycleLengthMin: null,
                 computedCycleLengthMax: null,
                 cyclePromoDismissedAt: null,
+                cycleDashboardBannerDismissedAt: null,
                 setupCompleted: true,
               }}
               phaseInfo={data.phase}

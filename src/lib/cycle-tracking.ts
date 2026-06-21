@@ -34,6 +34,7 @@ export interface CycleProfile {
   computedCycleLengthMax: number | null;
   setupCompleted: boolean;
   cyclePromoDismissedAt: string | null;
+  cycleDashboardBannerDismissedAt: string | null;
   optedInAt?: string | null;
   setupCompletedAt?: string | null;
   createdAt?: Date;
@@ -152,6 +153,7 @@ export function defaultCycleProfile(clientId: string): CycleProfile {
     computedCycleLengthMax: null,
     setupCompleted: false,
     cyclePromoDismissedAt: null,
+    cycleDashboardBannerDismissedAt: null,
   };
 }
 
@@ -161,6 +163,13 @@ export function shouldShowCyclePromo(
   if (profile.cyclePromoDismissedAt) return false;
   if (profile.setupCompleted) return false;
   return true;
+}
+
+/** Dashboard promo — stays visible until dismissed, even after setup. */
+export function shouldShowCycleDashboardBanner(
+  profile: Pick<CycleProfile, "cycleDashboardBannerDismissedAt">
+): boolean {
+  return !profile.cycleDashboardBannerDismissedAt;
 }
 
 export function historyWindowLabel(historyMaxDays: number): string {

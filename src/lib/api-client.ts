@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getFirebaseAuthErrorMessage, isFirebaseAuthError } from "@/lib/firebase-auth-errors";
 
 export function useApiClient() {
   const { getToken } = useAuth();
@@ -33,6 +34,9 @@ export function useApiClient() {
           throw new Error(
             "Network error. Check your connection and that the app is running (e.g. npm run dev)."
           );
+        }
+        if (isFirebaseAuthError(err)) {
+          throw new Error(getFirebaseAuthErrorMessage(err));
         }
         throw err;
       }

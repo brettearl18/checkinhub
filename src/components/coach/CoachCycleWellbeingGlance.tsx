@@ -40,6 +40,7 @@ function profileForRing(clientId: string, profile: NonNullable<CoachCycleGlanceD
     computedCycleLengthMin: null,
     computedCycleLengthMax: null,
                 cyclePromoDismissedAt: null,
+                cycleDashboardBannerDismissedAt: null,
                 setupCompleted: true,
   };
 }
