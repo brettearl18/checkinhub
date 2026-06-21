@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { CoachCycleWellbeingGlance, type CoachCycleGlanceData } from "@/components/coach/CoachCycleWellbeingGlance";
 import { CoachLegacyProgressPhotoUpload } from "@/components/coach/CoachLegacyProgressPhotoUpload";
 import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
@@ -302,6 +303,7 @@ export default function CoachClientProgressPage() {
   const [authError, setAuthError] = useState(false);
   const [habitRange, setHabitRange] = useState<HabitStripRange>("30d");
   const [measurementRange, setMeasurementRange] = useState<MeasurementRangeKey>("180d");
+  const [cycleGlance, setCycleGlance] = useState<CoachCycleGlanceData | null>(null);
 
   const applyProgressPayload = useCallback((data: Record<string, unknown>) => {
     const c = (data.client ?? {}) as { firstName?: string; lastName?: string };
@@ -336,16 +338,22 @@ export default function CoachClientProgressPage() {
       setLoading(true);
       setAuthError(false);
       try {
-        const [progressRes, habitsRes] = await Promise.all([
+        const [progressRes, habitsRes, cycleRes] = await Promise.all([
           fetchWithAuth(`/api/coach/clients/${clientId}/progress`),
           fetchWithAuth(`/api/coach/clients/${clientId}/habits`),
+          fetchWithAuth(`/api/coach/clients/${clientId}/cycle`),
         ]);
-        if (progressRes.status === 401 || habitsRes.status === 401) {
+        if (progressRes.status === 401 || habitsRes.status === 401 || cycleRes.status === 401) {
           setAuthError(true);
           return;
         }
         if (progressRes.ok) {
           applyProgressPayload(await progressRes.json());
+        }
+        if (cycleRes.ok) {
+          setCycleGlance((await cycleRes.json()) as CoachCycleGlanceData);
+        } else {
+          setCycleGlance(null);
         }
         if (habitsRes.ok) {
           const h = await habitsRes.json();
@@ -494,7 +502,7 @@ export default function CoachClientProgressPage() {
             Progress: {loading ? "…" : clientName.toUpperCase()}
           </h1>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            Scores, body measurements, habits, and photos at a glance
+            Scores, body measurements, habits, cycle, and photos at a glance
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -587,6 +595,8 @@ export default function CoachClientProgressPage() {
               )}
             </Card>
           </div>
+
+          <CoachCycleWellbeingGlance clientId={clientId} data={cycleGlance} />
 
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Score trend */}

@@ -470,12 +470,20 @@ export default function ClientPortalPage() {
                 &ldquo;{profile?.profilePersonalization?.quote ?? ""}&rdquo;
               </p>
             )}
-            <Link
-              href="/client/profile#body-weight"
-              className="mt-4 inline-flex items-center rounded-full border border-stone-200/80 bg-[#faf7f2] px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-            >
-              Log body weight
-            </Link>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                href="/client/profile#body-weight"
+                className="inline-flex items-center rounded-full border border-stone-200/80 bg-[#faf7f2] px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+              >
+                Log body weight
+              </Link>
+              <Link
+                href="/client/cycle"
+                className="inline-flex items-center rounded-full border border-stone-200/80 bg-[#faf7f2] px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+              >
+                Track cycle
+              </Link>
+            </div>
           </div>
           {!loading && questionProgressSummary && (
             <div

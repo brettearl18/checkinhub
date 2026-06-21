@@ -14,6 +14,9 @@ export interface CyclePeriodRecord {
   end: string;
 }
 
+export const CYCLE_HISTORY_3_MONTHS_DAYS = 92;
+export const CYCLE_HISTORY_6_MONTHS_DAYS = 183;
+
 export interface CycleProfile {
   clientId: string;
   trackingEnabled: boolean;
@@ -30,6 +33,7 @@ export interface CycleProfile {
   computedCycleLengthMin: number | null;
   computedCycleLengthMax: number | null;
   setupCompleted: boolean;
+  cyclePromoDismissedAt: string | null;
   optedInAt?: string | null;
   setupCompletedAt?: string | null;
   createdAt?: Date;
@@ -147,7 +151,20 @@ export function defaultCycleProfile(clientId: string): CycleProfile {
     computedCycleLengthMin: null,
     computedCycleLengthMax: null,
     setupCompleted: false,
+    cyclePromoDismissedAt: null,
   };
+}
+
+export function shouldShowCyclePromo(
+  profile: Pick<CycleProfile, "setupCompleted" | "cyclePromoDismissedAt">
+): boolean {
+  if (profile.cyclePromoDismissedAt) return false;
+  if (profile.setupCompleted) return false;
+  return true;
+}
+
+export function historyWindowLabel(historyMaxDays: number): string {
+  return historyMaxDays <= CYCLE_HISTORY_3_MONTHS_DAYS ? "3 months" : "6 months";
 }
 
 export function needsCycleSetup(profile: Pick<CycleProfile, "trackingEnabled" | "setupCompleted">): boolean {
@@ -272,8 +289,9 @@ export function validateCycleSetup(
   }
 
   const historyCutoff = addCalendarDays(today, -historyMaxDays);
+  const historyLabel = historyWindowLabel(historyMaxDays);
   if (lastPeriodStart < historyCutoff) {
-    return { ok: false, error: "Most recent period must be within the last 6 months" };
+    return { ok: false, error: `Most recent period must be within the last ${historyLabel}` };
   }
 
   const latestPeriodLength = periodLengthFromRange(lastPeriodStart, lastPeriodEnd);
@@ -293,7 +311,7 @@ export function validateCycleSetup(
       return { ok: false, error: "Each past period needs a valid start and end date" };
     }
     if (period.start < historyCutoff) {
-      return { ok: false, error: "Past periods must be within the last 6 months" };
+      return { ok: false, error: `Past periods must be within the last ${historyLabel}` };
     }
     const len = periodLengthFromRange(period.start, period.end);
     if (len < 2 || len > 14) {
@@ -307,7 +325,7 @@ export function validateCycleSetup(
   ]);
 
   if (periodHistory.length > 8) {
-    return { ok: false, error: "You can add up to 8 periods within 6 months" };
+    return { ok: false, error: `You can add up to 8 periods within ${historyLabel}` };
   }
 
   for (let i = 0; i < periodHistory.length; i++) {

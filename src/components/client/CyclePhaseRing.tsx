@@ -10,17 +10,21 @@ import { CYCLE_PHASE_META, type CyclePhaseInfo, type CycleProfile } from "@/lib/
 export function CyclePhaseRing({
   profile,
   phaseInfo,
+  compact = false,
+  viewer = "client",
 }: {
   profile: CycleProfile;
   phaseInfo: CyclePhaseInfo;
+  compact?: boolean;
+  viewer?: "client" | "coach";
 }) {
   const prediction = computePeriodPrediction(profile);
   const cycleLength = profile.averageCycleLength;
   const cycleDay = phaseInfo.cycleDay;
   const segments = computeRingSegments(cycleLength, profile.averagePeriodLength);
 
-  const size = 240;
-  const stroke = 20;
+  const size = compact ? 168 : 240;
+  const stroke = compact ? 14 : 20;
   const radius = (size - stroke) / 2;
   const cx = size / 2;
   const cy = size / 2;
@@ -87,20 +91,30 @@ export function CyclePhaseRing({
         <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
           {cycleDay != null ? (
             <>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+              <p
+                className={`font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)] ${
+                  compact ? "text-[9px]" : "text-[10px]"
+                }`}
+              >
                 Cycle day {cycleDay}
               </p>
-              <p className="mt-2 text-lg font-semibold leading-snug text-[var(--color-text)]">
+              <p
+                className={`mt-1 font-semibold leading-snug text-[var(--color-text)] ${
+                  compact ? "text-sm" : "mt-2 text-lg"
+                }`}
+              >
                 {prediction.headline}
               </p>
-              {prediction.subline && (
+              {prediction.subline && !compact && (
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">{prediction.subline}</p>
               )}
             </>
           ) : (
             <>
-              <p className="text-lg font-semibold text-[var(--color-text)]">{prediction.headline}</p>
-              {prediction.subline && (
+              <p className={`font-semibold text-[var(--color-text)] ${compact ? "text-sm" : "text-lg"}`}>
+                {prediction.headline}
+              </p>
+              {prediction.subline && !compact && (
                 <p className="mt-1 text-sm text-[var(--color-text-muted)]">{prediction.subline}</p>
               )}
             </>
@@ -108,37 +122,42 @@ export function CyclePhaseRing({
         </div>
       </div>
 
-      {activePhase && (
+      {activePhase && !compact && (
         <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
-          You&apos;re in the{" "}
+          {viewer === "coach" ? "Currently in the " : "You're in the "}
           <span className="font-medium text-[var(--color-text)]">
             {CYCLE_PHASE_META[activePhase].label.toLowerCase()} phase
           </span>
+          {viewer === "coach" ? " (estimated)" : ""}
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap justify-center gap-2">
-        {segments.map((seg) => {
-          const isActive = activePhase === seg.phase;
-          return (
-            <span
-              key={seg.phase}
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                isActive
-                  ? "bg-[var(--color-primary-subtle)] font-medium text-[var(--color-text)]"
-                  : "text-[var(--color-text-muted)]"
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: seg.color }} aria-hidden />
-              {seg.label}
-            </span>
-          );
-        })}
-      </div>
+      {!compact && (
+        <>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {segments.map((seg) => {
+              const isActive = activePhase === seg.phase;
+              return (
+                <span
+                  key={seg.phase}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
+                    isActive
+                      ? "bg-[var(--color-primary-subtle)] font-medium text-[var(--color-text)]"
+                      : "text-[var(--color-text-muted)]"
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: seg.color }} aria-hidden />
+                  {seg.label}
+                </span>
+              );
+            })}
+          </div>
 
-      <p className="mt-3 max-w-xs text-center text-xs text-[var(--color-text-muted)]">
-        Estimated only — not medical advice. Individual cycles vary.
-      </p>
+          <p className="mt-3 max-w-xs text-center text-xs text-[var(--color-text-muted)]">
+            Estimated only — not medical advice. Individual cycles vary.
+          </p>
+        </>
+      )}
     </div>
   );
 }

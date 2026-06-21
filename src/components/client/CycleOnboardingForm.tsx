@@ -5,8 +5,10 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import {
+  CYCLE_HISTORY_6_MONTHS_DAYS,
   CYCLE_PHASE_META,
   computeStatsFromPeriodHistory,
+  historyWindowLabel,
   normalizePeriodHistory,
   periodLengthFromRange,
   type CyclePeriodRecord,
@@ -14,8 +16,23 @@ import {
   type CycleSetupInput,
 } from "@/lib/cycle-tracking";
 import { todayPerth } from "@/lib/perth-date";
+import { formatMonthYearDisplay } from "@/lib/format-date";
 
 const emptyPastPeriod = (): CyclePeriodRecord => ({ start: "", end: "" });
+
+function pastPeriodRowLabel(
+  start: string,
+  displayIndex: number,
+  duplicateIndex: number,
+  totalWithSameMonth: number
+): string {
+  const monthYear = formatMonthYearDisplay(start);
+  if (!monthYear) {
+    return displayIndex === 0 ? "Previous period" : "Earlier period";
+  }
+  if (totalWithSameMonth > 1) return `${monthYear} (${duplicateIndex + 1})`;
+  return monthYear;
+}
 
 export type CycleOnboardingInitialValues = {
   lastPeriodStart?: string;
@@ -40,6 +57,8 @@ export function CycleOnboardingForm({
   initialValues,
   onCancel,
   variant = "setup",
+  historyMaxDays = CYCLE_HISTORY_6_MONTHS_DAYS,
+  seedPastPeriodRows = false,
 }: {
   saving: boolean;
   error: string | null;
@@ -47,18 +66,27 @@ export function CycleOnboardingForm({
   initialValues?: CycleOnboardingInitialValues;
   onCancel?: () => void;
   variant?: "setup" | "redo";
+  historyMaxDays?: number;
+  seedPastPeriodRows?: boolean;
 }) {
   const today = todayPerth();
+  const historyLabel = historyWindowLabel(historyMaxDays);
   const historyMin = useMemo(() => {
     const d = new Date(today + "T12:00:00");
-    d.setDate(d.getDate() - 183);
+    d.setDate(d.getDate() - historyMaxDays);
     return d.toISOString().slice(0, 10);
-  }, [today]);
+  }, [today, historyMaxDays]);
 
   const [lastPeriodStart, setLastPeriodStart] = useState(initialValues?.lastPeriodStart ?? "");
   const [lastPeriodEnd, setLastPeriodEnd] = useState(initialValues?.lastPeriodEnd ?? "");
-  const [pastPeriods, setPastPeriods] = useState<CyclePeriodRecord[]>(initialValues?.pastPeriods ?? []);
-  const [showPastPeriods, setShowPastPeriods] = useState((initialValues?.pastPeriods?.length ?? 0) > 0);
+  const [pastPeriods, setPastPeriods] = useState<CyclePeriodRecord[]>(() => {
+    if (initialValues?.pastPeriods?.length) return initialValues.pastPeriods;
+    if (seedPastPeriodRows) return [emptyPastPeriod(), emptyPastPeriod()];
+    return [];
+  });
+  const [showPastPeriods, setShowPastPeriods] = useState(
+    (initialValues?.pastPeriods?.length ?? 0) > 0 || seedPastPeriodRows
+  );
   const [averageCycleLength, setAverageCycleLength] = useState(
     String(initialValues?.averageCycleLength ?? 28)
   );
@@ -88,6 +116,36 @@ export function CycleOnboardingForm({
     if (history.length < 2) return null;
     return computeStatsFromPeriodHistory(history);
   }, [lastPeriodStart, lastPeriodEnd, pastPeriods]);
+
+  const pastPeriodsForDisplay = useMemo(() => {
+    const monthCounts = new Map<string, number>();
+    for (const period of pastPeriods) {
+      const key = formatMonthYearDisplay(period.start);
+      if (key) monthCounts.set(key, (monthCounts.get(key) ?? 0) + 1);
+    }
+
+    const monthSeen = new Map<string, number>();
+
+    return pastPeriods
+      .map((period, index) => ({ period, index }))
+      .sort((a, b) => {
+        if (!a.period.start && !b.period.start) return a.index - b.index;
+        if (!a.period.start) return 1;
+        if (!b.period.start) return -1;
+        return b.period.start.localeCompare(a.period.start);
+      })
+      .map(({ period, index }, displayIndex) => {
+        const monthYear = formatMonthYearDisplay(period.start);
+        const duplicateIndex = monthYear ? monthSeen.get(monthYear) ?? 0 : 0;
+        if (monthYear) monthSeen.set(monthYear, duplicateIndex + 1);
+        const totalWithSameMonth = monthYear ? monthCounts.get(monthYear) ?? 1 : 1;
+        return {
+          period,
+          index,
+          label: pastPeriodRowLabel(period.start, displayIndex, duplicateIndex, totalWithSameMonth),
+        };
+      });
+  }, [pastPeriods]);
 
   const needsManualCycleLength = !computedHistory;
 
@@ -210,8 +268,8 @@ export function CycleOnboardingForm({
             <div>
               <h3 className="text-sm font-semibold text-[var(--color-text)]">Earlier periods (optional)</h3>
               <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                Add up to 6 months of past periods — start and end dates only. We&apos;ll calculate your average
-                cycle length automatically.
+                Add past periods from the last {historyLabel} if you remember them — start and end dates only.
+                Skip this section if you don&apos;t have earlier dates.
               </p>
             </div>
             {!showPastPeriods && (
@@ -223,13 +281,13 @@ export function CycleOnboardingForm({
 
           {showPastPeriods && (
             <div className="space-y-4">
-              {pastPeriods.map((period, index) => (
+              {pastPeriodsForDisplay.map(({ period, index, label }) => (
                 <div
                   key={index}
                   className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-3 space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-[var(--color-text-muted)]">Period {index + 1}</p>
+                    <p className="text-xs font-semibold text-[var(--color-text)]">{label}</p>
                     <button
                       type="button"
                       onClick={() => removePastPeriod(index)}

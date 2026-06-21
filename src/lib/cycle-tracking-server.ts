@@ -16,6 +16,32 @@ function parsePeriodHistory(data: DocumentData | undefined): CyclePeriodRecord[]
   return parsePeriodRecords(data.periodHistory);
 }
 
+/** Firestore rejects undefined field values — write an explicit document shape. */
+function cycleProfileToFirestore(profile: CycleProfile, now: Date): Record<string, unknown> {
+  return {
+    clientId: profile.clientId,
+    trackingEnabled: profile.trackingEnabled,
+    shareWithCoach: profile.shareWithCoach,
+    shareNotesWithCoach: profile.shareNotesWithCoach,
+    averageCycleLength: profile.averageCycleLength,
+    averagePeriodLength: profile.averagePeriodLength,
+    lastPeriodStart: profile.lastPeriodStart,
+    lastPeriodEnd: profile.lastPeriodEnd,
+    periodHistory: profile.periodHistory.map((p) => ({ start: p.start, end: p.end })),
+    trackSexualActivity: profile.trackSexualActivity,
+    cycleRegularity: profile.cycleRegularity,
+    onHormonalBirthControl: profile.onHormonalBirthControl,
+    computedCycleLengthMin: profile.computedCycleLengthMin,
+    computedCycleLengthMax: profile.computedCycleLengthMax,
+    setupCompleted: profile.setupCompleted,
+    cyclePromoDismissedAt: profile.cyclePromoDismissedAt,
+    optedInAt: profile.optedInAt ?? null,
+    setupCompletedAt: profile.setupCompletedAt ?? null,
+    createdAt: profile.createdAt ?? now,
+    updatedAt: now,
+  };
+}
+
 function profileFromDoc(clientId: string, data: DocumentData | undefined): CycleProfile {
   const base = defaultCycleProfile(clientId);
   if (!data) return base;
@@ -55,6 +81,10 @@ function profileFromDoc(clientId: string, data: DocumentData | undefined): Cycle
       typeof data.setupCompleted === "boolean"
         ? data.setupCompleted
         : Boolean(data.lastPeriodStart),
+    cyclePromoDismissedAt:
+      typeof data.cyclePromoDismissedAt === "string" && data.cyclePromoDismissedAt.trim()
+        ? data.cyclePromoDismissedAt.trim()
+        : null,
     optedInAt:
       typeof data.optedInAt === "string" && data.optedInAt.trim() ? data.optedInAt.trim() : null,
     setupCompletedAt:
@@ -112,7 +142,10 @@ export async function saveCycleProfile(
     updatedAt: now,
     createdAt: existing.createdAt ?? now,
   };
-  await db.collection(CYCLE_PROFILES_COLLECTION).doc(clientId).set(next, { merge: true });
+  await db
+    .collection(CYCLE_PROFILES_COLLECTION)
+    .doc(clientId)
+    .set(cycleProfileToFirestore(next, now), { merge: true });
   return next;
 }
 

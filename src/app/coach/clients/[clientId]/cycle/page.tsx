@@ -130,6 +130,7 @@ export default function CoachClientCyclePage() {
                 onHormonalBirthControl: null,
                 computedCycleLengthMin: null,
                 computedCycleLengthMax: null,
+                cyclePromoDismissedAt: null,
                 setupCompleted: true,
               }}
               phaseInfo={data.phase}

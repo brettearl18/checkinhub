@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { BodyWeightBeforeCheckInModal } from "@/components/client/BodyWeightBeforeCheckInModal";
 import {
+  CycleTrackerPromoModal,
+  fetchShouldShowCyclePromo,
+} from "@/components/client/CycleTrackerPromoModal";
+import {
   buildResponses,
   checkInInputClass as inputClass,
   type DraftResponse,
@@ -44,6 +48,8 @@ export default function CheckInFormPage() {
   const [weightGateReady, setWeightGateReady] = useState(false);
   const [weightGatePrefill, setWeightGatePrefill] = useState<number | null>(null);
   const [weightGateSaving, setWeightGateSaving] = useState(false);
+  const [cyclePromoOpen, setCyclePromoOpen] = useState(false);
+  const [cyclePromoTrackingEnabled, setCyclePromoTrackingEnabled] = useState(false);
   const [weightGateError, setWeightGateError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,6 +113,20 @@ export default function CheckInFormPage() {
       cancelled = true;
     };
   }, [data, fetchWithAuth]);
+
+  useEffect(() => {
+    if (!submitResult) return;
+    let cancelled = false;
+    (async () => {
+      const { show, trackingEnabled } = await fetchShouldShowCyclePromo(fetchWithAuth);
+      if (cancelled || !show) return;
+      setCyclePromoTrackingEnabled(trackingEnabled);
+      setCyclePromoOpen(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [submitResult, fetchWithAuth]);
 
   const handleWeightGateContinue = async (bodyWeightKg: number) => {
     setWeightGateSaving(true);
@@ -358,6 +378,11 @@ export default function CheckInFormPage() {
             </div>
           </div>
         </Card>
+        <CycleTrackerPromoModal
+          open={cyclePromoOpen}
+          trackingEnabled={cyclePromoTrackingEnabled}
+          onClose={() => setCyclePromoOpen(false)}
+        />
       </div>
     );
   }

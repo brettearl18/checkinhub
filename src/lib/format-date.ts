@@ -65,3 +65,15 @@ export function formatDateTimeDisplay(
     minute: "2-digit",
   });
 }
+
+/**
+ * Month + year from a calendar date key (e.g. "May 2026").
+ */
+export function formatMonthYearDisplay(value: string | null | undefined): string | null {
+  if (value == null || value === "") return null;
+  const isoDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value).trim());
+  if (!isoDay) return null;
+  const d = new Date(`${isoDay[0]}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
