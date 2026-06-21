@@ -324,6 +324,9 @@ export default function CoachClientCheckInsPage() {
             <Link href={`/coach/clients/${clientId}/habits`}>Habits</Link>
           </Button>
           <Button asChild variant="secondary">
+            <Link href={`/coach/clients/${clientId}/cycle`}>Cycle</Link>
+          </Button>
+          <Button asChild variant="secondary">
             <Link href={`/coach/clients/${clientId}/settings`}>Settings</Link>
           </Button>
           <Button variant="secondary" onClick={() => setProgramAssignOpen(true)}>

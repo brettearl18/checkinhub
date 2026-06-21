@@ -27,7 +27,7 @@ interface Profile {
   timezone: string;
   profile: Record<string, unknown>;
   profilePersonalization: { quote: string | null; showQuote: boolean; colorTheme: string; icon: string | null };
-  mealPlanJson?: Record<string, unknown> | null;
+  cycleTrackingEnabled?: boolean;
 }
 
 interface CoachReview {
@@ -302,6 +302,30 @@ export default function ClientProfilePage() {
           </Link>{" "}
           — optional tape measurements and full history.
         </p>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Cycle & wellbeing</h2>
+        {profile?.cycleTrackingEnabled ? (
+          <>
+            <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+              You&apos;re using cycle tracking. Log mood, energy, and period days.
+            </p>
+            <Button asChild variant="secondary">
+              <Link href="/client/cycle">Open cycle tracker</Link>
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+              Optional period and mood tracking. Opt in when you&apos;re ready — nothing is recorded until you choose
+              to start.
+            </p>
+            <Button asChild variant="primary">
+              <Link href="/client/cycle">Set up cycle tracking</Link>
+            </Button>
+          </>
+        )}
       </Card>
 
       <Card className="p-6">

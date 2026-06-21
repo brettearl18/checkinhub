@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { TimelineAnnouncementModal } from "@/components/client/TimelineAnnouncementModal";
 import { VanaBrandBar } from "@/components/client/VanaBrandBar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useApiClient } from "@/lib/api-client";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
 
 /** Vana theme trial — entire client portal; dashboard is the primary preview surface */
@@ -40,6 +41,7 @@ const NAV_SECTIONS: { label: string; links: NavLinkItem[] }[] = [
       { href: "/client/timeline", label: "Timeline", icon: TimelineIcon },
       { href: "/client/measurements", label: "Measurements", icon: MeasurementsIcon },
       { href: "/client/goals", label: "Goals", icon: GoalsIcon },
+      { href: "/client/cycle", label: "Cycle", icon: CycleIcon },
       { href: "/client/progress-photos", label: "Photos", icon: PhotosIcon },
     ],
   },
@@ -58,16 +60,19 @@ const NAV_SECTIONS: { label: string; links: NavLinkItem[] }[] = [
 
 const NAV_LINKS = NAV_SECTIONS.flatMap((section) => [...section.links]);
 
+function navSectionsForClient(cycleTrackingEnabled: boolean) {
+  return NAV_SECTIONS.map((section) => ({
+    ...section,
+    links: section.links.filter((link) => link.href !== "/client/cycle" || cycleTrackingEnabled),
+  })).filter((section) => section.links.length > 0);
+}
+
 const BOTTOM_NAV: { href: string; label: string; short: string; icon: NavIcon }[] = [
   { href: "/client", label: "Home", short: "Home", icon: HomeIcon },
   { href: "/client/program", label: "Program", short: "Workouts", icon: ProgramIcon },
   { href: "/client/check-in/new", label: "New check-in", short: "Check-in", icon: CheckInIcon },
   { href: "/client/progress", label: "Progress", short: "Progress", icon: ProgressIcon },
 ];
-
-const MORE_LINKS = NAV_LINKS.filter(
-  (n) => !BOTTOM_NAV.some((b) => b.href === n.href)
-);
 
 function NavSection({
   label,
@@ -152,7 +157,43 @@ export default function ClientLayout({
   const pathname = usePathname();
   const router = useRouter();
   const { user, identity, authReady, loading, signOut } = useAuth();
+  const { fetchWithAuth } = useApiClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [cycleTrackingEnabled, setCycleTrackingEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const loadCycleNav = async () => {
+      try {
+        const res = await fetchWithAuth("/api/client/cycle");
+        if (res.ok && !cancelled) {
+          const json = await res.json();
+          setCycleTrackingEnabled(Boolean(json.profile?.trackingEnabled));
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+    loadCycleNav();
+    const onCycleUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
+      if (typeof detail?.enabled === "boolean") {
+        setCycleTrackingEnabled(detail.enabled);
+      } else {
+        loadCycleNav();
+      }
+    };
+    window.addEventListener("cycle-tracking-updated", onCycleUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("cycle-tracking-updated", onCycleUpdate);
+    };
+  }, [user, fetchWithAuth, pathname]);
+
+  const navSections = navSectionsForClient(cycleTrackingEnabled);
+  const navLinks = navSections.flatMap((section) => [...section.links]);
+  const moreLinks = navLinks.filter((n) => !BOTTOM_NAV.some((b) => b.href === n.href));
 
   useEffect(() => {
     if (!authReady) return;
@@ -206,7 +247,7 @@ export default function ClientLayout({
         </p>
         <nav className="flex-1 space-y-4 p-3 overflow-y-auto">
           <RecipeHubNavLink />
-          {NAV_SECTIONS.map((section) => (
+          {navSections.map((section) => (
             <NavSection key={section.label} label={section.label}>
               {section.links.map(({ href, label, icon }) => (
                 <NavLink key={href} href={href} label={label} icon={icon} active={isActive(href)} />
@@ -278,7 +319,7 @@ export default function ClientLayout({
           type="button"
           onClick={() => setDrawerOpen(true)}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 px-1 text-[10px] font-medium transition-colors ${
-            MORE_LINKS.some((l) => isActive(l.href))
+            moreLinks.some((l) => isActive(l.href))
               ? "text-[var(--color-primary)]"
               : "text-[var(--color-text-muted)] active:bg-[var(--color-bg)]"
           }`}
@@ -311,7 +352,7 @@ export default function ClientLayout({
               </div>
               <div className="space-y-4">
                 <RecipeHubNavLink onClick={() => setDrawerOpen(false)} />
-                {NAV_SECTIONS.map((section) => (
+                {navSections.map((section) => (
                   <NavSection key={section.label} label={section.label}>
                     {section.links.map(({ href, label, icon }) => (
                       <NavLink
@@ -466,6 +507,16 @@ function GoalsIcon({ className }: { className?: string }) {
       <circle cx="12" cy="12" r="8" />
       <circle cx="12" cy="12" r="4" />
       <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+    </NavSvg>
+  );
+}
+
+function CycleIcon({ className }: { className?: string }) {
+  return (
+    <NavSvg className={className}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4a4 4 0 0 1 0 8" />
+      <path d="M12 12a4 4 0 0 1 0 8" />
     </NavSvg>
   );
 }

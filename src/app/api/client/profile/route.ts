@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { fetchCycleProfile } from "@/lib/cycle-tracking-server";
 
 export async function GET(request: Request) {
   const authResult = await requireClient(request);
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
       paymentStatus: null,
       mealPlanLinks: [],
       mealPlanJson: null,
+      cycleTrackingEnabled: false,
     });
   }
 
@@ -39,6 +41,7 @@ export async function GET(request: Request) {
   if (mealPlanLinks.length === 0 && data.mealPlanName && data.mealPlanUrl) {
     mealPlanLinks = [{ label: String(data.mealPlanName), url: String(data.mealPlanUrl) }];
   }
+  const cycleProfile = await fetchCycleProfile(db, clientId);
   const profile = {
     id: clientSnap.id,
     firstName: data.firstName ?? "",
@@ -59,6 +62,7 @@ export async function GET(request: Request) {
       data.mealPlanJson && typeof data.mealPlanJson === "object" && !Array.isArray(data.mealPlanJson)
         ? (data.mealPlanJson as Record<string, unknown>)
         : null,
+    cycleTrackingEnabled: cycleProfile.trackingEnabled,
   };
   return NextResponse.json(profile);
 }
