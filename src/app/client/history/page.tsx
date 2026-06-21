@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
+import { MissedAssignmentsPanel } from "@/components/client/MissedAssignmentsPanel";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDdMmYyyy, formatDateDisplay } from "@/lib/format-date";
 
@@ -61,7 +62,9 @@ export default function ClientHistoryPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-[var(--color-text)]">Check-in history</h1>
-      <p className="text-sm text-[var(--color-text-secondary)]">Past check-ins, sorted by date completed.</p>
+      <p className="text-sm text-[var(--color-text-secondary)]">
+        Past check-ins, sorted by date completed.
+      </p>
 
       {loadError && (
         <div className="rounded border border-[var(--color-error)] px-4 py-3 text-sm text-[var(--color-error)] flex items-center justify-between gap-3">
@@ -117,6 +120,8 @@ export default function ClientHistoryPage() {
           </ul>
         </Card>
       )}
+
+      <MissedAssignmentsPanel />
     </div>
   );
 }

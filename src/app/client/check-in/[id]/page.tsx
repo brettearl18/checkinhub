@@ -255,8 +255,8 @@ export default function CheckInFormPage() {
     const weekPhrase = rw ? `the week of ${formatDateDdMmYyyy(rw)}` : "this check-in";
     const started = data.assignment.status === "started";
     const msg = started
-      ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list. You can undo this from your dashboard if you tapped by mistake.`
-      : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list. You can undo this from your dashboard if you tapped by mistake.`;
+      ? `Mark as missed? Your saved progress for ${weekPhrase} will be discarded and it will be removed from your to-do list. You can undo this from History if you tapped by mistake.`
+      : `Mark the check-in for ${weekPhrase} as missed? It will be removed from your to-do list. You can undo this from History if you tapped by mistake.`;
     if (!window.confirm(msg)) return;
     setMarkingMissed(true);
     setError(null);

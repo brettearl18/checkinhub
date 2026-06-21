@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       return tb - ta;
     });
 
-    return NextResponse.json(unique.slice(0, 10));
+    return NextResponse.json(unique.slice(0, 50));
   } catch (err) {
     console.error("[check-in/missed-assignments]", err);
     return NextResponse.json({ error: "Failed to load missed check-ins" }, { status: 500 });
