@@ -352,34 +352,6 @@ export function CycleLogDrawer({
   );
 }
 
-export function CycleQuickLogBar({ onOpenLog }: { onOpenLog: () => void }) {
-  const items = [
-    { label: "Mood", emoji: "😊" },
-    { label: "Energy", emoji: "⚡" },
-    { label: "Symptoms", emoji: "✦" },
-    { label: "Feelings", emoji: "💭" },
-    { label: "Period", emoji: "💧" },
-  ];
-
-  return (
-    <div className="grid grid-cols-5 gap-2">
-      {items.map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          onClick={onOpenLog}
-          className="flex flex-col items-center gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-1 py-3 transition-colors hover:border-[var(--color-primary-muted)] hover:bg-[var(--color-primary-subtle)]"
-        >
-          <span className="text-xl" aria-hidden>
-            {item.emoji}
-          </span>
-          <span className="text-[10px] font-medium text-[var(--color-text-secondary)]">{item.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function CycleTodaySummary({
   cycleDay,
   mood,

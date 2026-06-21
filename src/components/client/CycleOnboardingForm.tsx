@@ -17,14 +17,36 @@ import { todayPerth } from "@/lib/perth-date";
 
 const emptyPastPeriod = (): CyclePeriodRecord => ({ start: "", end: "" });
 
+export type CycleOnboardingInitialValues = {
+  lastPeriodStart?: string;
+  lastPeriodEnd?: string;
+  pastPeriods?: CyclePeriodRecord[];
+  averageCycleLength?: number;
+  trackSexualActivity?: boolean;
+  cycleRegularity?: CycleRegularity | null;
+  onHormonalBirthControl?: boolean | null;
+};
+
+function birthControlFromProfile(value: boolean | null | undefined): "" | "yes" | "no" | "skip" {
+  if (value === true) return "yes";
+  if (value === false) return "no";
+  return "skip";
+}
+
 export function CycleOnboardingForm({
   saving,
   error,
   onSubmit,
+  initialValues,
+  onCancel,
+  variant = "setup",
 }: {
   saving: boolean;
   error: string | null;
   onSubmit: (data: CycleSetupInput) => void;
+  initialValues?: CycleOnboardingInitialValues;
+  onCancel?: () => void;
+  variant?: "setup" | "redo";
 }) {
   const today = todayPerth();
   const historyMin = useMemo(() => {
@@ -33,14 +55,22 @@ export function CycleOnboardingForm({
     return d.toISOString().slice(0, 10);
   }, [today]);
 
-  const [lastPeriodStart, setLastPeriodStart] = useState("");
-  const [lastPeriodEnd, setLastPeriodEnd] = useState("");
-  const [pastPeriods, setPastPeriods] = useState<CyclePeriodRecord[]>([]);
-  const [showPastPeriods, setShowPastPeriods] = useState(false);
-  const [averageCycleLength, setAverageCycleLength] = useState("28");
-  const [trackSexualActivity, setTrackSexualActivity] = useState(false);
-  const [cycleRegularity, setCycleRegularity] = useState<CycleRegularity | "">("");
-  const [birthControl, setBirthControl] = useState<"" | "yes" | "no" | "skip">("");
+  const [lastPeriodStart, setLastPeriodStart] = useState(initialValues?.lastPeriodStart ?? "");
+  const [lastPeriodEnd, setLastPeriodEnd] = useState(initialValues?.lastPeriodEnd ?? "");
+  const [pastPeriods, setPastPeriods] = useState<CyclePeriodRecord[]>(initialValues?.pastPeriods ?? []);
+  const [showPastPeriods, setShowPastPeriods] = useState((initialValues?.pastPeriods?.length ?? 0) > 0);
+  const [averageCycleLength, setAverageCycleLength] = useState(
+    String(initialValues?.averageCycleLength ?? 28)
+  );
+  const [trackSexualActivity, setTrackSexualActivity] = useState(
+    Boolean(initialValues?.trackSexualActivity)
+  );
+  const [cycleRegularity, setCycleRegularity] = useState<CycleRegularity | "">(
+    initialValues?.cycleRegularity ?? ""
+  );
+  const [birthControl, setBirthControl] = useState<"" | "yes" | "no" | "skip">(
+    birthControlFromProfile(initialValues?.onHormonalBirthControl)
+  );
   const [localError, setLocalError] = useState<string | null>(null);
 
   const latestPeriodDays = useMemo(() => {
@@ -120,11 +150,27 @@ export function CycleOnboardingForm({
 
   return (
     <Card className="border-[var(--color-primary-muted)] p-6">
-      <h2 className="text-xl font-semibold text-[var(--color-text)]">Set up your cycle</h2>
-      <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-        Tell us about your recent periods so we can estimate phases and guides. Wellbeing tracking only — not
-        medical advice.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-[var(--color-text)]">
+            {variant === "redo" ? "Update cycle setup" : "Set up your cycle"}
+          </h2>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+            {variant === "redo"
+              ? "Change your period dates or preferences. Your daily logs are kept."
+              : "Tell us about your recent periods so we can estimate phases and guides. Wellbeing tracking only — not medical advice."}
+          </p>
+        </div>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="shrink-0 text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
         <div className="space-y-4">
@@ -337,7 +383,7 @@ export function CycleOnboardingForm({
         )}
 
         <Button type="submit" className="w-full" disabled={saving}>
-          {saving ? "Saving…" : "Start tracking"}
+          {saving ? "Saving…" : variant === "redo" ? "Save setup" : "Start tracking"}
         </Button>
       </form>
 

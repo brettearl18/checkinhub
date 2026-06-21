@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
-import { CycleOnboardingForm } from "@/components/client/CycleOnboardingForm";
+import { CycleOnboardingForm, type CycleOnboardingInitialValues } from "@/components/client/CycleOnboardingForm";
 import { CycleCalendar } from "@/components/client/CycleCalendar";
-import { CycleLogDrawer, CycleQuickLogBar, CycleTodaySummary } from "@/components/client/CycleLogDrawer";
 import { CyclePhaseRing } from "@/components/client/CyclePhaseRing";
 import { CycleWeekStrip } from "@/components/client/CycleWeekStrip";
+import { CycleLogDrawer, CycleTodaySummary } from "@/components/client/CycleLogDrawer";
 import { useApiClient } from "@/lib/api-client";
 import { todayPerth } from "@/lib/perth-date";
 import {
@@ -35,6 +35,21 @@ interface CycleData {
 }
 
 type ViewMode = "cycle" | "calendar";
+
+function setupInitialFromProfile(profile: CycleProfile): CycleOnboardingInitialValues {
+  const pastPeriods = profile.periodHistory.filter(
+    (p) => !(p.start === profile.lastPeriodStart && p.end === profile.lastPeriodEnd)
+  );
+  return {
+    lastPeriodStart: profile.lastPeriodStart ?? "",
+    lastPeriodEnd: profile.lastPeriodEnd ?? "",
+    pastPeriods,
+    averageCycleLength: profile.averageCycleLength,
+    trackSexualActivity: profile.trackSexualActivity,
+    cycleRegularity: profile.cycleRegularity,
+    onHormonalBirthControl: profile.onHormonalBirthControl,
+  };
+}
 
 function applyLogToForm(
   log: CycleDailyLog | null,
@@ -74,6 +89,7 @@ export default function ClientCyclePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("cycle");
   const [logDrawerOpen, setLogDrawerOpen] = useState(false);
   const [coachSettingsOpen, setCoachSettingsOpen] = useState(false);
+  const [showSetupRedo, setShowSetupRedo] = useState(false);
   const [selectedLogDate, setSelectedLogDate] = useState(todayPerth());
 
   const [mood, setMood] = useState<number | null>(null);
@@ -309,7 +325,7 @@ export default function ClientCyclePage() {
     await patchProfile({ trackingEnabled: true });
   };
 
-  const completeSetup = async (setup: CycleSetupInput) => {
+  const completeSetup = async (setup: CycleSetupInput, variant: "setup" | "redo" = "setup") => {
     setSaving(true);
     setError(null);
     try {
@@ -324,7 +340,8 @@ export default function ClientCyclePage() {
         return;
       }
       await load();
-      setSuccess("Cycle tracking is ready");
+      setShowSetupRedo(false);
+      setSuccess(variant === "redo" ? "Cycle setup updated" : "Cycle tracking is ready");
       setTimeout(() => setSuccess(null), 2500);
     } finally {
       setSaving(false);
@@ -358,29 +375,41 @@ export default function ClientCyclePage() {
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-[var(--color-text)]">Cycle tracker</h1>
         </div>
-        {profile?.trackingEnabled && profile.setupCompleted && (
-          <div className="flex rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5 text-xs">
+        {profile?.trackingEnabled && profile.setupCompleted && !showSetupRedo && (
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode("cycle")}
+                className={`rounded-lg px-3 py-1.5 font-medium ${
+                  viewMode === "cycle"
+                    ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
+                    : "text-[var(--color-text-muted)]"
+                }`}
+              >
+                Cycle
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("calendar")}
+                className={`rounded-lg px-3 py-1.5 font-medium ${
+                  viewMode === "calendar"
+                    ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
+                    : "text-[var(--color-text-muted)]"
+                }`}
+              >
+                Calendar
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => setViewMode("cycle")}
-              className={`rounded-lg px-3 py-1.5 font-medium ${
-                viewMode === "cycle"
-                  ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
-                  : "text-[var(--color-text-muted)]"
-              }`}
+              onClick={() => {
+                setError(null);
+                setShowSetupRedo(true);
+              }}
+              className="text-xs font-medium text-[var(--color-primary)] hover:underline"
             >
-              Cycle
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("calendar")}
-              className={`rounded-lg px-3 py-1.5 font-medium ${
-                viewMode === "calendar"
-                  ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
-                  : "text-[var(--color-text-muted)]"
-              }`}
-            >
-              Calendar
+              Set up
             </button>
           </div>
         )}
@@ -412,7 +441,21 @@ export default function ClientCyclePage() {
         <CycleOnboardingForm saving={saving} error={error} onSubmit={completeSetup} />
       )}
 
-      {!loading && profile?.trackingEnabled && profile.setupCompleted && data && (
+      {!loading && profile?.trackingEnabled && profile.setupCompleted && showSetupRedo && (
+        <CycleOnboardingForm
+          variant="redo"
+          saving={saving}
+          error={error}
+          initialValues={setupInitialFromProfile(profile)}
+          onCancel={() => {
+            setShowSetupRedo(false);
+            setError(null);
+          }}
+          onSubmit={(setup) => completeSetup(setup, "redo")}
+        />
+      )}
+
+      {!loading && profile?.trackingEnabled && profile.setupCompleted && data && !showSetupRedo && (
         <>
           {viewMode === "cycle" ? (
             <>
@@ -443,13 +486,6 @@ export default function ClientCyclePage() {
                     Log today
                   </Button>
                 </div>
-              </Card>
-
-              <Card className="p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-                  Quick log
-                </p>
-                <CycleQuickLogBar onOpenLog={() => openLogForDate(today)} />
               </Card>
 
               <CycleTodaySummary
@@ -528,6 +564,18 @@ export default function ClientCyclePage() {
                     {profile.averagePeriodLength}-day periods.
                   </p>
                 )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={saving}
+                  onClick={() => {
+                    setError(null);
+                    setCoachSettingsOpen(false);
+                    setShowSetupRedo(true);
+                  }}
+                >
+                  Set up again
+                </Button>
                 <Button type="button" variant="secondary" disabled={saving} onClick={stopTracking}>
                   Stop cycle tracking
                 </Button>
