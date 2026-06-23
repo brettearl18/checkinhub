@@ -28,6 +28,8 @@ interface Profile {
   profile: Record<string, unknown>;
   profilePersonalization: { quote: string | null; showQuote: boolean; colorTheme: string; icon: string | null };
   cycleTrackingEnabled?: boolean;
+  accountClosed?: boolean;
+  dataRetentionUntilDisplay?: string | null;
 }
 
 interface CoachReview {
@@ -54,6 +56,8 @@ export default function ClientProfilePage() {
   const [weightDate, setWeightDate] = useState(() => toLocalDateString(new Date()));
   const [weightSaving, setWeightSaving] = useState(false);
   const [weightError, setWeightError] = useState<string | null>(null);
+  const [deleteLinkLoading, setDeleteLinkLoading] = useState(false);
+  const [deleteLinkError, setDeleteLinkError] = useState<string | null>(null);
 
   const loadMeasurements = useCallback(async () => {
     try {
@@ -172,6 +176,32 @@ export default function ClientProfilePage() {
     }
   };
 
+  const handleDeleteData = async () => {
+    setDeleteLinkLoading(true);
+    setDeleteLinkError(null);
+    try {
+      const res = await fetchWithAuth("/api/client/delete-data/link");
+      if (res.status === 401) {
+        setAuthError(true);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleteLinkError(typeof data.error === "string" ? data.error : "Could not open deletion.");
+        return;
+      }
+      if (typeof data.deletionLink === "string" && data.deletionLink) {
+        window.location.href = data.deletionLink;
+        return;
+      }
+      setDeleteLinkError("Could not open deletion.");
+    } catch {
+      setDeleteLinkError("Could not open deletion.");
+    } finally {
+      setDeleteLinkLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -217,8 +247,49 @@ export default function ClientProfilePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-[var(--color-text)]">Profile</h1>
+      <h1 className="text-2xl font-semibold text-[var(--color-text)]">
+        {profile?.accountClosed ? "Account closed" : "Profile"}
+      </h1>
 
+      {profile?.accountClosed && (
+        <Card className="p-6 border-[var(--color-border)]">
+          <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Account &amp; data</h2>
+          <p className="text-sm text-[var(--color-text-secondary)] mb-2">
+            Your account is closed and you no longer have access to coaching features. We keep your data until{" "}
+            <strong className="text-[var(--color-text)]">
+              {profile.dataRetentionUntilDisplay ?? "the end of your retention period"}
+            </strong>{" "}
+            so we can reactivate you if you return. After that, it is permanently deleted.
+          </p>
+          <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+            You can delete your data immediately at any time. Deletion is permanent and cannot be undone.
+          </p>
+          {deleteLinkError && (
+            <p className="mb-3 text-sm text-[var(--color-error)]">{deleteLinkError}</p>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={deleteLinkLoading}
+            onClick={handleDeleteData}
+          >
+            {deleteLinkLoading ? "Opening…" : "Delete my data"}
+          </Button>
+          <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+            To return, contact{" "}
+            <a href="mailto:info@vanahealth.com.au" className="text-[var(--color-primary)] hover:underline">
+              info@vanahealth.com.au
+            </a>
+            .{" "}
+            <Link href="/privacy" className="text-[var(--color-primary)] hover:underline">
+              Privacy statement
+            </Link>
+          </p>
+        </Card>
+      )}
+
+      {!profile?.accountClosed && (
+      <>
       <Card className="p-6" id="body-weight">
         <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Body weight</h2>
         <p className="text-sm text-[var(--color-text-secondary)] mb-4">
@@ -415,6 +486,8 @@ export default function ClientProfilePage() {
           <Button type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
         </form>
       </Card>
+      </>
+      )}
     </div>
   );
 }

@@ -160,9 +160,37 @@ export default function ClientLayout({
   const { fetchWithAuth } = useApiClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [cycleTrackingEnabled, setCycleTrackingEnabled] = useState(false);
+  const [accountClosed, setAccountClosed] = useState(false);
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
+    const loadAccountStatus = async () => {
+      try {
+        const res = await fetchWithAuth("/api/client/profile");
+        if (res.ok && !cancelled) {
+          const json = await res.json();
+          setAccountClosed(Boolean(json.accountClosed));
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+    loadAccountStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, fetchWithAuth, pathname]);
+
+  useEffect(() => {
+    if (!accountClosed) return;
+    if (pathname !== "/client/profile") {
+      router.replace("/client/profile");
+    }
+  }, [accountClosed, pathname, router]);
+
+  useEffect(() => {
+    if (!user || accountClosed) return;
     let cancelled = false;
     const loadCycleNav = async () => {
       try {
@@ -191,7 +219,9 @@ export default function ClientLayout({
     };
   }, [user, fetchWithAuth, pathname]);
 
-  const navSections = navSectionsForClient(cycleTrackingEnabled);
+  const navSections = accountClosed
+    ? [{ label: "Account", links: [{ href: "/client/profile", label: "Profile", icon: ProfileIcon }] }]
+    : navSectionsForClient(cycleTrackingEnabled);
   const navLinks = navSections.flatMap((section) => [...section.links]);
   const moreLinks = navLinks.filter((n) => !BOTTOM_NAV.some((b) => b.href === n.href));
 
@@ -296,6 +326,7 @@ export default function ClientLayout({
       </main>
 
       {/* Mobile bottom nav */}
+      {!accountClosed && (
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around border-t border-stone-200/80 bg-[#fffdf9]/95 backdrop-blur-sm safe-area-inset-bottom"
         aria-label="Primary"
@@ -328,6 +359,7 @@ export default function ClientLayout({
           More
         </button>
       </nav>
+      )}
 
       {/* Mobile drawer (More menu) */}
       {drawerOpen && (

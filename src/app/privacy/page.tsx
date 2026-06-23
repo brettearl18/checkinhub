@@ -18,7 +18,7 @@ export default function PrivacyPage() {
             Privacy Statement
           </h1>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Last updated: February 2026
+            Last updated: May 2026
           </p>
         </div>
       </header>
@@ -94,7 +94,11 @@ export default function PrivacyPage() {
               <li>Withdraw consent where we rely on it.</li>
             </ul>
             <p className="mt-2">
-              To exercise these rights or ask questions about your data, contact your coach or the organisation that provided you access to CheckinHUB. You may also have the right to lodge a complaint with a supervisory authority in your country.
+              To exercise these rights or ask questions about your data, contact your coach or the organisation that provided you access to CheckinHUB, or email{" "}
+              <a href="mailto:info@vanahealth.com.au" className="text-[var(--color-primary)] hover:underline">
+                info@vanahealth.com.au
+              </a>
+              . You may also have the right to lodge a complaint with a supervisory authority in your country.
             </p>
           </section>
 
@@ -102,8 +106,17 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">
               7. Data retention
             </h2>
+            <p className="mb-2">
+              While your account is <strong className="text-[var(--color-text)]">active</strong>, we retain your data so we can provide the service.
+            </p>
+            <p className="mb-2">
+              When your account is <strong className="text-[var(--color-text)]">closed</strong> (by you, your coach, or because your subscription ended), we retain a copy of your check-ins, progress, and related account data for <strong className="text-[var(--color-text)]">12 months</strong> so we can reactivate your account if you return. We will email you when your account is closed with the date your data will be deleted.
+            </p>
+            <p className="mb-2">
+              Around <strong className="text-[var(--color-text)]">11 months</strong> after closure, we send a reminder that your data will be permanently deleted in 30 days unless you return or request earlier deletion.
+            </p>
             <p>
-              We retain your data for as long as your account is active and as needed to provide the service, resolve disputes, and comply with legal obligations. When you or your coach closes an account, we may retain some data for a limited period for legal or operational reasons before secure deletion.
+              You can <strong className="text-[var(--color-text)]">request immediate deletion</strong> at any time after your account is closed, using the &quot;Delete my data&quot; link in your closure email or from your profile if you can still sign in. Deletion is permanent and cannot be undone. After the 12-month retention period ends, we automatically and permanently delete your data.
             </p>
           </section>
 

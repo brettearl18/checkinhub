@@ -3,6 +3,7 @@ import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { getStripe } from "@/lib/stripe-server";
 import { deriveStripeSubscriptionAccountStatus } from "@/lib/stripe-subscription-status";
+import { clearStripeCancellationPending, scheduleStripeCancellationClosure } from "@/lib/client-account-closure";
 
 /**
  * POST /api/coach/clients/[clientId]/billing/sync
@@ -115,6 +116,12 @@ export async function POST(
       updatePayload.firstPaymentAt = lastPaymentAt;
     }
     await clientSnap.ref.update(updatePayload);
+
+    if (stripeSubscriptionStatus === "cancelled") {
+      await scheduleStripeCancellationClosure(db, clientId);
+    } else if (stripeSubscriptionStatus === "active" || stripeSubscriptionStatus === "paused") {
+      await clearStripeCancellationPending(db, clientId);
+    }
 
     return NextResponse.json({ ok: true, paymentStatus, stripeSubscriptionStatus });
   } catch (err) {

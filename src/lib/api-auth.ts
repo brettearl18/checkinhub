@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { isAdminConfigured, verifyIdToken } from "@/lib/firebase-admin";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { isClosedClientStatus } from "@/lib/client-status";
 
 export interface ResolvedIdentity {
   uid: string;
   role: string | null;
   clientId: string | null;
   coachId: string | null;
+}
+
+export interface RequireClientOptions {
+  /** Allow cancelled/archived clients (profile read, delete-data only). */
+  allowClosedAccount?: boolean;
 }
 
 export async function getIdentityFromToken(token: string): Promise<ResolvedIdentity> {
@@ -52,7 +58,10 @@ export function getTokenFromRequest(request: Request): string | null {
   return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 }
 
-export async function requireClient(request: Request): Promise<
+export async function requireClient(
+  request: Request,
+  options?: RequireClientOptions
+): Promise<
   | { identity: ResolvedIdentity; token: string }
   | { error: NextResponse }
 > {
@@ -63,6 +72,21 @@ export async function requireClient(request: Request): Promise<
     if (identity.role !== "client" || !identity.clientId) {
       return { error: NextResponse.json({ error: "Client access required" }, { status: 403 }) };
     }
+
+    if (!options?.allowClosedAccount && isAdminConfigured()) {
+      const db = getAdminDb();
+      const clientSnap = await db.collection("clients").doc(identity.clientId).get();
+      const status = clientSnap.data()?.status as string | undefined;
+      if (isClosedClientStatus(status)) {
+        return {
+          error: NextResponse.json(
+            { error: "Your account is closed. You can manage your data from Profile." },
+            { status: 403 }
+          ),
+        };
+      }
+    }
+
     return { identity, token };
   } catch (e) {
     if (e instanceof Error && e.message === "ServiceUnavailable") {

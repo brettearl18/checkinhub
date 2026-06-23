@@ -10,6 +10,7 @@ export interface SendEmailOptions {
   html: string;
   text?: string;
   replyTo?: string;
+  cc?: string | string[];
 }
 
 function isConfigured(): boolean {
@@ -30,7 +31,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ ok: boolea
     return { ok: false, error: "Email not configured" };
   }
 
-  const { to, subject, html, text, replyTo } = options;
+  const { to, subject, html, text, replyTo, cc } = options;
   const testEmail = process.env.MAILGUN_TEST_EMAIL?.trim();
   const actualTo = Array.isArray(to) ? to : [to];
   const toList = testEmail ? [testEmail] : actualTo;
@@ -43,6 +44,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ ok: boolea
   const form = new FormData();
   form.append("from", from);
   form.append("to", toList.join(", "));
+  if (cc && !testEmail) {
+    const ccList = Array.isArray(cc) ? cc : [cc];
+    if (ccList.length > 0) form.append("cc", ccList.join(", "));
+  }
   form.append("subject", finalSubject);
   form.append("html", html);
   if (text) form.append("text", text);

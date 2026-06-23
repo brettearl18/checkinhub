@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { getStripe, syncClientStripeSubscriptionFields } from "@/lib/stripe-server";
+import { scheduleStripeCancellationClosure } from "@/lib/client-account-closure";
 
 async function getSubscriptionId(
   clientId: string,
@@ -84,6 +85,7 @@ export async function POST(
         paymentStatus: "canceled",
         updatedAt: new Date(),
       });
+      await scheduleStripeCancellationClosure(db, clientId);
       return NextResponse.json({ ok: true, cancelAtPeriodEnd: false, stripeSubscriptionStatus: "cancelled" });
     }
   } catch (err) {

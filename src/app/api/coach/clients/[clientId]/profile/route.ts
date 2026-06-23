@@ -4,6 +4,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
 import { isClosedClientStatus, normalizeClientStatusForApi, normalizeClientStatusForStorage } from "@/lib/client-status";
+import { closeClientAccount } from "@/lib/client-account-closure";
 import type { ClientBadgeAwardMode } from "@/lib/badge-approval";
 import { resolveThresholds, SCORING_PROFILES, type ScoringProfileId } from "@/lib/scoring-utils";
 
@@ -232,6 +233,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const clientBefore = snap.data() as {
+    firstName?: string;
+    email?: string;
+    status?: string;
+  };
+  const previousStatus = normalizeClientStatusForApi(clientBefore.status);
   const now = new Date();
   const clientUpdate: Record<string, unknown> = { updatedAt: now };
 
@@ -292,6 +299,15 @@ export async function PATCH(
   }
 
   await db.collection("clients").doc(clientId).update(clientUpdate);
+
+  const newStatus =
+    body.status !== undefined && typeof body.status === "string"
+      ? normalizeClientStatusForApi(normalizeClientStatusForStorage(body.status))
+      : previousStatus;
+  const justCancelled = newStatus === "cancelled" && previousStatus !== "cancelled";
+  if (justCancelled) {
+    await closeClientAccount(db, clientId);
+  }
 
   const sendMealPlanEmail = body.sendMealPlanEmail === true && body.mealPlanLinks !== undefined;
   const newMealPlanLinks = Array.isArray(body.mealPlanLinks)

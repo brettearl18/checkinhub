@@ -4,6 +4,11 @@ import { getStripe } from "@/lib/stripe-server";
 import { deriveStripeSubscriptionAccountStatus } from "@/lib/stripe-subscription-status";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import {
+  clearStripeCancellationPending,
+  getClientIdByStripeCustomerId,
+  scheduleStripeCancellationByCustomerId,
+} from "@/lib/client-account-closure";
 
 /**
  * Stripe webhook: keep client payment status in sync.
@@ -99,6 +104,7 @@ export async function POST(request: Request) {
               updatePayload.firstPaymentAt = paidAt;
             }
             await doc.ref.update(updatePayload);
+            await clearStripeCancellationPending(db, doc.id);
           }
         }
         break;
@@ -137,6 +143,14 @@ export async function POST(request: Request) {
             stripeSubscriptionStatus: accountStatus,
             ...(nextBilling != null ? { nextBillingAt: nextBilling } : {}),
           });
+          const clientId = await getClientIdByStripeCustomerId(db, customerId);
+          if (clientId) {
+            if (accountStatus === "cancelled") {
+              await scheduleStripeCancellationByCustomerId(db, customerId);
+            } else if (accountStatus === "active" || accountStatus === "paused") {
+              await clearStripeCancellationPending(db, clientId);
+            }
+          }
         }
         break;
       }
@@ -149,6 +163,7 @@ export async function POST(request: Request) {
             stripeSubscriptionId: subscription.id ?? null,
             stripeSubscriptionStatus: "cancelled",
           });
+          await scheduleStripeCancellationByCustomerId(db, customerId);
         }
         break;
       }

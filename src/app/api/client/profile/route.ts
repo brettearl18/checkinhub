@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
+import { normalizeClientStatusForApi } from "@/lib/client-status";
+import {
+  formatRetentionUntilDisplay,
+  resolveDataRetentionUntil,
+} from "@/lib/client-account-closure";
 import { fetchCycleProfile } from "@/lib/cycle-tracking-server";
 
 export async function GET(request: Request) {
-  const authResult = await requireClient(request);
+  const authResult = await requireClient(request, { allowClosedAccount: true });
   if ("error" in authResult) return authResult.error;
   const clientId = authResult.identity.clientId!;
 
@@ -23,6 +28,10 @@ export async function GET(request: Request) {
       mealPlanLinks: [],
       mealPlanJson: null,
       cycleTrackingEnabled: false,
+      status: "active",
+      accountClosed: false,
+      dataRetentionUntil: null,
+      dataRetentionUntilDisplay: null,
     });
   }
 
@@ -42,6 +51,9 @@ export async function GET(request: Request) {
     mealPlanLinks = [{ label: String(data.mealPlanName), url: String(data.mealPlanUrl) }];
   }
   const cycleProfile = await fetchCycleProfile(db, clientId);
+  const status = normalizeClientStatusForApi(data.status as string | undefined);
+  const accountClosed = status === "cancelled";
+  const retentionUntil = accountClosed ? resolveDataRetentionUntil(data) : null;
   const profile = {
     id: clientSnap.id,
     firstName: data.firstName ?? "",
@@ -63,6 +75,10 @@ export async function GET(request: Request) {
         ? (data.mealPlanJson as Record<string, unknown>)
         : null,
     cycleTrackingEnabled: cycleProfile.trackingEnabled,
+    status,
+    accountClosed,
+    dataRetentionUntil: retentionUntil,
+    dataRetentionUntilDisplay: retentionUntil ? formatRetentionUntilDisplay(retentionUntil) : null,
   };
   return NextResponse.json(profile);
 }
