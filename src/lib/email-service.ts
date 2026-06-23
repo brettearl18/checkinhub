@@ -11,6 +11,8 @@ export interface SendEmailOptions {
   text?: string;
   replyTo?: string;
   cc?: string | string[];
+  /** Override MAILGUN_FROM_NAME for this message (e.g. "Coach Silvi"). */
+  fromName?: string;
 }
 
 function isConfigured(): boolean {
@@ -31,13 +33,14 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ ok: boolea
     return { ok: false, error: "Email not configured" };
   }
 
-  const { to, subject, html, text, replyTo, cc } = options;
+  const { to, subject, html, text, replyTo, cc, fromName } = options;
   const testEmail = process.env.MAILGUN_TEST_EMAIL?.trim();
   const actualTo = Array.isArray(to) ? to : [to];
   const toList = testEmail ? [testEmail] : actualTo;
   const finalSubject = testEmail ? `[TEST] ${subject}` : subject;
 
-  const from = `${process.env.MAILGUN_FROM_NAME} <${process.env.MAILGUN_FROM_EMAIL}>`;
+  const senderName = fromName?.trim() || process.env.MAILGUN_FROM_NAME;
+  const from = `${senderName} <${process.env.MAILGUN_FROM_EMAIL}>`;
   const domain = process.env.MAILGUN_DOMAIN!;
   const apiKey = process.env.MAILGUN_API_KEY!;
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdminConfigured, verifyIdToken } from "@/lib/firebase-admin";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isClosedClientStatus } from "@/lib/client-status";
+import { isStripePortalAccessSuspended } from "@/lib/client-account-closure";
 
 export interface ResolvedIdentity {
   uid: string;
@@ -11,7 +12,9 @@ export interface ResolvedIdentity {
 }
 
 export interface RequireClientOptions {
-  /** Allow cancelled/archived clients (profile read, delete-data only). */
+  /** Allow profile read when account is closed or Stripe billing has ended. */
+  allowLimitedPortalAccess?: boolean;
+  /** Allow delete-data routes for closed accounts only. */
   allowClosedAccount?: boolean;
 }
 
@@ -73,14 +76,30 @@ export async function requireClient(
       return { error: NextResponse.json({ error: "Client access required" }, { status: 403 }) };
     }
 
-    if (!options?.allowClosedAccount && isAdminConfigured()) {
+    if (isAdminConfigured()) {
       const db = getAdminDb();
       const clientSnap = await db.collection("clients").doc(identity.clientId).get();
-      const status = clientSnap.data()?.status as string | undefined;
-      if (isClosedClientStatus(status)) {
+      const clientData = clientSnap.data() ?? {};
+      const status = clientData.status as string | undefined;
+      const closed = isClosedClientStatus(status);
+      const stripeSuspended = isStripePortalAccessSuspended(clientData);
+
+      if (closed && !options?.allowClosedAccount && !options?.allowLimitedPortalAccess) {
         return {
           error: NextResponse.json(
             { error: "Your account is closed. You can manage your data from Profile." },
+            { status: 403 }
+          ),
+        };
+      }
+
+      if (stripeSuspended && !options?.allowLimitedPortalAccess) {
+        return {
+          error: NextResponse.json(
+            {
+              error:
+                "Your subscription has ended. You can view your account status from Profile.",
+            },
             { status: 403 }
           ),
         };

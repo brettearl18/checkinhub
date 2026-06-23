@@ -4,6 +4,7 @@ import { isClosedClientStatus, normalizeClientStatusForStorage } from "@/lib/cli
 import {
   sendClientAccountClosedEmail,
   sendClientDataDeletionWarningEmail,
+  resolveCoachEmailContext,
 } from "@/lib/client-cancelled-email";
 import { buildDataDeletionLink, ensureDataDeletionToken } from "@/lib/client-data-deletion-token";
 import { resolveAppBaseUrl } from "@/lib/app-url";
@@ -104,11 +105,14 @@ export async function closeClientAccount(
     const deletionLink = tokenInfo
       ? buildDataDeletionLink(resolveAppBaseUrl(), tokenInfo.token, tokenInfo.email)
       : undefined;
+    const coachId = typeof data.coachId === "string" ? data.coachId : "";
+    const coach = await resolveCoachEmailContext(db, coachId);
     const result = await sendClientAccountClosedEmail(
       email,
       firstName,
       retentionUntilDisplay,
-      deletionLink
+      deletionLink,
+      coach
     );
     if (result.ok) {
       patch.accountClosedEmailSentAt = now;
@@ -179,4 +183,18 @@ export async function getClientIdByStripeCustomerId(
     .limit(1)
     .get();
   return snap.empty ? null : snap.docs[0].id;
+}
+
+/** Stripe billing ended but account not yet closed (3-day email grace). */
+export function isStripePortalAccessSuspended(data: Record<string, unknown>): boolean {
+  if (isClosedClientStatus(data.status as string | undefined)) return false;
+  if (parseClientTimestamp(data.stripeCancellationPendingAt)) return true;
+  return (data.stripeSubscriptionStatus as string | undefined) === "cancelled";
+}
+
+export function isPortalAccessLimited(data: Record<string, unknown>): boolean {
+  return (
+    isClosedClientStatus(data.status as string | undefined) ||
+    isStripePortalAccessSuspended(data)
+  );
 }

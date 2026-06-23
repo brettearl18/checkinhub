@@ -5,12 +5,13 @@ import { isAdminConfigured } from "@/lib/firebase-admin";
 import { normalizeClientStatusForApi } from "@/lib/client-status";
 import {
   formatRetentionUntilDisplay,
+  isStripePortalAccessSuspended,
   resolveDataRetentionUntil,
 } from "@/lib/client-account-closure";
 import { fetchCycleProfile } from "@/lib/cycle-tracking-server";
 
 export async function GET(request: Request) {
-  const authResult = await requireClient(request, { allowClosedAccount: true });
+  const authResult = await requireClient(request, { allowLimitedPortalAccess: true });
   if ("error" in authResult) return authResult.error;
   const clientId = authResult.identity.clientId!;
 
@@ -30,6 +31,8 @@ export async function GET(request: Request) {
       cycleTrackingEnabled: false,
       status: "active",
       accountClosed: false,
+      subscriptionAccessSuspended: false,
+      portalAccessLimited: false,
       dataRetentionUntil: null,
       dataRetentionUntilDisplay: null,
     });
@@ -53,6 +56,8 @@ export async function GET(request: Request) {
   const cycleProfile = await fetchCycleProfile(db, clientId);
   const status = normalizeClientStatusForApi(data.status as string | undefined);
   const accountClosed = status === "cancelled";
+  const subscriptionAccessSuspended = !accountClosed && isStripePortalAccessSuspended(data);
+  const portalAccessLimited = accountClosed || subscriptionAccessSuspended;
   const retentionUntil = accountClosed ? resolveDataRetentionUntil(data) : null;
   const profile = {
     id: clientSnap.id,
@@ -77,6 +82,8 @@ export async function GET(request: Request) {
     cycleTrackingEnabled: cycleProfile.trackingEnabled,
     status,
     accountClosed,
+    subscriptionAccessSuspended,
+    portalAccessLimited,
     dataRetentionUntil: retentionUntil,
     dataRetentionUntilDisplay: retentionUntil ? formatRetentionUntilDisplay(retentionUntil) : null,
   };

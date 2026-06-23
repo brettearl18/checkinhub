@@ -5,7 +5,7 @@ import {
   parseClientTimestamp,
   resolveDataRetentionUntil,
 } from "@/lib/client-account-closure";
-import { sendClientDataDeletionWarningEmail } from "@/lib/client-cancelled-email";
+import { sendClientDataDeletionWarningEmail, resolveCoachEmailContext } from "@/lib/client-cancelled-email";
 import { buildDataDeletionLink, ensureDataDeletionToken } from "@/lib/client-data-deletion-token";
 import { resolveAppBaseUrl } from "@/lib/app-url";
 import { formatDateDisplay } from "@/lib/format-date";
@@ -79,11 +79,15 @@ export async function runClientDataRetentionReminders(): Promise<{
       ? buildDataDeletionLink(resolveAppBaseUrl(), tokenInfo.token, tokenInfo.email)
       : undefined;
 
+    const coachId = typeof data.coachId === "string" ? data.coachId : "";
+    const coach = await resolveCoachEmailContext(db, coachId);
+
     const result = await sendClientDataDeletionWarningEmail(
       email,
       firstName,
       deletionDateDisplay,
-      deletionLink
+      deletionLink,
+      coach
     );
     if (!result.ok) {
       console.error("[client-data-retention-cron]", doc.id, result.error);

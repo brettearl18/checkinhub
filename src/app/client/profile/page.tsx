@@ -29,6 +29,8 @@ interface Profile {
   profilePersonalization: { quote: string | null; showQuote: boolean; colorTheme: string; icon: string | null };
   cycleTrackingEnabled?: boolean;
   accountClosed?: boolean;
+  subscriptionAccessSuspended?: boolean;
+  portalAccessLimited?: boolean;
   dataRetentionUntilDisplay?: string | null;
 }
 
@@ -248,8 +250,29 @@ export default function ClientProfilePage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-[var(--color-text)]">
-        {profile?.accountClosed ? "Account closed" : "Profile"}
+        {profile?.accountClosed
+          ? "Account closed"
+          : profile?.subscriptionAccessSuspended
+            ? "Subscription ended"
+            : "Profile"}
       </h1>
+
+      {profile?.subscriptionAccessSuspended && !profile?.accountClosed && (
+        <Card className="p-6 border-[var(--color-border)]">
+          <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Subscription ended</h2>
+          <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+            Your subscription is no longer active, so coaching features in CheckinHUB are turned off.
+            If you&apos;d like to continue, contact us at{" "}
+            <a href="mailto:info@vanahealth.com.au" className="text-[var(--color-primary)] hover:underline">
+              info@vanahealth.com.au
+            </a>{" "}
+            and we can help get you set up again.
+          </p>
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            If your subscription is not renewed, your account will be fully closed after a short grace period.
+          </p>
+        </Card>
+      )}
 
       {profile?.accountClosed && (
         <Card className="p-6 border-[var(--color-border)]">
@@ -288,7 +311,7 @@ export default function ClientProfilePage() {
         </Card>
       )}
 
-      {!profile?.accountClosed && (
+      {!profile?.portalAccessLimited && (
       <>
       <Card className="p-6" id="body-weight">
         <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Body weight</h2>

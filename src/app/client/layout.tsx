@@ -160,7 +160,7 @@ export default function ClientLayout({
   const { fetchWithAuth } = useApiClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [cycleTrackingEnabled, setCycleTrackingEnabled] = useState(false);
-  const [accountClosed, setAccountClosed] = useState(false);
+  const [portalAccessLimited, setPortalAccessLimited] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -170,7 +170,7 @@ export default function ClientLayout({
         const res = await fetchWithAuth("/api/client/profile");
         if (res.ok && !cancelled) {
           const json = await res.json();
-          setAccountClosed(Boolean(json.accountClosed));
+          setPortalAccessLimited(Boolean(json.portalAccessLimited));
         }
       } catch {
         // non-fatal
@@ -183,14 +183,14 @@ export default function ClientLayout({
   }, [user, fetchWithAuth, pathname]);
 
   useEffect(() => {
-    if (!accountClosed) return;
+    if (!portalAccessLimited) return;
     if (pathname !== "/client/profile") {
       router.replace("/client/profile");
     }
-  }, [accountClosed, pathname, router]);
+  }, [portalAccessLimited, pathname, router]);
 
   useEffect(() => {
-    if (!user || accountClosed) return;
+    if (!user || portalAccessLimited) return;
     let cancelled = false;
     const loadCycleNav = async () => {
       try {
@@ -219,7 +219,7 @@ export default function ClientLayout({
     };
   }, [user, fetchWithAuth, pathname]);
 
-  const navSections = accountClosed
+  const navSections = portalAccessLimited
     ? [{ label: "Account", links: [{ href: "/client/profile", label: "Profile", icon: ProfileIcon }] }]
     : navSectionsForClient(cycleTrackingEnabled);
   const navLinks = navSections.flatMap((section) => [...section.links]);
@@ -326,7 +326,7 @@ export default function ClientLayout({
       </main>
 
       {/* Mobile bottom nav */}
-      {!accountClosed && (
+      {!portalAccessLimited && (
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around border-t border-stone-200/80 bg-[#fffdf9]/95 backdrop-blur-sm safe-area-inset-bottom"
         aria-label="Primary"
