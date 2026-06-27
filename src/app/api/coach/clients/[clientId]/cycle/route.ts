@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCoach } from "@/lib/api-auth";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 import { todayPerth } from "@/lib/perth-date";
-import { addCalendarDays, computePhaseInfo, stripCoachVisibleCycleLog } from "@/lib/cycle-tracking";
+import { addCalendarDays, computePhaseInfo, needsCycleSetup, stripCoachVisibleCycleLog } from "@/lib/cycle-tracking";
 import { fetchCycleLogsForOwners, fetchCycleProfile } from "@/lib/cycle-tracking-server";
 
 /**
@@ -37,10 +37,34 @@ export async function GET(
   }
 
   const profile = await fetchCycleProfile(db, clientId);
+
+  if (!profile.trackingEnabled && !profile.setupCompleted) {
+    return NextResponse.json({
+      shared: false,
+      reason: "not_started",
+      trackingEnabled: false,
+      setupCompleted: false,
+      shareWithCoach: false,
+    });
+  }
+
+  if (needsCycleSetup(profile)) {
+    return NextResponse.json({
+      shared: false,
+      reason: "setup_incomplete",
+      trackingEnabled: profile.trackingEnabled,
+      setupCompleted: false,
+      shareWithCoach: profile.shareWithCoach,
+    });
+  }
+
   if (!profile.shareWithCoach || !profile.trackingEnabled) {
     return NextResponse.json({
       shared: false,
-      reason: "not_opted_in",
+      reason: "not_sharing",
+      trackingEnabled: profile.trackingEnabled,
+      setupCompleted: profile.setupCompleted,
+      shareWithCoach: profile.shareWithCoach,
     });
   }
 
