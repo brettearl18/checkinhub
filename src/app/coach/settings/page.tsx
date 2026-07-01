@@ -18,21 +18,38 @@ export default function CoachSettingsPage() {
   const [testEmailTo, setTestEmailTo] = useState("");
   const [testEmailLoading, setTestEmailLoading] = useState(false);
   const [testEmailMessage, setTestEmailMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [emailStatus, setEmailStatus] = useState<{
+    configured: boolean;
+    testMode: boolean;
+    coachDisplayName: string;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
       setBadgeModeLoading(true);
       try {
-        const res = await fetchWithAuth("/api/coach/settings");
-        if (res.status === 401) {
+        const [settingsRes, emailRes] = await Promise.all([
+          fetchWithAuth("/api/coach/settings"),
+          fetchWithAuth("/api/coach/email-status"),
+        ]);
+        if (settingsRes.status === 401 || emailRes.status === 401) {
           setAuthError(true);
           return;
         }
-        if (res.ok) {
-          const data = await res.json();
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
           if (data.defaultBadgeAwardMode === "coach" || data.defaultBadgeAwardMode === "auto") {
             setBadgeMode(data.defaultBadgeAwardMode);
           }
+        }
+        if (emailRes.ok) {
+          const data = await emailRes.json();
+          setEmailStatus({
+            configured: Boolean(data.configured),
+            testMode: Boolean(data.testMode),
+            coachDisplayName:
+              typeof data.coachDisplayName === "string" ? data.coachDisplayName : "Coach Silvi",
+          });
         }
       } finally {
         setBadgeModeLoading(false);
@@ -59,7 +76,15 @@ export default function CoachSettingsPage() {
     }
   };
 
-  const sendTest = async (template: "default" | "reminder-open" | "reminder-closing") => {
+  const sendTest = async (
+    template:
+      | "default"
+      | "reminder-open"
+      | "reminder-closing"
+      | "account-closed"
+      | "account-reactivated"
+      | "deletion-warning"
+  ) => {
     if (!testEmailTo.trim()) return;
     setTestEmailMessage(null);
     setTestEmailLoading(true);
@@ -78,13 +103,15 @@ export default function CoachSettingsPage() {
         return;
       }
       if (res.ok) {
-        const msg =
-          template === "default"
-            ? "Test email sent. Check the inbox (and spam)."
-            : template === "reminder-open"
-              ? "Reminder (open) test sent."
-              : "Reminder (closing) test sent.";
-        setTestEmailMessage({ type: "success", text: msg });
+        const labels: Record<string, string> = {
+          default: "Test email sent. Check the inbox (and spam).",
+          "reminder-open": "Reminder (open) test sent.",
+          "reminder-closing": "Reminder (closing) test sent.",
+          "account-closed": "Account closed preview sent.",
+          "account-reactivated": "Account reactivated preview sent.",
+          "deletion-warning": "Deletion warning preview sent.",
+        };
+        setTestEmailMessage({ type: "success", text: labels[template] ?? "Test email sent." });
       } else {
         setTestEmailMessage({ type: "error", text: (data.error as string) || "Failed to send" });
       }
@@ -156,8 +183,35 @@ export default function CoachSettingsPage() {
       {/* Email */}
       <Card className="p-5 border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
         <h2 className="text-base font-semibold text-[var(--color-text)] mb-1">Email</h2>
+        {emailStatus && (
+          <div
+            className={`mb-4 rounded-lg border px-3 py-2.5 text-sm ${
+              !emailStatus.configured
+                ? "border-red-200 bg-red-50 text-red-800"
+                : emailStatus.testMode
+                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                  : "border-green-200 bg-green-50 text-green-800"
+            }`}
+          >
+            {!emailStatus.configured ? (
+              <p>
+                <strong>Not configured.</strong> Add Mailgun variables in Vercel (Production) and redeploy.
+              </p>
+            ) : emailStatus.testMode ? (
+              <p>
+                <strong>Test mode.</strong> All emails are redirected to one inbox (MAILGUN_TEST_EMAIL). Remove
+                that variable in Vercel to send live emails to clients.
+              </p>
+            ) : (
+              <p>
+                <strong>Live.</strong> Clients receive emails at their registered address. Cancellation emails
+                send from <strong>{emailStatus.coachDisplayName}</strong>.
+              </p>
+            )}
+          </div>
+        )}
         <p className="text-sm text-[var(--color-text-muted)] mb-4">
-          Emails (reminders, new client invites, meal plan updates) are sent via Mailgun. Use the options below to verify delivery and preview the reminder emails clients receive.
+          Emails are sent via Mailgun. Preview reminders and account emails below before they go to clients.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -197,6 +251,33 @@ export default function CoachSettingsPage() {
             onClick={() => sendTest("reminder-closing")}
           >
             Send “closing” test
+          </Button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-[var(--color-text-muted)]">Account emails:</span>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={testEmailLoading || !testEmailTo.trim()}
+            onClick={() => sendTest("account-closed")}
+          >
+            Account closed
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={testEmailLoading || !testEmailTo.trim()}
+            onClick={() => sendTest("account-reactivated")}
+          >
+            Account reactivated
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={testEmailLoading || !testEmailTo.trim()}
+            onClick={() => sendTest("deletion-warning")}
+          >
+            Deletion warning
           </Button>
         </div>
         {testEmailMessage && (
