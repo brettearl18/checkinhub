@@ -4,7 +4,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
 import { isClosedClientStatus, normalizeClientStatusForApi, normalizeClientStatusForStorage } from "@/lib/client-status";
-import { closeClientAccount } from "@/lib/client-account-closure";
+import { closeClientAccount, reactivateClientAccount } from "@/lib/client-account-closure";
 import type { ClientBadgeAwardMode } from "@/lib/badge-approval";
 import { resolveThresholds, SCORING_PROFILES, type ScoringProfileId } from "@/lib/scoring-utils";
 
@@ -304,9 +304,16 @@ export async function PATCH(
     body.status !== undefined && typeof body.status === "string"
       ? normalizeClientStatusForApi(normalizeClientStatusForStorage(body.status))
       : previousStatus;
-  const justCancelled = newStatus === "cancelled" && previousStatus !== "cancelled";
+  const justCancelled =
+    newStatus === "cancelled" && !isClosedClientStatus(clientBefore.status);
   if (justCancelled) {
     await closeClientAccount(db, clientId);
+  }
+
+  const justReactivated =
+    newStatus === "active" && isClosedClientStatus(clientBefore.status);
+  if (justReactivated) {
+    await reactivateClientAccount(db, clientId, { coachReactivation: true });
   }
 
   const sendMealPlanEmail = body.sendMealPlanEmail === true && body.mealPlanLinks !== undefined;

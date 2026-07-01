@@ -5,8 +5,8 @@ import { deriveStripeSubscriptionAccountStatus } from "@/lib/stripe-subscription
 import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import {
-  clearStripeCancellationPending,
   getClientIdByStripeCustomerId,
+  reactivateClientAccount,
   scheduleStripeCancellationByCustomerId,
 } from "@/lib/client-account-closure";
 
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
               updatePayload.firstPaymentAt = paidAt;
             }
             await doc.ref.update(updatePayload);
-            await clearStripeCancellationPending(db, doc.id);
+            await reactivateClientAccount(db, doc.id, { stripeRestore: true });
           }
         }
         break;
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
             if (accountStatus === "cancelled") {
               await scheduleStripeCancellationByCustomerId(db, customerId);
             } else if (accountStatus === "active" || accountStatus === "paused") {
-              await clearStripeCancellationPending(db, clientId);
+              await reactivateClientAccount(db, clientId, { stripeRestore: true });
             }
           }
         }

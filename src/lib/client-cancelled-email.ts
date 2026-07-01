@@ -127,6 +127,65 @@ export async function sendClientAccountClosedEmail(
   });
 }
 
+export function buildClientAccountReactivatedEmail(
+  firstName: string,
+  loginUrl: string,
+  coach: CoachEmailContext
+): { subject: string; html: string; text: string } {
+  const greeting = firstName.trim() || "there";
+  const coachName = coach.coachName || DEFAULT_CLIENT_EMAIL_COACH_NAME;
+  const subject = "Your CheckinHUB account has been reactivated";
+  const portalUrl = loginUrl.replace(/\/sign-in\/?$/, "/client");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;font-size:16px;color:#2c2825;">Hi ${greeting},</p>
+    <p style="margin:0 0 16px;">Great news — your CheckinHUB account is <strong>active again</strong>. You can log in, complete check-ins, and pick up your progress where you left off.</p>
+    <p style="margin:0 0 20px;">${emailButton(loginUrl, "Sign in to CheckinHUB")}</p>
+    <p style="margin:0;font-size:14px;color:#57534e;">Questions? Reply to this email — I&apos;m happy to help.</p>
+  `.trim();
+
+  const html = wrapClientEmail({
+    preheader: "Your CheckinHUB account is active again.",
+    bodyHtml,
+    coachName,
+  });
+
+  const text = `Hi ${greeting},
+
+Great news — your CheckinHUB account is active again. You can log in, complete check-ins, and pick up your progress where you left off.
+
+Sign in: ${loginUrl}
+Portal: ${portalUrl}
+
+Questions? Reply to this email.
+
+With care,
+${coachName}
+Vana Health`;
+
+  return { subject, html, text };
+}
+
+export async function sendClientAccountReactivatedEmail(
+  to: string,
+  firstName: string,
+  loginUrl: string,
+  coach: CoachEmailContext
+): Promise<{ ok: boolean; error?: string }> {
+  const { subject, html, text } = buildClientAccountReactivatedEmail(firstName, loginUrl, coach);
+  const cc =
+    process.env.CLIENT_ACCOUNT_CLOSED_CC_EMAIL?.trim() || CLIENT_ACCOUNT_CLOSED_CC_EMAIL;
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text,
+    cc,
+    fromName: coach.coachName,
+    replyTo: coach.replyTo || CLIENT_ACCOUNT_CLOSED_CC_EMAIL,
+  });
+}
+
 export function buildClientDataDeletionWarningEmail(
   firstName: string,
   deletionDateDisplay: string,

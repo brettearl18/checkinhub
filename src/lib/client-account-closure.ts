@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { isClosedClientStatus, normalizeClientStatusForStorage } from "@/lib/client-status";
 import {
   sendClientAccountClosedEmail,
+  sendClientAccountReactivatedEmail,
   sendClientDataDeletionWarningEmail,
   resolveCoachEmailContext,
 } from "@/lib/client-cancelled-email";
@@ -124,6 +125,98 @@ export async function closeClientAccount(
 
   await ref.update(patch);
   return { ok: true, alreadyClosed, emailSent };
+}
+
+const REACTIVATION_EMAIL_DEDUP_MS = 10 * 60 * 1000;
+
+function closureFieldsToClear(): Record<string, unknown> {
+  return {
+    cancelledAt: FieldValue.delete(),
+    dataRetentionUntil: FieldValue.delete(),
+    accountClosedEmailSentAt: FieldValue.delete(),
+    dataDeletionWarningEmailSentAt: FieldValue.delete(),
+    dataDeletionToken: FieldValue.delete(),
+    dataDeletionTokenExpiry: FieldValue.delete(),
+    stripeCancellationPendingAt: FieldValue.delete(),
+  };
+}
+
+/**
+ * Restore a client after coach reactivation or Stripe resubscription.
+ * Clears closure / retention fields and sends a welcome-back email once.
+ */
+export async function reactivateClientAccount(
+  db: Firestore,
+  clientId: string,
+  options?: { sendEmail?: boolean; stripeRestore?: boolean; coachReactivation?: boolean }
+): Promise<{ ok: boolean; emailSent: boolean }> {
+  const ref = db.collection("clients").doc(clientId);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return { ok: false, emailSent: false };
+  }
+
+  const data = snap.data()!;
+  const wasClosed = isClosedClientStatus(data.status as string | undefined);
+  const hadPendingStripe = Boolean(parseClientTimestamp(data.stripeCancellationPendingAt));
+  const fullClosureRestore = options?.coachReactivation || wasClosed;
+
+  if (options?.stripeRestore) {
+    if (wasClosed) return { ok: true, emailSent: false };
+    if (!hadPendingStripe) return { ok: true, emailSent: false };
+  } else if (options?.coachReactivation) {
+    // Coach may have already set status to active.
+  } else if (!wasClosed) {
+    return { ok: true, emailSent: false };
+  }
+
+  const recentReactivation = parseClientTimestamp(data.accountReactivatedEmailSentAt);
+  if (
+    recentReactivation &&
+    Date.now() - recentReactivation.getTime() < REACTIVATION_EMAIL_DEDUP_MS
+  ) {
+    const patch: Record<string, unknown> = {
+      updatedAt: new Date(),
+      stripeCancellationPendingAt: FieldValue.delete(),
+    };
+    if (fullClosureRestore) {
+      patch.status = normalizeClientStatusForStorage("active");
+      Object.assign(patch, closureFieldsToClear());
+    }
+    await ref.update(patch);
+    return { ok: true, emailSent: false };
+  }
+
+  const now = new Date();
+  const patch: Record<string, unknown> = {
+    updatedAt: now,
+    stripeCancellationPendingAt: FieldValue.delete(),
+  };
+  if (fullClosureRestore) {
+    patch.status = normalizeClientStatusForStorage("active");
+    Object.assign(patch, closureFieldsToClear());
+  }
+
+  let emailSent = false;
+  const shouldSendEmail = options?.sendEmail !== false;
+  const email = typeof data.email === "string" ? data.email.trim() : "";
+  const firstName = typeof data.firstName === "string" ? data.firstName : "";
+  const coachId = typeof data.coachId === "string" ? data.coachId : "";
+
+  if (shouldSendEmail && email) {
+    const coach = await resolveCoachEmailContext(db, coachId);
+    const loginUrl = `${resolveAppBaseUrl().replace(/\/$/, "")}/sign-in`;
+    const result = await sendClientAccountReactivatedEmail(email, firstName, loginUrl, coach);
+    if (result.ok) {
+      patch.accountReactivatedEmailSentAt = now;
+      emailSent = true;
+    } else {
+      console.error("[reactivateClientAccount] reactivation email failed:", result.error);
+    }
+  }
+
+  await ref.update(patch);
+  return { ok: true, emailSent };
 }
 
 /**
