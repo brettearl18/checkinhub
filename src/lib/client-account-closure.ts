@@ -278,9 +278,26 @@ export async function getClientIdByStripeCustomerId(
   return snap.empty ? null : snap.docs[0].id;
 }
 
+/**
+ * True when an upfront package is still in force (paid in full / package months not expired).
+ * Used so cancelled Stripe subscriptions do not lock out package clients.
+ */
+export function hasActiveUpfrontPackage(data: Record<string, unknown>): boolean {
+  const paidAt = parseClientTimestamp(data.packagePaidAt);
+  const months = typeof data.packageMonths === "number" ? data.packageMonths : null;
+  if (!paidAt || months == null || months < 1) return false;
+  const freeWeeks = typeof data.packageFreeWeeks === "number" ? data.packageFreeWeeks : 0;
+  const expires = new Date(paidAt.getTime());
+  expires.setMonth(expires.getMonth() + months);
+  expires.setDate(expires.getDate() + freeWeeks * 7);
+  return expires.getTime() >= Date.now();
+}
+
 /** Stripe billing ended but account not yet closed (3-day email grace). */
 export function isStripePortalAccessSuspended(data: Record<string, unknown>): boolean {
   if (isClosedClientStatus(data.status as string | undefined)) return false;
+  // Paid-in-full / package clients keep portal access even if a prior Stripe sub was cancelled.
+  if (hasActiveUpfrontPackage(data)) return false;
   if (parseClientTimestamp(data.stripeCancellationPendingAt)) return true;
   return (data.stripeSubscriptionStatus as string | undefined) === "cancelled";
 }

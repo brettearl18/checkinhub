@@ -4,7 +4,12 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { sendEmail } from "@/lib/email-service";
 import { isClosedClientStatus, normalizeClientStatusForApi, normalizeClientStatusForStorage } from "@/lib/client-status";
-import { closeClientAccount, reactivateClientAccount } from "@/lib/client-account-closure";
+import { FieldValue } from "firebase-admin/firestore";
+import {
+  closeClientAccount,
+  hasActiveUpfrontPackage,
+  reactivateClientAccount,
+} from "@/lib/client-account-closure";
 import type { ClientBadgeAwardMode } from "@/lib/badge-approval";
 import { resolveThresholds, SCORING_PROFILES, type ScoringProfileId } from "@/lib/scoring-utils";
 
@@ -253,7 +258,52 @@ export async function PATCH(
   if (body.programStartDate !== undefined) clientUpdate.programStartDate = body.programStartDate;
   if (body.programDurationWeeks !== undefined) clientUpdate.programDurationWeeks = body.programDurationWeeks;
   if (body.coachNotes !== undefined) clientUpdate.coachNotes = body.coachNotes;
-  if (body.stripeCustomerId !== undefined) clientUpdate.stripeCustomerId = body.stripeCustomerId === "" || body.stripeCustomerId == null ? null : body.stripeCustomerId;
+  if (body.stripeCustomerId !== undefined) {
+    const clearing =
+      body.stripeCustomerId === "" || body.stripeCustomerId == null;
+    if (clearing) {
+      // Unlink Stripe: clear ID and subscription lock fields so package clients can use the portal.
+      clientUpdate.stripeCustomerId = null;
+      clientUpdate.stripeSubscriptionId = FieldValue.delete();
+      clientUpdate.stripeSubscriptionStatus = FieldValue.delete();
+      clientUpdate.stripeCancellationPendingAt = FieldValue.delete();
+      const afterPackage = {
+        ...snap.data(),
+        ...(body.packagePaidAt !== undefined
+          ? {
+              packagePaidAt:
+                body.packagePaidAt === "" || body.packagePaidAt == null
+                  ? null
+                  : new Date(body.packagePaidAt as string),
+            }
+          : {}),
+        ...(body.packageMonths !== undefined
+          ? {
+              packageMonths:
+                body.packageMonths === "" ||
+                body.packageMonths == null ||
+                (typeof body.packageMonths === "number" &&
+                  (body.packageMonths < 1 || body.packageMonths > 120))
+                  ? null
+                  : Number(body.packageMonths),
+            }
+          : {}),
+        ...(body.packageFreeWeeks !== undefined
+          ? {
+              packageFreeWeeks:
+                typeof body.packageFreeWeeks === "number" && body.packageFreeWeeks >= 0
+                  ? body.packageFreeWeeks
+                  : 0,
+            }
+          : {}),
+      } as Record<string, unknown>;
+      clientUpdate.paymentStatus = hasActiveUpfrontPackage(afterPackage)
+        ? "paid"
+        : FieldValue.delete();
+    } else {
+      clientUpdate.stripeCustomerId = String(body.stripeCustomerId).trim();
+    }
+  }
   if (body.packagePaidAt !== undefined) {
     const v = body.packagePaidAt;
     clientUpdate.packagePaidAt = v === "" || v == null ? null : new Date(v as string);
@@ -265,6 +315,27 @@ export async function PATCH(
   if (body.packageFreeWeeks !== undefined) {
     const v = body.packageFreeWeeks;
     clientUpdate.packageFreeWeeks = typeof v === "number" && v >= 0 ? v : 0;
+  }
+
+  // Saving an active upfront package while Stripe shows cancelled: lift portal suspension.
+  const packageTouched =
+    body.packagePaidAt !== undefined ||
+    body.packageMonths !== undefined ||
+    body.packageFreeWeeks !== undefined;
+  if (packageTouched && body.stripeCustomerId === undefined) {
+    const merged = {
+      ...snap.data(),
+      ...clientUpdate,
+    } as Record<string, unknown>;
+    if (hasActiveUpfrontPackage(merged)) {
+      clientUpdate.stripeCancellationPendingAt = FieldValue.delete();
+      if (
+        (merged.stripeSubscriptionStatus as string | undefined) === "cancelled" ||
+        (merged.paymentStatus as string | undefined) === "canceled"
+      ) {
+        clientUpdate.paymentStatus = "paid";
+      }
+    }
   }
   if (body.mealPlanLinks !== undefined) {
     const raw = body.mealPlanLinks;

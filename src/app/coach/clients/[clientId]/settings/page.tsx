@@ -437,9 +437,10 @@ export default function CoachClientSettingsPage() {
           checkInFrequency: form.checkInFrequency,
           communicationPreference: form.communicationPreference,
           coachNotes: form.coachNotes,
-          stripeCustomerId: form.stripeCustomerId || undefined,
-          packagePaidAt: form.packagePaidAt || undefined,
-          packageMonths: form.packageMonths ?? undefined,
+          // Send null explicitly so clearing the field unlinks Stripe (undefined is omitted from JSON).
+          stripeCustomerId: form.stripeCustomerId?.trim() ? form.stripeCustomerId.trim() : null,
+          packagePaidAt: form.packagePaidAt || null,
+          packageMonths: form.packageMonths ?? null,
           packageFreeWeeks: form.packageFreeWeeks,
           badgeAwardMode: form.badgeAwardMode,
           mealPlanLinks: form.mealPlanLinks,
@@ -1319,6 +1320,7 @@ export default function CoachClientSettingsPage() {
             )}
             <p className="text-sm text-[var(--color-text-muted)] mb-4">
               Link this client to a Stripe customer so payment status (paid up / failed) can appear on their profile. Paste the Customer ID from Stripe, click Connect to verify, then Save settings.
+              To move a client from subscription to paid-in-full, clear the Customer ID (or use Unlink), set the Upfront package below, and Save — this restores portal access.
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[200px] flex-1">
@@ -1362,6 +1364,24 @@ export default function CoachClientSettingsPage() {
               >
                 {connectLoading ? "Checking…" : "Connect"}
               </Button>
+              {form.stripeCustomerId && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setForm((p) => ({
+                      ...p,
+                      stripeCustomerId: null,
+                      stripeSubscriptionStatus: null,
+                      paymentStatus: p.packagePaidAt && p.packageMonths ? "paid" : null,
+                    }));
+                    setConnectResult(null);
+                    setSubscription(null);
+                  }}
+                >
+                  Unlink Stripe
+                </Button>
+              )}
             </div>
             {connectResult && (
               <div className="mt-3 text-sm">
