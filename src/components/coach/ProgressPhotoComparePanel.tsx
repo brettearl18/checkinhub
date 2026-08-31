@@ -349,6 +349,14 @@ export function ProgressPhotoComparePanel({
   const isCoach = variant === "coach";
   const { fetchWithAuth } = useApiClient();
   const legacyAssignment = useMemo(() => buildLegacyPoseAssignment(images), [images]);
+  const visibleCompareRows = useMemo(() => {
+    return PROGRESS_PHOTO_COMPARE_ROWS.filter((milestone) => {
+      if (milestone !== "previous") return true;
+      return PROGRESS_PHOTO_POSES.some(
+        (pose) => getProgressPhotoForMilestone(images, pose, "previous", legacyAssignment) != null
+      );
+    });
+  }, [images, legacyAssignment]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -526,7 +534,7 @@ export function ProgressPhotoComparePanel({
           </div>
         </div>
 
-        {PROGRESS_PHOTO_COMPARE_ROWS.map((milestone, index) => (
+        {visibleCompareRows.map((milestone, index) => (
           <div
             key={milestone}
             className={isClient && index > 0 ? "border-t border-stone-200/70 pt-6 sm:pt-7" : undefined}
