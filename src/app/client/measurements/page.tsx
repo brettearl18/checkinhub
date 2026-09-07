@@ -63,6 +63,14 @@ export default function ClientMeasurementsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editBodyWeight, setEditBodyWeight] = useState("");
+  const [editMeasurements, setEditMeasurements] = useState<Record<string, string>>({
+    waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "",
+  });
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const todayKey = todayPerth();
   const [chartMetric, setChartMetric] = useState<"bodyWeight" | (typeof MEASUREMENT_KEYS)[number] | "arms" | "thighs">("bodyWeight");
   const chartData = useMemo(() => {
@@ -234,6 +242,74 @@ export default function ClientMeasurementsPage() {
       setImportError(err instanceof Error ? err.message : "Could not save entry.");
     } finally {
       setImporting(false);
+    }
+  };
+
+  const emptyMeasurementFields = () => ({
+    waist: "", hips: "", chest: "", leftThigh: "", rightThigh: "", leftArm: "", rightArm: "",
+  });
+
+  const startEdit = (m: Measurement) => {
+    setEditingId(m.id);
+    setEditDate(m.date ?? todayKey);
+    setEditBodyWeight(m.bodyWeight != null ? String(m.bodyWeight) : "");
+    const fields = emptyMeasurementFields();
+    for (const key of MEASUREMENT_KEYS) {
+      const v = m.measurements?.[key];
+      fields[key] = v != null ? String(v) : "";
+    }
+    setEditMeasurements(fields);
+    setEditError(null);
+    setShowForm(false);
+    setShowImportForm(false);
+    window.setTimeout(() => {
+      document.getElementById("edit-measurement-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      if (!editDate) throw new Error("Choose a date for this entry.");
+      const measurementsNum = buildMeasurementsPayload(editMeasurements);
+      const weightNum = editBodyWeight.trim() ? Number(editBodyWeight) : null;
+      const hasWeight = weightNum != null && !Number.isNaN(weightNum);
+      const hasMeasurements = Object.keys(measurementsNum).length > 0;
+      if (!hasWeight && !hasMeasurements) {
+        throw new Error("Keep weight and/or at least one body measurement.");
+      }
+
+      const res = await fetchWithAuth(`/api/client/measurements/${editingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: editDate,
+          bodyWeight: hasWeight ? weightNum : null,
+          measurements: measurementsNum,
+        }),
+      });
+      if (res.status === 401) {
+        setAuthError(true);
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body.error as string) || "Could not update entry.");
+      }
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not update entry.");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -462,6 +538,7 @@ export default function ClientMeasurementsPage() {
                       {measurementLabels[key]}
                     </th>
                   ))}
+                  <th className="px-4 py-3 text-right font-medium text-[var(--color-text-muted)]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -469,7 +546,9 @@ export default function ClientMeasurementsPage() {
                   <tr
                     key={m.id}
                     id={`measurement-${m.id}`}
-                    className="scroll-mt-24 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-primary-subtle)]/20"
+                    className={`scroll-mt-24 border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-primary-subtle)]/20 ${
+                      editingId === m.id ? "bg-[var(--color-primary-subtle)]/30" : ""
+                    }`}
                   >
                     <td className="px-4 py-3">
                       <span className="font-medium text-[var(--color-text)]">{formatDateDisplay(m.date)}</span>
@@ -487,15 +566,80 @@ export default function ClientMeasurementsPage() {
                         {m.measurements?.[key] != null ? `${m.measurements[key]} cm` : "—"}
                       </td>
                     ))}
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(m)}
+                        className="text-sm font-medium text-[var(--color-primary)] hover:underline"
+                      >
+                        {editingId === m.id ? "Editing…" : "Edit"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <p className="px-4 py-2 text-xs text-[var(--color-text-muted)]">
-            Scroll horizontally on small screens to see all columns.
+            Scroll horizontally on small screens to see all columns. Use Edit to correct a past entry.
           </p>
         </Card>
+
+        {editingId && (
+          <Card className="vana-card border-[var(--color-primary-muted)] p-6" id="edit-measurement-form">
+            <h2 className="text-lg font-medium text-[var(--color-text)]">Edit measurement</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Update the date, weight, or tape measurements for this entry. Clearing a tape field removes it.
+            </p>
+            <form onSubmit={handleSaveEdit} className="mt-4 space-y-4">
+              <Input
+                label="Date"
+                type="date"
+                required
+                max={todayKey}
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+              />
+              <Input
+                label="Body weight (kg)"
+                type="number"
+                step="0.1"
+                value={editBodyWeight}
+                onChange={(e) => setEditBodyWeight(e.target.value)}
+                placeholder="e.g. 72.5"
+              />
+              <div>
+                <p className="mb-2 text-sm font-medium text-[var(--color-text)]">Body measurements (cm)</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {MEASUREMENT_KEYS.map((key) => (
+                    <Input
+                      key={key}
+                      label={formLabels[key]}
+                      type="number"
+                      step="0.1"
+                      value={editMeasurements[key] ?? ""}
+                      onChange={(e) => setEditMeasurements((prev) => ({ ...prev, [key]: e.target.value }))}
+                      placeholder="—"
+                    />
+                  ))}
+                </div>
+              </div>
+              {editError && (
+                <p className="text-sm text-[var(--color-error)]" role="alert">
+                  {editError}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" variant="primary" disabled={savingEdit}>
+                  {savingEdit ? "Saving…" : "Save changes"}
+                </Button>
+                <Button type="button" variant="secondary" onClick={cancelEdit} disabled={savingEdit}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Card>
+        )}
         </>
       )}
 
