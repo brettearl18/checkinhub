@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireClient } from "@/lib/api-auth";
-import { getAdminDb } from "@/lib/firebase-admin";
-import { isAdminConfigured } from "@/lib/firebase-admin";
+import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
+import { isValidHeightCm, parseHeightCm } from "@/lib/client-height";
 
 /**
  * GET /api/client/setup-status
- * Returns whether the client has completed first-time setup: baseline measurement, progress photo, push notifications.
+ * Returns whether the client has completed first-time setup:
+ * baseline measurement, progress photo, push notifications, height.
  */
 export async function GET(request: Request) {
   const authResult = await requireClient(request);
@@ -17,13 +18,13 @@ export async function GET(request: Request) {
       hasBaselineMeasurement: false,
       hasProgressPhoto: false,
       hasPushEnabled: false,
+      hasHeight: false,
     });
   }
 
   const db = getAdminDb();
 
-  // Baseline = has at least one measurement (first measurement removes the To Do item)
-  const [measurementsSnap, photosSnap, pushSnap] = await Promise.all([
+  const [measurementsSnap, photosSnap, pushSnap, clientSnap] = await Promise.all([
     db
       .collection("client_measurements")
       .where("clientId", "==", clientId!)
@@ -39,11 +40,15 @@ export async function GET(request: Request) {
       .where("userId", "==", uid)
       .limit(1)
       .get(),
+    db.collection("clients").doc(clientId!).get(),
   ]);
+
+  const heightCm = parseHeightCm(clientSnap.data()?.heightCm);
 
   return NextResponse.json({
     hasBaselineMeasurement: !measurementsSnap.empty,
     hasProgressPhoto: !photosSnap.empty,
     hasPushEnabled: !pushSnap.empty,
+    hasHeight: isValidHeightCm(heightCm),
   });
 }

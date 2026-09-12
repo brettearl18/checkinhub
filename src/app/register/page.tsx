@@ -16,6 +16,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [heightCm, setHeightCm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +34,7 @@ export default function RegisterPage() {
           email,
           password,
           inviteCode,
+          heightCm: heightCm.trim() ? Number(heightCm) : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -84,6 +86,17 @@ export default function RegisterPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
+          />
+          <Input
+            label="Height (cm)"
+            type="number"
+            step="0.1"
+            min={100}
+            max={250}
+            value={heightCm}
+            onChange={(e) => setHeightCm(e.target.value)}
+            required
+            placeholder="e.g. 165"
           />
           <Input
             label="Coach code"

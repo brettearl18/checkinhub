@@ -18,7 +18,7 @@ function toDate(v: unknown): Date | null {
 
 /** POST: complete token onboarding – set password, create Auth user, activate client. */
 export async function POST(request: Request) {
-  let body: { token?: string; email?: string; password?: string };
+  let body: { token?: string; email?: string; password?: string; heightCm?: number | string };
   try {
     body = await request.json();
   } catch {
@@ -35,6 +35,12 @@ export async function POST(request: Request) {
       { error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` },
       { status: 400 }
     );
+  }
+
+  const { normalizeHeightCmInput } = await import("@/lib/client-height");
+  const heightResult = normalizeHeightCmInput(body.heightCm);
+  if (!heightResult.ok) {
+    return NextResponse.json({ error: heightResult.error }, { status: 400 });
   }
 
   if (!isAdminConfigured()) {
@@ -103,6 +109,7 @@ export async function POST(request: Request) {
     await docRef.update({
       status: "active",
       authUid: uid,
+      heightCm: heightResult.heightCm,
       onboardingToken: null,
       tokenExpiry: null,
       onboardingStatus: "completed",

@@ -25,6 +25,7 @@ interface Profile {
   email: string;
   phone: string;
   timezone: string;
+  heightCm: number | null;
   profile: Record<string, unknown>;
   profilePersonalization: { quote: string | null; showQuote: boolean; colorTheme: string; icon: string | null };
   cycleTrackingEnabled?: boolean;
@@ -52,7 +53,14 @@ export default function ClientProfilePage() {
   const [saving, setSaving] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", timezone: "" });
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    timezone: "",
+    heightCm: "",
+  });
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [weightInput, setWeightInput] = useState("");
   const [weightDate, setWeightDate] = useState(() => toLocalDateString(new Date()));
@@ -96,6 +104,7 @@ export default function ClientProfilePage() {
         email: data.email ?? "",
         phone: data.phone ?? "",
         timezone: data.timezone ?? "",
+        heightCm: data.heightCm != null ? String(data.heightCm) : "",
       });
     } catch {
       setError("Could not load profile.");
@@ -209,17 +218,36 @@ export default function ClientProfilePage() {
     setSaving(true);
     setError(null);
     try {
+      const heightTrimmed = form.heightCm.trim();
+      const payload: Record<string, unknown> = {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phone: form.phone,
+        timezone: form.timezone,
+      };
+      if (heightTrimmed === "") {
+        payload.heightCm = null;
+      } else {
+        const n = Number(heightTrimmed);
+        if (!Number.isFinite(n)) {
+          setError("Enter height as a number in centimetres.");
+          setSaving(false);
+          return;
+        }
+        payload.heightCm = n;
+      }
       const res = await fetchWithAuth("/api/client/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (res.status === 401) {
         setAuthError(true);
         return;
       }
       if (!res.ok) {
-        setError("Could not save profile.");
+        const data = await res.json().catch(() => ({}));
+        setError(typeof data.error === "string" ? data.error : "Could not save profile.");
         return;
       }
       await loadProfile();
@@ -504,6 +532,16 @@ export default function ClientProfilePage() {
           </div>
           <Input label="Email" type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
           <Input label="Phone" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+          <Input
+            label="Height (cm)"
+            type="number"
+            step="0.1"
+            min={100}
+            max={250}
+            value={form.heightCm}
+            onChange={(e) => setForm((p) => ({ ...p, heightCm: e.target.value }))}
+            placeholder="e.g. 165"
+          />
           <Input label="Timezone" value={form.timezone} onChange={(e) => setForm((p) => ({ ...p, timezone: e.target.value }))} placeholder="e.g. Australia/Perth" />
           {error && <p className="text-sm text-[var(--color-error)]">{error}</p>}
           <Button type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>

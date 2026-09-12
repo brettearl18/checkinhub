@@ -101,6 +101,7 @@ interface SetupStatus {
   hasBaselineMeasurement: boolean;
   hasProgressPhoto: boolean;
   hasPushEnabled: boolean;
+  hasHeight: boolean;
 }
 
 const QUICK_LINKS = [
@@ -234,6 +235,7 @@ export default function ClientPortalPage() {
           hasBaselineMeasurement: s.hasBaselineMeasurement === true,
           hasProgressPhoto: s.hasProgressPhoto === true,
           hasPushEnabled: s.hasPushEnabled === true,
+          hasHeight: s.hasHeight === true,
         });
       } else {
         setSetupStatus(null);
@@ -342,7 +344,10 @@ export default function ClientPortalPage() {
 
   const setupIncomplete =
     setupStatus &&
-    (!setupStatus.hasBaselineMeasurement || !setupStatus.hasProgressPhoto || !setupStatus.hasPushEnabled);
+    (!setupStatus.hasBaselineMeasurement ||
+      !setupStatus.hasProgressPhoto ||
+      !setupStatus.hasPushEnabled ||
+      !setupStatus.hasHeight);
 
   // Compact progress snapshot: chart (body weight only) and before/current photos
   const progressSnapshotChartData = useMemo(() => {
@@ -535,9 +540,17 @@ export default function ClientPortalPage() {
             <div className="p-5">
               <h2 className="font-display text-lg font-medium text-stone-800">Complete your setup</h2>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                Add your baseline, a photo, and turn on notifications so you don’t miss habits and check-ins.
+                Add your height, baseline, a photo, and turn on notifications so you don’t miss habits and check-ins.
               </p>
               <ul className="mt-3 space-y-2">
+                <li className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                  <span className="text-sm font-medium text-[var(--color-text)]">Height</span>
+                  {setupStatus!.hasHeight ? (
+                    <span className="text-xs text-[var(--color-success)]">✓ Done</span>
+                  ) : (
+                    <Link href="/client/profile" className="rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90">Add</Link>
+                  )}
+                </li>
                 <li className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
                   <span className="text-sm font-medium text-[var(--color-text)]">Baseline measurements</span>
                   {setupStatus!.hasBaselineMeasurement ? (

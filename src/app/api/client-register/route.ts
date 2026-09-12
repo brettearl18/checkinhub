@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     email?: string;
     password?: string;
     inviteCode?: string;
+    heightCm?: number | string;
   };
   try {
     body = await request.json();
@@ -48,6 +49,12 @@ export async function POST(request: Request) {
 
   if (!firstName || !lastName || !email || !password || !inviteCode) {
     return NextResponse.json({ error: "All fields are required." }, { status: 400 });
+  }
+
+  const { normalizeHeightCmInput } = await import("@/lib/client-height");
+  const heightResult = normalizeHeightCmInput(body.heightCm);
+  if (!heightResult.ok) {
+    return NextResponse.json({ error: heightResult.error }, { status: 400 });
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
@@ -119,6 +126,7 @@ export async function POST(request: Request) {
       email,
       status: "active",
       authUid: uid,
+      heightCm: heightResult.heightCm,
       createdAt: now,
       updatedAt: now,
       canStartCheckIns: true,

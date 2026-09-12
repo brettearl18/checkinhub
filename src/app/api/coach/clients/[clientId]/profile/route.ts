@@ -37,6 +37,7 @@ export async function GET(
       lastName: "",
       email: "",
       phone: "",
+      heightCm: null as number | null,
       timezone: "",
       status: "active",
       trafficLightRedMax: 60,
@@ -76,6 +77,7 @@ export async function GET(
     lastName?: string;
     email?: string;
     phone?: string;
+    heightCm?: number | null;
     timezone?: string;
     status?: string;
     profile?: { preferences?: { checkInFrequency?: string; communication?: string } };
@@ -136,11 +138,15 @@ export async function GET(
     }
   }
 
+  const { parseHeightCm, isValidHeightCm } = await import("@/lib/client-height");
+  const heightCm = parseHeightCm(data.heightCm);
+
   return NextResponse.json({
     firstName: data.firstName ?? "",
     lastName: data.lastName ?? "",
     email: data.email ?? "",
     phone: data.phone ?? "",
+    heightCm: isValidHeightCm(heightCm) ? heightCm : null,
     timezone: data.timezone ?? "",
     status: normalizeClientStatusForApi(data.status ?? "active"),
     trafficLightRedMax: redMax,
@@ -251,6 +257,18 @@ export async function PATCH(
   if (body.lastName !== undefined) clientUpdate.lastName = body.lastName;
   if (body.email !== undefined) clientUpdate.email = body.email;
   if (body.phone !== undefined) clientUpdate.phone = body.phone;
+  if (body.heightCm !== undefined) {
+    if (body.heightCm === null || body.heightCm === "") {
+      clientUpdate.heightCm = null;
+    } else {
+      const { normalizeHeightCmInput } = await import("@/lib/client-height");
+      const normalized = normalizeHeightCmInput(body.heightCm);
+      if (!normalized.ok) {
+        return NextResponse.json({ error: normalized.error }, { status: 400 });
+      }
+      clientUpdate.heightCm = normalized.heightCm;
+    }
+  }
   if (body.timezone !== undefined) clientUpdate.timezone = body.timezone;
   if (body.status !== undefined && typeof body.status === "string") {
     clientUpdate.status = normalizeClientStatusForStorage(body.status);

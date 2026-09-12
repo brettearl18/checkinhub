@@ -20,6 +20,7 @@ function ClientOnboardingForm() {
   const [clientName, setClientName] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [heightCm, setHeightCm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [complete, setComplete] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -66,12 +67,21 @@ function ClientOnboardingForm() {
       setError("Passwords do not match.");
       return;
     }
+    if (!heightCm.trim()) {
+      setError("Please enter your height in centimetres.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch("/api/client-onboarding/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email, password }),
+        body: JSON.stringify({
+          token,
+          email,
+          password,
+          heightCm: Number(heightCm),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -153,7 +163,7 @@ function ClientOnboardingForm() {
           One more step
         </h1>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Hi{clientName ? ` ${clientName}` : ""}. Your coach invited you. Choose a password and you’re in.
+          Hi{clientName ? ` ${clientName}` : ""}. Your coach invited you. Choose a password, add your height, and you’re in.
         </p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <Input
@@ -184,6 +194,17 @@ function ClientOnboardingForm() {
             minLength={8}
             placeholder="Same as above"
             autoComplete="new-password"
+          />
+          <Input
+            label="Height (cm)"
+            type="number"
+            step="0.1"
+            min={100}
+            max={250}
+            value={heightCm}
+            onChange={(e) => setHeightCm(e.target.value)}
+            required
+            placeholder="e.g. 165"
           />
           {error && (
             <p className="text-sm text-[var(--color-error)]" role="alert">

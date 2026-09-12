@@ -25,6 +25,7 @@ interface ClientSettings {
   lastName: string;
   email: string;
   phone: string;
+  heightCm: string;
   timezone: string;
   status: string;
   scoringProfile: string;
@@ -52,6 +53,7 @@ const DEFAULT_SETTINGS: ClientSettings = {
   lastName: "",
   email: "",
   phone: "",
+  heightCm: "",
   timezone: "",
   status: "active",
   scoringProfile: "moderate",
@@ -249,6 +251,7 @@ export default function CoachClientSettingsPage() {
             lastName: data.lastName ?? "",
             email: data.email ?? "",
             phone: data.phone ?? "",
+            heightCm: data.heightCm != null ? String(data.heightCm) : "",
             timezone: data.timezone ?? "",
             status: data.status ?? "active",
             scoringProfile: typeof data.scoringProfile === "string" ? data.scoringProfile : "moderate",
@@ -427,6 +430,7 @@ export default function CoachClientSettingsPage() {
           lastName: form.lastName,
           email: form.email,
           phone: form.phone,
+          heightCm: form.heightCm.trim() ? Number(form.heightCm) : null,
           timezone: form.timezone,
           status: form.status,
           scoringProfile: form.scoringProfile || undefined,
@@ -586,6 +590,16 @@ export default function CoachClientSettingsPage() {
                 label="Phone"
                 value={form.phone}
                 onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+              />
+              <Input
+                label="Height (cm)"
+                type="number"
+                step="0.1"
+                min={100}
+                max={250}
+                value={form.heightCm}
+                onChange={(e) => setForm((p) => ({ ...p, heightCm: e.target.value }))}
+                placeholder="e.g. 165"
               />
               <Input
                 label="Timezone (e.g. Australia/Perth)"

@@ -9,6 +9,7 @@ import {
   resolveDataRetentionUntil,
 } from "@/lib/client-account-closure";
 import { fetchCycleProfile } from "@/lib/cycle-tracking-server";
+import { isValidHeightCm, normalizeHeightCmInput, parseHeightCm } from "@/lib/client-height";
 
 export async function GET(request: Request) {
   const authResult = await requireClient(request, { allowLimitedPortalAccess: true });
@@ -23,6 +24,7 @@ export async function GET(request: Request) {
       email: "",
       phone: "",
       timezone: "Australia/Perth",
+      heightCm: null,
       profile: {},
       profilePersonalization: { quote: null, showQuote: false, colorTheme: "#daa450", icon: null },
       paymentStatus: null,
@@ -59,6 +61,7 @@ export async function GET(request: Request) {
   const subscriptionAccessSuspended = !accountClosed && isStripePortalAccessSuspended(data);
   const portalAccessLimited = accountClosed || subscriptionAccessSuspended;
   const retentionUntil = accountClosed ? resolveDataRetentionUntil(data) : null;
+  const heightCm = parseHeightCm(data.heightCm);
   const profile = {
     id: clientSnap.id,
     firstName: data.firstName ?? "",
@@ -66,6 +69,7 @@ export async function GET(request: Request) {
     email: data.email ?? "",
     phone: data.phone ?? "",
     timezone: data.timezone ?? "",
+    heightCm: isValidHeightCm(heightCm) ? heightCm : null,
     profile: data.profile ?? {},
     profilePersonalization: data.profilePersonalization ?? {
       quote: null,
@@ -115,6 +119,18 @@ export async function PATCH(request: Request) {
   const update: Record<string, unknown> = { updatedAt: new Date() };
   for (const key of ALLOWED_PROFILE_FIELDS) {
     if (body[key] !== undefined) update[key] = body[key];
+  }
+
+  if (body.heightCm !== undefined) {
+    if (body.heightCm === null || body.heightCm === "") {
+      update.heightCm = null;
+    } else {
+      const normalized = normalizeHeightCmInput(body.heightCm);
+      if (!normalized.ok) {
+        return NextResponse.json({ error: normalized.error }, { status: 400 });
+      }
+      update.heightCm = normalized.heightCm;
+    }
   }
 
   if (!isAdminConfigured()) {

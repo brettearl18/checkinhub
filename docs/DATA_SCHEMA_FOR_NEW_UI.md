@@ -45,6 +45,7 @@ Used for: client portal identity, coach assignment, onboarding, profile, progres
   lastName: string;
   email: string;
   phone?: string;
+  heightCm?: number | null;      // client height in centimetres (100–250)
   timezone?: string;             // e.g. 'Australia/Perth'
   status?: string;               // 'pending' | 'active' | etc.
   onboardingStatus?: string;     // 'not_started' | 'in_progress' | 'completed' | 'submitted'
