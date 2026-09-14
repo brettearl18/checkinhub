@@ -54,8 +54,11 @@ export default function CoachLayout({
   useEffect(() => {
     if (!authReady) return;
     if (!user) {
-      router.replace("/sign-in?next=/coach");
-      return;
+      // Brief settle so a transient auth restore blip does not bounce to sign-in.
+      const t = window.setTimeout(() => {
+        router.replace("/sign-in?next=/coach");
+      }, 400);
+      return () => window.clearTimeout(t);
     }
     if (identity && identity.role !== "coach") {
       router.replace("/");

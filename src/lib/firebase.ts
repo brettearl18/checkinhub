@@ -1,5 +1,11 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  type Auth,
+} from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
@@ -30,13 +36,25 @@ let auth: Auth;
 let db: Firestore;
 let storage: FirebaseStorage;
 
+/**
+ * Auth with durable local persistence (IndexedDB, then localStorage).
+ * Keeps coaches/clients signed in across browser restarts until they sign out
+ * or the browser clears site data.
+ */
 export function getFirebaseAuth(): Auth {
   if (typeof window === "undefined") {
     throw new Error("Firebase Auth is only available on the client.");
   }
   if (!auth) {
     app = getFirebase();
-    auth = getAuth(app);
+    try {
+      auth = initializeAuth(app, {
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      });
+    } catch {
+      // Already initialized (Fast Refresh / second call)
+      auth = getAuth(app);
+    }
   }
   return auth;
 }

@@ -105,7 +105,11 @@ The referer error comes from the **Browser API key** restriction, not the author
    http://localhost:3000
    ```
 
-6. **Save**. Changes can take a few minutes to apply; hard-refresh or try incognito.
+6. Under **API restrictions**, either leave **Don’t restrict key**, or if restricted include at least:
+   - Identity Toolkit API
+   - Token Service API  
+   Missing **Token Service API** causes sessions to die after ~1 hour (ID token cannot refresh) — coaches appear to be “kicked out” often.
+7. **Save**. Changes can take a few minutes to apply; hard-refresh or try incognito.
 
 Also confirm in Vercel → **Environment Variables** (Production):
 
