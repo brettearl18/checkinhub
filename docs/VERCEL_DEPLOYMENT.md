@@ -107,8 +107,11 @@ The referer error comes from the **Browser API key** restriction, not the author
 
 6. Under **API restrictions**, either leave **Don’t restrict key**, or if restricted include at least:
    - Identity Toolkit API
-   - Token Service API  
+   - Token Service API
+   - **Firebase Installations API** (required for push / FCM token)
+   - **FCM Registration API** (or Firebase Cloud Messaging API)
    Missing **Token Service API** causes sessions to die after ~1 hour (ID token cannot refresh) — coaches appear to be “kicked out” often.
+   Missing **Firebase Installations API** causes Enable push to fail with `403 PERMISSION_DENIED` / `installations/request-failed`.
 7. **Save**. Changes can take a few minutes to apply; hard-refresh or try incognito.
 
 Also confirm in Vercel → **Environment Variables** (Production):

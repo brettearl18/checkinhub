@@ -1,8 +1,9 @@
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 import { sendPushToUser } from "@/lib/push-server";
-import { measurementDateKeyFromFirestore } from "@/lib/client-measurements-server";
 import { todayPerth } from "@/lib/perth-date";
 import { isClosedClientStatus } from "@/lib/client-status";
+import { HABIT_DEFINITIONS } from "@/lib/habits";
+import { HABIT_ENTRIES_COLLECTION } from "@/lib/habits-streaks";
 
 async function getClientAuthUid(
   db: ReturnType<typeof getAdminDb>,
@@ -17,18 +18,20 @@ async function getClientAuthUid(
   return clientId;
 }
 
-const ACTION_PATH = "/client/profile#body-weight";
+const ACTION_PATH = "/client/habits";
+const HABIT_IDS = HABIT_DEFINITIONS.map((h) => h.id);
 
 /**
- * 7:00 Australia/Perth daily: remind clients to log body weight (push + in-app), if not yet today.
- * Cron: 0 23 * * * (UTC) → 07:00 Perth.
+ * 19:00 Australia/Perth daily: remind clients to log habits (push + in-app)
+ * if they have not logged all habits for today.
+ * Cron: 0 11 * * * (UTC) → 19:00 Perth.
  */
-export async function runWeightRemindersPerth(): Promise<{
+export async function runHabitRemindersPerth(): Promise<{
   ok: true;
   perthDate: string;
   checked: number;
   reminded: number;
-  skippedLogged: number;
+  skippedComplete: number;
   skippedClosed: number;
   pushSent: number;
   errors: number;
@@ -39,7 +42,7 @@ export async function runWeightRemindersPerth(): Promise<{
       perthDate: todayPerth(),
       checked: 0,
       reminded: 0,
-      skippedLogged: 0,
+      skippedComplete: 0,
       skippedClosed: 0,
       pushSent: 0,
       errors: 0,
@@ -50,13 +53,13 @@ export async function runWeightRemindersPerth(): Promise<{
   const perthDate = todayPerth();
   const now = new Date();
 
-  const title = "Log your body weight";
-  const message = "Add today’s weight on your profile — quick daily check-in.";
+  const title = "Log your habits";
+  const message = "Evening check-in — log steps, hydration, and sleep in your Habit Tracker.";
 
   const clientsSnap = await db.collection("clients").get();
   let checked = 0;
   let reminded = 0;
-  let skippedLogged = 0;
+  let skippedComplete = 0;
   let skippedClosed = 0;
   let pushSent = 0;
   let errors = 0;
@@ -72,21 +75,21 @@ export async function runWeightRemindersPerth(): Promise<{
         continue;
       }
 
-      const measSnap = await db
-        .collection("client_measurements")
+      const entriesSnap = await db
+        .collection(HABIT_ENTRIES_COLLECTION)
         .where("clientId", "==", clientId)
-        .orderBy("date", "desc")
-        .limit(30)
+        .where("date", "==", perthDate)
+        .limit(20)
         .get();
 
-      const hasToday = measSnap.docs.some((m) => {
-        const key = measurementDateKeyFromFirestore(m.data().date);
-        const bw = m.data().bodyWeight;
-        return key === perthDate && typeof bw === "number" && !Number.isNaN(bw);
-      });
-
-      if (hasToday) {
-        skippedLogged += 1;
+      const loggedIds = new Set<string>();
+      for (const entry of entriesSnap.docs) {
+        const habitId = (entry.data() as { habitId?: string }).habitId;
+        if (habitId) loggedIds.add(habitId);
+      }
+      const allLogged = HABIT_IDS.every((id) => loggedIds.has(id));
+      if (allLogged) {
+        skippedComplete += 1;
         continue;
       }
 
@@ -95,11 +98,11 @@ export async function runWeightRemindersPerth(): Promise<{
 
       await db.collection("notifications").add({
         userId,
-        type: "weight_daily_reminder",
+        type: "habit_evening_reminder",
         title,
         message,
-        actionUrl: "/client/profile#body-weight",
-        metadata: { clientId, perthDate, anchor: "body-weight" },
+        actionUrl: ACTION_PATH,
+        metadata: { clientId, perthDate },
         isRead: false,
         createdAt: now,
       });
@@ -111,7 +114,7 @@ export async function runWeightRemindersPerth(): Promise<{
           title,
           body: message,
           actionPath: ACTION_PATH,
-          tag: "weight_daily_reminder",
+          tag: "habit_evening_reminder",
         });
         pushSent += result.sent;
       } catch {
@@ -122,5 +125,14 @@ export async function runWeightRemindersPerth(): Promise<{
     }
   }
 
-  return { ok: true, perthDate, checked, reminded, skippedLogged, skippedClosed, pushSent, errors };
+  return {
+    ok: true,
+    perthDate,
+    checked,
+    reminded,
+    skippedComplete,
+    skippedClosed,
+    pushSent,
+    errors,
+  };
 }

@@ -22,8 +22,8 @@ export const HABIT_DEFINITIONS: HabitDefinition[] = [
   {
     id: "steps",
     label: "Daily step count",
-    description: "8pm reminder",
-    reminderTime: "8pm",
+    description: "7pm reminder",
+    reminderTime: "7pm",
     options: [
       { value: "under_7500", label: "< 7,500 steps", goalMet: false },
       { value: "7500_8500", label: "7,500 – 8,500 steps", goalMet: true },
@@ -34,8 +34,8 @@ export const HABIT_DEFINITIONS: HabitDefinition[] = [
   {
     id: "hydration",
     label: "Hydration",
-    description: "8pm reminder",
-    reminderTime: "8pm",
+    description: "7pm reminder",
+    reminderTime: "7pm",
     options: [
       { value: "under_2_5", label: "< 2.5L water per day", goalMet: false },
       { value: "2_5_plus", label: "2.5L+ water per day", goalMet: true },
@@ -44,8 +44,8 @@ export const HABIT_DEFINITIONS: HabitDefinition[] = [
   {
     id: "sleep",
     label: "Sleep",
-    description: "9am reminder",
-    reminderTime: "9am",
+    description: "7pm reminder",
+    reminderTime: "7pm",
     options: [
       { value: "under_7", label: "< 7 hours", goalMet: false },
       { value: "7_plus", label: "7+ hours", goalMet: true },
