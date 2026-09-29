@@ -113,6 +113,7 @@ export async function enableClientPushNotifications(
         message: (err as { error?: string }).error || "Failed to save notification setup.",
       };
     }
+    void listenForForegroundPush();
     return { ok: true };
   } catch (e) {
     return {
@@ -128,9 +129,26 @@ export async function enableClientPushNotifications(
  * and nothing is displayed unless we show it ourselves.
  * Returns an unsubscribe function.
  */
+let foregroundPushListener: Promise<(() => void) | null> | null = null;
+
 export async function listenForForegroundPush(): Promise<() => void> {
-  if (!isPushSupportedInBrowser() || Notification.permission !== "granted") return () => {};
-  if (!(await isSupported().catch(() => false))) return () => {};
+  if (!foregroundPushListener) {
+    foregroundPushListener = subscribeToForegroundPush();
+  }
+  const unsubscribe = await foregroundPushListener;
+  if (!unsubscribe) {
+    foregroundPushListener = null;
+    return () => {};
+  }
+  return () => {
+    unsubscribe();
+    foregroundPushListener = null;
+  };
+}
+
+async function subscribeToForegroundPush(): Promise<(() => void) | null> {
+  if (!isPushSupportedInBrowser() || Notification.permission !== "granted") return null;
+  if (!(await isSupported().catch(() => false))) return null;
   const messaging = getMessaging(getFirebaseApp());
   return onMessage(messaging, (payload) => {
     const title = payload.notification?.title || payload.data?.title || "CheckinHUB";
@@ -143,8 +161,9 @@ export async function listenForForegroundPush(): Promise<() => void> {
           icon: "/icon-192.png",
           badge: "/badge-96.png",
           tag: data.tag || "checkinhub",
+          renotify: true,
           data,
-        })
+        } as NotificationOptions)
       )
       .catch(() => {
         /* no registration — in-app notification list still has it */

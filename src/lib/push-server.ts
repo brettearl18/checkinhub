@@ -73,6 +73,7 @@ export async function sendPushToUser(options: SendPushOptions): Promise<{ sent: 
             badge: `${baseUrl}/badge-96.png`,
             // Same tag replaces instead of stacking when a device holds more than one token.
             tag: notificationTag,
+            renotify: true,
           },
         },
         data: {

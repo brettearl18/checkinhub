@@ -34,6 +34,7 @@ messaging.onBackgroundMessage(function(payload) {
     icon: '/icon-192.png',
     badge: '/badge-96.png',
     tag: payload.data?.tag || 'checkinhub',
+    renotify: true,
     data: payload.data || {},
     requireInteraction: false,
   };
