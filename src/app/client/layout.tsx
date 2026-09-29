@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { TimelineAnnouncementModal } from "@/components/client/TimelineAnnouncementModal";
 import { ClientHeightPromptModal } from "@/components/client/ClientHeightPromptModal";
 import { ClientPushPromptModal } from "@/components/client/ClientPushPromptModal";
+import { ClientPushForegroundListener } from "@/components/client/ClientPushForegroundListener";
 import { VanaBrandBar } from "@/components/client/VanaBrandBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApiClient } from "@/lib/api-client";
@@ -273,6 +274,7 @@ export default function ClientLayout({
       <TimelineAnnouncementModal userId={announcementUserId} />
       <ClientHeightPromptModal enabled={Boolean(user) && !portalAccessLimited} />
       <ClientPushPromptModal enabled={Boolean(user) && !portalAccessLimited} />
+      <ClientPushForegroundListener enabled={Boolean(user) && !portalAccessLimited} />
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-stone-200/80 bg-[#faf7f2]">
         <VanaBrandBar />

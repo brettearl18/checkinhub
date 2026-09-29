@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   if ("error" in authResult) return authResult.error;
   const userId = authResult.identity.uid;
 
-  let body: { token?: string };
+  let body: { token?: string; standalone?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -34,10 +34,24 @@ export async function POST(request: Request) {
   const tokenId = token.slice(0, 50) + "_" + Buffer.from(token).toString("base64").slice(-20);
   const docId = tokenId.replace(/[^a-zA-Z0-9_-]/g, "_");
 
+  const userAgent = request.headers.get("user-agent") ?? "";
+  const device = /iPhone|iPad|iPod/i.test(userAgent)
+    ? "ios"
+    : /Android/i.test(userAgent)
+      ? "android"
+      : /Macintosh/i.test(userAgent)
+        ? "mac"
+        : /Windows/i.test(userAgent)
+          ? "windows"
+          : "other";
+
   await db.collection(PUSH_TOKENS_COLLECTION).doc(docId).set(
     {
       userId,
       token,
+      device,
+      userAgent: userAgent.slice(0, 300),
+      standalone: body.standalone === true,
       updatedAt: new Date(),
     },
     { merge: true }

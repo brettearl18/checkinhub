@@ -1,6 +1,6 @@
 "use client";
 
-import { getToken, getMessaging } from "firebase/messaging";
+import { getToken, getMessaging, onMessage, isSupported } from "firebase/messaging";
 import { getFirebaseApp } from "@/lib/firebase";
 
 const VAPID_KEY =
@@ -17,6 +17,37 @@ export function isPushSupportedInBrowser(): boolean {
     "Notification" in window &&
     "serviceWorker" in navigator
   );
+}
+
+function isIosDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  // iPadOS reports as Mac; touch support distinguishes it.
+  return /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+}
+
+function isStandaloneApp(): boolean {
+  if (typeof window === "undefined") return false;
+  const nav = navigator as Navigator & { standalone?: boolean };
+  return nav.standalone === true || window.matchMedia?.("(display-mode: standalone)").matches === true;
+}
+
+/**
+ * What the login prompt should show for a client without push:
+ * - enable: browser supports push; show the Enable button
+ * - ios-install: iPhone/iPad in Safari; push only works from the Home Screen app
+ * - denied: permission blocked; explain how to unblock
+ * - none: no path to push on this browser (e.g. some in-app browsers)
+ */
+export type PushPromptMode = "enable" | "ios-install" | "denied" | "none";
+
+export function getPushPromptMode(): PushPromptMode {
+  if (typeof window === "undefined" || !VAPID_KEY) return "none";
+  if (isIosDevice() && !isStandaloneApp()) return "ios-install";
+  if (!isPushSupportedInBrowser()) return "none";
+  if (Notification.permission === "denied") return "denied";
+  return "enable";
 }
 
 /**
@@ -72,7 +103,7 @@ export async function enableClientPushNotifications(
     const res = await fetchWithAuth("/api/client/push-subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, standalone: isStandaloneApp() }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -90,4 +121,33 @@ export async function enableClientPushNotifications(
       message: e instanceof Error ? e.message : "Something went wrong",
     };
   }
+}
+
+/**
+ * FCM hands pushes to the page (not the service worker) while the app is open,
+ * and nothing is displayed unless we show it ourselves.
+ * Returns an unsubscribe function.
+ */
+export async function listenForForegroundPush(): Promise<() => void> {
+  if (!isPushSupportedInBrowser() || Notification.permission !== "granted") return () => {};
+  if (!(await isSupported().catch(() => false))) return () => {};
+  const messaging = getMessaging(getFirebaseApp());
+  return onMessage(messaging, (payload) => {
+    const title = payload.notification?.title || payload.data?.title || "CheckinHUB";
+    const body = payload.notification?.body || payload.data?.body || "";
+    const data = payload.data ?? {};
+    void navigator.serviceWorker.ready
+      .then((reg) =>
+        reg.showNotification(title, {
+          body,
+          icon: "/icon-192.png",
+          badge: "/badge-96.png",
+          tag: data.tag || "checkinhub",
+          data,
+        })
+      )
+      .catch(() => {
+        /* no registration — in-app notification list still has it */
+      });
+  });
 }

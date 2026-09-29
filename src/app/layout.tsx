@@ -6,7 +6,8 @@ import { fontDisplay, fontSans } from "@/lib/fonts";
 export const metadata: Metadata = {
   title: "CheckinHUB",
   description: "Coach–client check-in and progress platform",
-  icons: { icon: "/icon-192.png" },
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "CheckinHUB", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { useApiClient } from "@/lib/api-client";
 import {
   enableClientPushNotifications,
-  isPushSupportedInBrowser,
+  getPushPromptMode,
+  type PushPromptMode,
 } from "@/lib/client-push";
 
 const SESSION_SKIP_KEY = "checkinhub.push-prompt.skipped";
@@ -19,12 +20,14 @@ interface Props {
 
 /**
  * Prompts clients who have not enabled push to turn on notifications after login.
+ * On iPhone Safari it explains Add to Home Screen; when blocked it explains how to unblock.
  * "Later" skips for the browser session only; next login shows again.
  * Yields to the height prompt when that is also needed.
  */
 export function ClientPushPromptModal({ enabled = true }: Props) {
   const { fetchWithAuth } = useApiClient();
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<PushPromptMode>("enable");
   const [enabling, setEnabling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
@@ -38,10 +41,8 @@ export function ClientPushPromptModal({ enabled = true }: Props) {
     } catch {
       /* ignore */
     }
-    if (!isPushSupportedInBrowser()) return;
-    if (typeof Notification !== "undefined" && Notification.permission === "denied") {
-      // Still show once so they know how to fix it — unless they already skipped.
-    }
+    const promptMode = getPushPromptMode();
+    if (promptMode === "none") return;
 
     try {
       const res = await fetchWithAuth("/api/client/setup-status");
@@ -58,6 +59,7 @@ export function ClientPushPromptModal({ enabled = true }: Props) {
       }
       if (data.hasHeight !== true && !heightSkipped) return;
 
+      setMode(promptMode);
       setOpen(true);
     } catch {
       /* ignore */
@@ -127,6 +129,70 @@ export function ClientPushPromptModal({ enabled = true }: Props) {
       aria-labelledby="push-prompt-title"
     >
       <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-6 shadow-xl">
+        {mode === "ios-install" ? (
+          <>
+            <h2 id="push-prompt-title" className="text-lg font-semibold text-[var(--color-text)]">
+              Get reminders on your iPhone
+            </h2>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              iPhone only allows notifications from the CheckinHUB app on your Home Screen. It takes 30
+              seconds:
+            </p>
+            <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-[var(--color-text)]">
+              <li>
+                In Safari, tap the <strong>Share</strong> button (square with an up arrow).
+              </li>
+              <li>
+                Scroll down and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.
+              </li>
+              <li>Open CheckinHUB from the new Home Screen icon and sign in.</li>
+              <li>
+                Tap <strong>Enable notifications</strong> when asked.
+              </li>
+            </ol>
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+              You’ll then get a morning body-weight nudge and an evening Habit Tracker reminder.
+            </p>
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="primary" onClick={skipForSession}>
+                Got it
+              </Button>
+            </div>
+          </>
+        ) : mode === "denied" ? (
+          <>
+            <h2 id="push-prompt-title" className="text-lg font-semibold text-[var(--color-text)]">
+              Notifications are blocked
+            </h2>
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+              Notifications were turned off for CheckinHUB on this device, so you’re missing your morning
+              weight and evening habit reminders. To turn them back on:
+            </p>
+            <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-[var(--color-text)]">
+              <li>
+                <strong>iPhone (Home Screen app):</strong> Settings → Notifications → CheckinHUB → Allow
+                Notifications.
+              </li>
+              <li>
+                <strong>Android / Chrome:</strong> tap the icon left of the web address → Permissions →
+                Notifications → Allow.
+              </li>
+            </ul>
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+              Then reopen the app and tap Enable in{" "}
+              <Link href="/client/notifications" className="text-[var(--color-primary)] hover:underline" onClick={skipForSession}>
+                Notifications
+              </Link>
+              .
+            </p>
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="primary" onClick={skipForSession}>
+                Got it
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
         <h2 id="push-prompt-title" className="text-lg font-semibold text-[var(--color-text)]">
           Enable notifications
         </h2>
@@ -156,8 +222,10 @@ export function ClientPushPromptModal({ enabled = true }: Props) {
               <Link href="/client/notifications" className="text-[var(--color-primary)] hover:underline" onClick={skipForSession}>
                 Notifications
               </Link>
-              . On iPhone, add the app to your Home Screen first.
+              .
             </p>
+          </>
+        )}
           </>
         )}
       </div>

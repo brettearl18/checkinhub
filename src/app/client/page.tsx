@@ -10,6 +10,7 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { ClientDashboardBadges } from "@/components/client/ClientDashboardBadges";
 import { CycleTrackerDashboardBanner } from "@/components/client/CycleTrackerDashboardBanner";
 import { HabitWeeklyStrip } from "@/components/client/HabitWeeklyStrip";
+import { TodayWeightCard } from "@/components/client/TodayWeightCard";
 import { CheckInProgressChart } from "@/components/ui/CheckInProgressChart";
 import { MeasurementLineChartLazy } from "@/components/ui/MeasurementLineChartLazy";
 import { useApiClient } from "@/lib/api-client";
@@ -327,6 +328,18 @@ export default function ClientPortalPage() {
     }
   };
 
+  const reloadMeasurements = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/client/measurements");
+      if (res.ok) {
+        const data = await res.json();
+        setMeasurementList(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      /* dashboard keeps the previous list */
+    }
+  }, [fetchWithAuth]);
+
   useEffect(() => {
     loadData();
   }, [fetchWithAuth]);
@@ -519,6 +532,10 @@ export default function ClientPortalPage() {
           )}
         </div>
       </header>
+
+      {!authError && !loading && (
+        <TodayWeightCard className="mt-4" measurements={measurementList} onSaved={() => void reloadMeasurements()} />
+      )}
 
       {!authError && <CycleTrackerDashboardBanner />}
 

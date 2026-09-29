@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { ClientDashboardBadges } from "@/components/client/ClientDashboardBadges";
 import { ClientProgressCompactPreview } from "@/components/client/ClientProgressCompactPreview";
+import { TodayWeightCard } from "@/components/client/TodayWeightCard";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDdMmYyyy, formatDateDisplay, formatDateTimeDisplay } from "@/lib/format-date";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
@@ -245,6 +246,18 @@ export default function ClientDashboard2Page() {
     }
   };
 
+  const reloadMeasurements = async () => {
+    try {
+      const res = await fetchWithAuth("/api/client/measurements");
+      if (res.ok) {
+        const data = await res.json();
+        setMeasurements(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      /* keep previous list */
+    }
+  };
+
   if (authError) return <AuthErrorRetry onRetry={load} />;
 
   return (
@@ -261,6 +274,8 @@ export default function ClientDashboard2Page() {
         <Card className="vana-card p-8 text-center text-sm text-stone-500">Loading…</Card>
       ) : (
         <>
+          <TodayWeightCard measurements={measurements} onSaved={() => void reloadMeasurements()} />
+
           {/* KPI strip */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Link href="/client/progress" className="block">

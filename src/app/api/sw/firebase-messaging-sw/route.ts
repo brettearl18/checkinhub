@@ -30,7 +30,7 @@ messaging.onBackgroundMessage(function(payload) {
   const options = {
     body: payload.notification?.body || payload.data?.body || '',
     icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    badge: '/badge-96.png',
     tag: payload.data?.tag || 'checkinhub',
     data: payload.data || {},
     requireInteraction: false,
