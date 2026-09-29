@@ -17,7 +17,7 @@ async function getClientAuthUid(
   return clientId;
 }
 
-const ACTION_PATH = "/client/profile#body-weight";
+const ACTION_PATH = "/client?log=weight";
 
 /**
  * 7:00 Australia/Perth daily: remind clients to log body weight (push + in-app), if not yet today.
@@ -51,7 +51,7 @@ export async function runWeightRemindersPerth(): Promise<{
   const now = new Date();
 
   const title = "Log your body weight";
-  const message = "Add today’s weight on your profile — quick daily check-in.";
+  const message = "Morning weigh-in — tap to log today’s weight in a few seconds.";
 
   const clientsSnap = await db.collection("clients").get();
   let checked = 0;
@@ -98,8 +98,8 @@ export async function runWeightRemindersPerth(): Promise<{
         type: "weight_daily_reminder",
         title,
         message,
-        actionUrl: "/client/profile#body-weight",
-        metadata: { clientId, perthDate, anchor: "body-weight" },
+        actionUrl: ACTION_PATH,
+        metadata: { clientId, perthDate },
         isRead: false,
         createdAt: now,
       });

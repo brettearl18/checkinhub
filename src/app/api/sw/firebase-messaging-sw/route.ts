@@ -26,6 +26,8 @@ firebase.initializeApp(${JSON.stringify(config)});
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function(payload) {
+  // FCM already displays messages that carry a notification payload.
+  if (payload.notification) return;
   const title = payload.notification?.title || payload.data?.title || 'CheckinHUB';
   const options = {
     body: payload.notification?.body || payload.data?.body || '',
@@ -40,13 +42,18 @@ messaging.onBackgroundMessage(function(payload) {
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  const url = event.notification.data?.url || event.notification.data?.link || '/client';
+  const data = event.notification.data || {};
+  const fcm = data.FCM_MSG || {};
+  const rawUrl = data.url || data.link || fcm.data?.url || fcm.fcmOptions?.link || '/client';
+  const target = new URL(rawUrl, self.location.origin);
+  const url = self.location.origin + target.pathname + target.search + target.hash;
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      // Only reuse a window already on screen; background Chrome tabs would pull the user out of the installed app.
       for (var i = 0; i < clientList.length; i++) {
-        if (clientList[i].url && 'focus' in clientList[i]) {
-          clientList[i].navigate(url);
-          return clientList[i].focus();
+        var c = clientList[i];
+        if ((c.focused || c.visibilityState === 'visible') && 'focus' in c) {
+          return c.navigate(url).then(function(w) { return (w || c).focus(); });
         }
       }
       if (clients.openWindow) return clients.openWindow(url);

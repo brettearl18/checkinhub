@@ -57,6 +57,7 @@ export async function sendPushToUser(options: SendPushOptions): Promise<{ sent: 
     return { sent: 0, failed: tokenDocs.length };
   }
 
+  const notificationTag = tag || "checkinhub";
   let sent = 0;
   let failed = 0;
   for (const { ref, token } of tokenDocs) {
@@ -70,12 +71,14 @@ export async function sendPushToUser(options: SendPushOptions): Promise<{ sent: 
           notification: {
             icon: `${baseUrl}/icon-192.png`,
             badge: `${baseUrl}/badge-96.png`,
+            // Same tag replaces instead of stacking when a device holds more than one token.
+            tag: notificationTag,
           },
         },
         data: {
           url: link,
           link,
-          tag: tag || "checkinhub",
+          tag: notificationTag,
         },
       });
       sent++;

@@ -328,6 +328,11 @@ export default function ClientPortalPage() {
     }
   };
 
+  const [focusWeight, setFocusWeight] = useState(false);
+  useEffect(() => {
+    setFocusWeight(new URLSearchParams(window.location.search).get("log") === "weight");
+  }, []);
+
   const reloadMeasurements = useCallback(async () => {
     try {
       const res = await fetchWithAuth("/api/client/measurements");
@@ -534,7 +539,12 @@ export default function ClientPortalPage() {
       </header>
 
       {!authError && !loading && (
-        <TodayWeightCard className="mt-4" measurements={measurementList} onSaved={() => void reloadMeasurements()} />
+        <TodayWeightCard
+          className="mt-4"
+          measurements={measurementList}
+          onSaved={() => void reloadMeasurements()}
+          focusOnMount={focusWeight}
+        />
       )}
 
       {!authError && <CycleTrackerDashboardBanner />}

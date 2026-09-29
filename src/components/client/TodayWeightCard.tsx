@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useApiClient } from "@/lib/api-client";
@@ -16,6 +16,8 @@ interface Props {
   measurements: WeightEntry[];
   onSaved: () => void;
   className?: string;
+  /** Scroll to the card and focus the input (e.g. opened from the 7am reminder). */
+  focusOnMount?: boolean;
 }
 
 const MIN_KG = 20;
@@ -28,14 +30,22 @@ function addDays(yyyyMmDd: string, delta: number): string {
 }
 
 /** Quick daily body-weight entry on the client dashboard. */
-export function TodayWeightCard({ measurements, onSaved, className = "" }: Props) {
+export function TodayWeightCard({ measurements, onSaved, className = "", focusOnMount = false }: Props) {
   const { fetchWithAuth } = useApiClient();
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const today = todayPerth();
+
+  useEffect(() => {
+    if (!focusOnMount) return;
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    inputRef.current?.focus({ preventScroll: true });
+  }, [focusOnMount]);
 
   const { todayWeight, lastEntry, daysLoggedThisWeek } = useMemo(() => {
     const weighed = measurements.filter(
@@ -85,6 +95,7 @@ export function TodayWeightCard({ measurements, onSaved, className = "" }: Props
 
   if (todayWeight != null && !editing) {
     return (
+      <div ref={cardRef}>
       <Card className={`vana-card flex flex-wrap items-center justify-between gap-3 p-4 ${className}`}>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">Today’s weight</p>
@@ -97,10 +108,12 @@ export function TodayWeightCard({ measurements, onSaved, className = "" }: Props
           Update
         </Button>
       </Card>
+      </div>
     );
   }
 
   return (
+    <div ref={cardRef}>
     <Card className={`vana-card border-2 border-[var(--color-primary-muted)] p-4 sm:p-5 ${className}`}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-primary)]">Daily weigh-in</p>
       <h2 className="mt-1 text-lg font-semibold text-stone-800">
@@ -115,6 +128,7 @@ export function TodayWeightCard({ measurements, onSaved, className = "" }: Props
           <span className="sr-only">Weight in kg</span>
           <div className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 focus-within:border-[var(--color-primary)]">
             <input
+              ref={inputRef}
               type="number"
               inputMode="decimal"
               step="0.1"
@@ -147,5 +161,6 @@ export function TodayWeightCard({ measurements, onSaved, className = "" }: Props
         {lastEntry && ` · Last: ${lastEntry.bodyWeight} kg on ${formatDateDisplay(lastEntry.date)}`}
       </p>
     </Card>
+    </div>
   );
 }

@@ -63,6 +63,18 @@ export default function ClientHabitsPage() {
     load();
   }, [load]);
 
+  const [focusHabitId, setFocusHabitId] = useState<string | null>(null);
+  useEffect(() => {
+    setFocusHabitId(new URLSearchParams(window.location.search).get("focus"));
+  }, []);
+
+  useEffect(() => {
+    if (!focusHabitId || loading || !data) return;
+    document.getElementById(`habit-${focusHabitId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = window.setTimeout(() => setFocusHabitId(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [focusHabitId, loading, data]);
+
   const logEntry = async (habitId: string, value: string, entryDate?: string) => {
     if (!data) return;
     setHabitLogError(null);
@@ -155,8 +167,12 @@ export default function ClientHabitsPage() {
             const streak = data.streaks[habit.id] ?? { current: 0, longest: 0, goalMetToday: false };
             const busy = submitting === habit.id;
             return (
-              <li key={habit.id}>
-                <Card className="p-5">
+              <li key={habit.id} id={`habit-${habit.id}`}>
+                <Card
+                  className={`p-5 transition-shadow ${
+                    focusHabitId === habit.id ? "ring-2 ring-[var(--color-primary)] ring-offset-2" : ""
+                  }`}
+                >
                   <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                     <div>
                       <h2 className="font-semibold text-[var(--color-text)]">{habit.label}</h2>

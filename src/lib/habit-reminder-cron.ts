@@ -19,11 +19,24 @@ async function getClientAuthUid(
 }
 
 const ACTION_PATH = "/client/habits";
+const STEPS_ACTION_PATH = "/client/habits?focus=steps";
 const HABIT_IDS = HABIT_DEFINITIONS.map((h) => h.id);
 
+const STEPS_REMINDER = {
+  title: "Track your 10,000 steps",
+  message: "How did your steps go today? Tap to log them in your Habit Tracker.",
+  actionPath: STEPS_ACTION_PATH,
+};
+
+const REMAINING_HABITS_REMINDER = {
+  title: "Finish today’s habits",
+  message: "Steps are in — tap to add today’s water and sleep.",
+  actionPath: ACTION_PATH,
+};
+
 /**
- * 19:00 Australia/Perth daily: remind clients to log habits (push + in-app)
- * if they have not logged all habits for today.
+ * 19:00 Australia/Perth daily: remind clients to track steps (push + in-app),
+ * or to finish their other habits if steps are already logged. Skips anyone done for the day.
  * Cron: 0 11 * * * (UTC) → 19:00 Perth.
  */
 export async function runHabitRemindersPerth(): Promise<{
@@ -52,9 +65,6 @@ export async function runHabitRemindersPerth(): Promise<{
   const db = getAdminDb();
   const perthDate = todayPerth();
   const now = new Date();
-
-  const title = "Log your habits";
-  const message = "Evening check-in — log steps, hydration, and sleep in your Habit Tracker.";
 
   const clientsSnap = await db.collection("clients").get();
   let checked = 0;
@@ -96,12 +106,16 @@ export async function runHabitRemindersPerth(): Promise<{
       const userId = await getClientAuthUid(db, clientId, data);
       if (!userId) continue;
 
+      const { title, message, actionPath } = loggedIds.has("steps")
+        ? REMAINING_HABITS_REMINDER
+        : STEPS_REMINDER;
+
       await db.collection("notifications").add({
         userId,
         type: "habit_evening_reminder",
         title,
         message,
-        actionUrl: ACTION_PATH,
+        actionUrl: actionPath,
         metadata: { clientId, perthDate },
         isRead: false,
         createdAt: now,
@@ -113,7 +127,7 @@ export async function runHabitRemindersPerth(): Promise<{
           userId,
           title,
           body: message,
-          actionPath: ACTION_PATH,
+          actionPath,
           tag: "habit_evening_reminder",
         });
         pushSent += result.sent;
