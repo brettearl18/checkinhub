@@ -11,6 +11,11 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { ProgressPhotoEditForm } from "@/components/coach/ProgressPhotoEditForm";
 import { useApiClient } from "@/lib/api-client";
+import {
+  photoUploadCatchMessage,
+  photoUploadErrorMessage,
+  resizeImageForUpload,
+} from "@/lib/resize-image-for-upload";
 import { formatProgressPhotoDate } from "@/lib/progress-photo-dates";
 import { todayPerth } from "@/lib/perth-date";
 import {
@@ -131,8 +136,9 @@ export default function ProgressPhotosPage() {
     setBaselineError(null);
     setBaselineSuccess(null);
     try {
+      const uploadFile = await resizeImageForUpload(input.files[0]!);
       const formData = new FormData();
-      formData.append("file", input.files[0]!);
+      formData.append("file", uploadFile);
       formData.append("imageType", baselineType);
       formData.append("photoDate", baselineDate);
       if (baselineCaption.trim()) formData.append("caption", baselineCaption.trim());
@@ -148,15 +154,15 @@ export default function ProgressPhotosPage() {
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setBaselineError((body && body.error) || "Upload failed.");
+        setBaselineError(photoUploadErrorMessage(res.status, body));
         return;
       }
 
       input.value = "";
       setBaselineSuccess("Baseline saved. Add another angle or upload a current photo.");
       await load();
-    } catch {
-      setBaselineError("Upload failed.");
+    } catch (err) {
+      setBaselineError(photoUploadCatchMessage(err));
     } finally {
       setBaselineUploading(false);
     }
@@ -170,8 +176,9 @@ export default function ProgressPhotosPage() {
     setUploading(true);
     setError(null);
     try {
+      const uploadFile = await resizeImageForUpload(file);
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
       formData.append("imageType", imageType);
       if (caption.trim()) formData.append("caption", caption.trim());
 
@@ -186,7 +193,7 @@ export default function ProgressPhotosPage() {
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError((body && body.error) || "Upload failed.");
+        setError(photoUploadErrorMessage(res.status, body));
         return;
       }
       await res.json();
@@ -194,8 +201,8 @@ export default function ProgressPhotosPage() {
       input.value = "";
       setUploadOpen(false);
       await load();
-    } catch {
-      setError("Upload failed.");
+    } catch (err) {
+      setError(photoUploadCatchMessage(err));
     } finally {
       setUploading(false);
     }

@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useApiClient } from "@/lib/api-client";
 import { toLocalDateString } from "@/lib/format-date";
+import {
+  photoUploadCatchMessage,
+  photoUploadErrorMessage,
+  resizeImageForUpload,
+} from "@/lib/resize-image-for-upload";
 
 const LEGACY_IMAGE_TYPES = [
   { value: "before_front", label: "Before — front" },
@@ -48,8 +53,9 @@ export function CoachLegacyProgressPhotoUpload({ clientId, onUploaded }: Props) 
     setSuccess(null);
 
     try {
+      const uploadFile = await resizeImageForUpload(input.files[0]!);
       const formData = new FormData();
-      formData.append("file", input.files[0]!);
+      formData.append("file", uploadFile);
       formData.append("imageType", imageType);
       formData.append("photoDate", photoDate);
       if (caption.trim()) formData.append("caption", caption.trim());
@@ -61,15 +67,15 @@ export function CoachLegacyProgressPhotoUpload({ clientId, onUploaded }: Props) 
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError((body as { error?: string }).error ?? "Upload failed.");
+        setError(photoUploadErrorMessage(res.status, body));
         return;
       }
 
       input.value = "";
       setSuccess("Photo saved. Upload another or close this panel.");
       onUploaded?.();
-    } catch {
-      setError("Upload failed.");
+    } catch (err) {
+      setError(photoUploadCatchMessage(err));
     } finally {
       setUploading(false);
     }
