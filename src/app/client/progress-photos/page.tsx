@@ -12,9 +12,11 @@ import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoCompa
 import { ProgressPhotoEditForm } from "@/components/coach/ProgressPhotoEditForm";
 import { useApiClient } from "@/lib/api-client";
 import {
+  PHOTO_FILE_ACCEPT,
   photoUploadCatchMessage,
   photoUploadErrorMessage,
   resizeImageForUpload,
+  yieldForUiPaint,
 } from "@/lib/resize-image-for-upload";
 import { formatProgressPhotoDate } from "@/lib/progress-photo-dates";
 import { todayPerth } from "@/lib/perth-date";
@@ -136,6 +138,7 @@ export default function ProgressPhotosPage() {
     setBaselineError(null);
     setBaselineSuccess(null);
     try {
+      await yieldForUiPaint();
       const uploadFile = await resizeImageForUpload(input.files[0]!);
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -176,6 +179,7 @@ export default function ProgressPhotosPage() {
     setUploading(true);
     setError(null);
     try {
+      await yieldForUiPaint();
       const uploadFile = await resizeImageForUpload(file);
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -276,7 +280,7 @@ export default function ProgressPhotosPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
+                accept={PHOTO_FILE_ACCEPT}
                 className="block w-full text-sm text-stone-700 file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--color-primary-subtle)] file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-[var(--color-primary)]"
               />
             </div>
@@ -306,8 +310,13 @@ export default function ProgressPhotosPage() {
               </p>
             )}
             <Button type="submit" disabled={uploading}>
-              {uploading ? "Uploading…" : "Save current photo"}
+              {uploading ? "Preparing photo…" : "Save current photo"}
             </Button>
+            {uploading && (
+              <p className="text-xs text-stone-500">
+                Large iPhone photos can take a few seconds to prepare. Keep this screen open.
+              </p>
+            )}
           </form>
         </Card>
       )}
@@ -473,14 +482,14 @@ export default function ProgressPhotosPage() {
                     <input
                       ref={baselineFileInputRef}
                       type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      accept={PHOTO_FILE_ACCEPT}
                       required
                       className="block w-full text-xs text-stone-600 file:mr-2 file:rounded file:border-0 file:bg-[var(--color-primary-subtle)] file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-[var(--color-primary)]"
                     />
                   </div>
                   <div className="flex items-end sm:col-span-2 lg:col-span-1">
                     <Button type="submit" className="w-full sm:w-auto" disabled={baselineUploading}>
-                      {baselineUploading ? "Saving…" : "Save"}
+                      {baselineUploading ? "Preparing…" : "Save"}
                     </Button>
                   </div>
                 </div>

@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/Input";
 import { useApiClient } from "@/lib/api-client";
 import { toLocalDateString } from "@/lib/format-date";
 import {
+  PHOTO_FILE_ACCEPT,
   photoUploadCatchMessage,
   photoUploadErrorMessage,
   resizeImageForUpload,
+  yieldForUiPaint,
 } from "@/lib/resize-image-for-upload";
 
 const LEGACY_IMAGE_TYPES = [
@@ -53,6 +55,7 @@ export function CoachLegacyProgressPhotoUpload({ clientId, onUploaded }: Props) 
     setSuccess(null);
 
     try {
+      await yieldForUiPaint();
       const uploadFile = await resizeImageForUpload(input.files[0]!);
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -137,7 +140,7 @@ export function CoachLegacyProgressPhotoUpload({ clientId, onUploaded }: Props) 
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept={PHOTO_FILE_ACCEPT}
               required
               className="block w-full text-sm text-[var(--color-text-muted)] file:mr-3 file:rounded file:border-0 file:bg-[var(--color-primary-subtle)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[var(--color-text)]"
             />
@@ -147,7 +150,7 @@ export function CoachLegacyProgressPhotoUpload({ clientId, onUploaded }: Props) 
           {success && <p className="text-sm text-emerald-600">{success}</p>}
 
           <Button type="submit" disabled={uploading}>
-            {uploading ? "Uploading…" : "Upload photo"}
+            {uploading ? "Preparing photo…" : "Upload photo"}
           </Button>
         </form>
       )}
