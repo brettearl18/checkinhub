@@ -11,12 +11,10 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { ProgressPhotoComparePanel } from "@/components/coach/ProgressPhotoComparePanel";
 import { ProgressPhotoEditForm } from "@/components/coach/ProgressPhotoEditForm";
 import { useApiClient } from "@/lib/api-client";
+import { uploadProgressPhotoDirect } from "@/lib/progress-photo-upload-client";
 import {
   PHOTO_FILE_ACCEPT,
   photoUploadCatchMessage,
-  photoUploadErrorMessage,
-  resizeImageForUpload,
-  yieldForUiPaint,
 } from "@/lib/resize-image-for-upload";
 import { formatProgressPhotoDate } from "@/lib/progress-photo-dates";
 import { todayPerth } from "@/lib/perth-date";
@@ -138,33 +136,24 @@ export default function ProgressPhotosPage() {
     setBaselineError(null);
     setBaselineSuccess(null);
     try {
-      await yieldForUiPaint();
-      const uploadFile = await resizeImageForUpload(input.files[0]!);
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      formData.append("imageType", baselineType);
-      formData.append("photoDate", baselineDate);
-      if (baselineCaption.trim()) formData.append("caption", baselineCaption.trim());
-
-      const res = await fetchWithAuth("/api/client/progress-images", {
-        method: "POST",
-        body: formData,
+      await uploadProgressPhotoDirect({
+        file: input.files[0]!,
+        meta: {
+          imageType: baselineType,
+          photoDate: baselineDate,
+          caption: baselineCaption.trim() || null,
+        },
+        fetchWithAuth,
       });
-
-      if (res.status === 401) {
-        setAuthError(true);
-        return;
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setBaselineError(photoUploadErrorMessage(res.status, body));
-        return;
-      }
 
       input.value = "";
       setBaselineSuccess("Baseline saved. Add another angle or upload a current photo.");
       await load();
     } catch (err) {
+      if (err instanceof Error && (err as Error & { status?: number }).status === 401) {
+        setAuthError(true);
+        return;
+      }
       setBaselineError(photoUploadCatchMessage(err));
     } finally {
       setBaselineUploading(false);
@@ -179,33 +168,23 @@ export default function ProgressPhotosPage() {
     setUploading(true);
     setError(null);
     try {
-      await yieldForUiPaint();
-      const uploadFile = await resizeImageForUpload(file);
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      formData.append("imageType", imageType);
-      if (caption.trim()) formData.append("caption", caption.trim());
-
-      const res = await fetchWithAuth("/api/client/progress-images", {
-        method: "POST",
-        body: formData,
+      await uploadProgressPhotoDirect({
+        file,
+        meta: {
+          imageType,
+          caption: caption.trim() || null,
+        },
+        fetchWithAuth,
       });
-
-      if (res.status === 401) {
-        setAuthError(true);
-        return;
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(photoUploadErrorMessage(res.status, body));
-        return;
-      }
-      await res.json();
       setCaption("");
       input.value = "";
       setUploadOpen(false);
       await load();
     } catch (err) {
+      if (err instanceof Error && (err as Error & { status?: number }).status === 401) {
+        setAuthError(true);
+        return;
+      }
       setError(photoUploadCatchMessage(err));
     } finally {
       setUploading(false);
@@ -310,11 +289,11 @@ export default function ProgressPhotosPage() {
               </p>
             )}
             <Button type="submit" disabled={uploading}>
-              {uploading ? "Preparing photo…" : "Save current photo"}
+              {uploading ? "Uploading photo…" : "Save current photo"}
             </Button>
             {uploading && (
               <p className="text-xs text-stone-500">
-                Large iPhone photos can take a few seconds to prepare. Keep this screen open.
+                Large iPhone photos can take a little longer. Keep this screen open.
               </p>
             )}
           </form>

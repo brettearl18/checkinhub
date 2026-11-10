@@ -1,11 +1,7 @@
 /**
- * Browser-only. Shrinks phone photos before upload so the request stays under
- * Vercel's 4.5 MB serverless body limit (larger requests fail with 413 before
- * reaching the API route).
- *
- * Important for iPhone: decoding a 12 MP photo + canvas draw on the main thread
- * can freeze Safari/PWA for several seconds. We yield so "Preparing…" can paint
- * first, and we decode the image only once.
+ * Browser-only best-effort shrink before upload.
+ * Direct Storage upload is the source of truth for large/HEIC iPhone photos;
+ * this path only speeds things up when Safari can decode the file cheaply.
  */
 
 export const MAX_PHOTO_PICK_BYTES = 20 * 1024 * 1024;
@@ -40,20 +36,57 @@ export function yieldForUiPaint(): Promise<void> {
   });
 }
 
-async function decode(
+function isHeicLike(file: File): boolean {
+  const type = (file.type || "").toLowerCase();
+  if (type.includes("heic") || type.includes("heif")) return true;
+  const name = (file.name || "").toLowerCase();
+  return name.endsWith(".heic") || name.endsWith(".heif");
+}
+
+async function decodeDownscaled(
   file: File
 ): Promise<{ source: CanvasImageSource; width: number; height: number; release: () => void }> {
+  // Prefer resize-during-decode so 48MP iPhone photos never fully materialise in memory.
   if (typeof createImageBitmap === "function") {
     try {
-      const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+      // Landscape-biased first pass.
+      const wide = await createImageBitmap(file, {
+        imageOrientation: "from-image",
+        resizeWidth: MAX_LONG_EDGE_PX,
+        resizeQuality: "medium",
+      });
+      if (Math.max(wide.width, wide.height) <= MAX_LONG_EDGE_PX * 1.15) {
+        return {
+          source: wide,
+          width: wide.width,
+          height: wide.height,
+          release: () => wide.close(),
+        };
+      }
+      wide.close();
+      const tall = await createImageBitmap(file, {
+        imageOrientation: "from-image",
+        resizeHeight: MAX_LONG_EDGE_PX,
+        resizeQuality: "medium",
+      });
       return {
-        source: bitmap,
-        width: bitmap.width,
-        height: bitmap.height,
-        release: () => bitmap.close(),
+        source: tall,
+        width: tall.width,
+        height: tall.height,
+        release: () => tall.close(),
       };
     } catch {
-      // Fall through to <img> decoding (older Safari / HEIC edge cases).
+      try {
+        const full = await createImageBitmap(file, { imageOrientation: "from-image" });
+        return {
+          source: full,
+          width: full.width,
+          height: full.height,
+          release: () => full.close(),
+        };
+      } catch {
+        // Fall through to <img>.
+      }
     }
   }
 
@@ -63,11 +96,7 @@ async function decode(
       const el = new Image();
       el.onload = () => resolve(el);
       el.onerror = () =>
-        reject(
-          new PhotoPrepareError(
-            "Could not read this photo. On iPhone, try taking a screenshot of it and upload the screenshot."
-          )
-        );
+        reject(new PhotoPrepareError("Could not read this photo on the phone."));
       el.src = url;
     });
     return {
@@ -87,19 +116,24 @@ function toJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | 
 }
 
 /**
- * Returns a file that is safe to upload: small originals pass through untouched,
- * anything else is redrawn as a JPEG with the long edge capped.
+ * Returns a file that is safe to upload when the browser can decode it.
+ * Throws PhotoPrepareError for HEIC/undecodable files so the caller can
+ * fall back to direct Storage upload of the original.
  */
 export async function resizeImageForUpload(file: File): Promise<File> {
   if (file.size > MAX_PHOTO_PICK_BYTES) {
     throw new PhotoPrepareError("Photo is too large (max 20 MB). Please choose a smaller photo.");
+  }
+  // Let the server handle HEIC — decoding it in Safari is unreliable and can freeze.
+  if (isHeicLike(file)) {
+    throw new PhotoPrepareError("HEIC needs server processing");
   }
   if (file.type === "image/gif") return file;
   if (file.size <= SKIP_RESIZE_UNDER_BYTES && PASSTHROUGH_TYPES.has(file.type)) return file;
 
   await yieldForUiPaint();
 
-  const { source, width, height, release } = await decode(file);
+  const { source, width, height, release } = await decodeDownscaled(file);
   try {
     let longEdge = Math.min(MAX_LONG_EDGE_PX, Math.max(width, height));
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -131,19 +165,21 @@ export async function resizeImageForUpload(file: File): Promise<File> {
   }
 
   if (file.size <= TARGET_MAX_BYTES && PASSTHROUGH_TYPES.has(file.type)) return file;
-  throw new PhotoPrepareError(
-    "Could not prepare this photo for upload. Try a screenshot of the photo, or choose a smaller one."
-  );
+  throw new PhotoPrepareError("Could not prepare this photo on the phone.");
 }
 
 /** User-facing message for an error thrown while preparing or sending a photo. */
 export function photoUploadCatchMessage(err: unknown): string {
-  return err instanceof PhotoPrepareError ? err.message : "Upload failed.";
+  if (err instanceof PhotoPrepareError) return err.message;
+  if (err instanceof Error && (err as Error & { status?: number }).status === 401) {
+    return "Please sign in again, then try uploading.";
+  }
+  return "Upload failed.";
 }
 
 /** User-facing message for a failed photo upload response. */
 export function photoUploadErrorMessage(status: number, body: unknown): string {
-  if (status === 413) return "Photo is too large to upload. Please try a smaller photo.";
+  if (status === 413) return "Photo is too large to upload. Please try again.";
   const msg = (body as { error?: string } | null)?.error;
   return msg || "Upload failed.";
 }

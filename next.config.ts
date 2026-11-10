@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // sharp / heic-convert are native/wasm Node packages used by photo processing.
+  serverExternalPackages: ["sharp", "heic-convert", "libheif-js"],
   images: {
     remotePatterns: [
       {

@@ -5,12 +5,10 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useApiClient } from "@/lib/api-client";
 import { toLocalDateString } from "@/lib/format-date";
+import { uploadProgressPhotoDirect } from "@/lib/progress-photo-upload-client";
 import {
   PHOTO_FILE_ACCEPT,
   photoUploadCatchMessage,
-  photoUploadErrorMessage,
-  resizeImageForUpload,
-  yieldForUiPaint,
 } from "@/lib/resize-image-for-upload";
 
 const LEGACY_IMAGE_TYPES = [
@@ -55,24 +53,16 @@ export function CoachLegacyProgressPhotoUpload({ clientId, onUploaded }: Props) 
     setSuccess(null);
 
     try {
-      await yieldForUiPaint();
-      const uploadFile = await resizeImageForUpload(input.files[0]!);
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      formData.append("imageType", imageType);
-      formData.append("photoDate", photoDate);
-      if (caption.trim()) formData.append("caption", caption.trim());
-
-      const res = await fetchWithAuth(`/api/coach/clients/${clientId}/progress-images`, {
-        method: "POST",
-        body: formData,
+      await uploadProgressPhotoDirect({
+        file: input.files[0]!,
+        meta: {
+          imageType,
+          photoDate,
+          caption: caption.trim() || null,
+        },
+        fetchWithAuth,
+        apiBase: `/api/coach/clients/${clientId}/progress-images`,
       });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(photoUploadErrorMessage(res.status, body));
-        return;
-      }
 
       input.value = "";
       setSuccess("Photo saved. Upload another or close this panel.");
@@ -150,7 +140,7 @@ export function CoachLegacyProgressPhotoUpload({ clientId, onUploaded }: Props) 
           {success && <p className="text-sm text-emerald-600">{success}</p>}
 
           <Button type="submit" disabled={uploading}>
-            {uploading ? "Preparing photo…" : "Upload photo"}
+            {uploading ? "Uploading photo…" : "Upload photo"}
           </Button>
         </form>
       )}
