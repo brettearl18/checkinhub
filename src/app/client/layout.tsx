@@ -254,7 +254,7 @@ export default function ClientLayout({
   if (!user) return null;
 
   const isActive = (href: string) => {
-    if (href === "/client") return pathname === "/client";
+    if (href === "/client") return pathname === "/client" || pathname === "/client/classic";
     if (href === "/client/progress") {
       return (
         pathname === "/client/progress" ||

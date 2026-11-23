@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -9,6 +10,11 @@ import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
 import { useApiClient } from "@/lib/api-client";
 import { formatDateTimeDisplay, formatDateDisplay, toLocalDateString } from "@/lib/format-date";
+import {
+  getClientDashboardPref,
+  setClientDashboardPref,
+  type ClientDashboardPref,
+} from "@/lib/client-dashboard-pref";
 
 interface Measurement {
   id: string;
@@ -46,8 +52,10 @@ interface CoachReview {
 }
 
 export default function ClientProfilePage() {
+  const router = useRouter();
   const { fetchWithAuth } = useApiClient();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [dashboardPref, setDashboardPref] = useState<ClientDashboardPref>("new");
   const [coachReviews, setCoachReviews] = useState<CoachReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -258,6 +266,16 @@ export default function ClientProfilePage() {
     }
   };
 
+  useEffect(() => {
+    setDashboardPref(getClientDashboardPref());
+  }, []);
+
+  const chooseDashboard = (pref: ClientDashboardPref) => {
+    setClientDashboardPref(pref);
+    setDashboardPref(pref);
+    router.push(pref === "classic" ? "/client/classic" : "/client");
+  };
+
   if (loading && !profile) {
     return <p className="text-[var(--color-text-muted)]">Loading profile…</p>;
   }
@@ -341,6 +359,30 @@ export default function ClientProfilePage() {
 
       {!profile?.portalAccessLimited && (
       <>
+      <Card className="p-6" id="dashboard">
+        <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Home dashboard</h2>
+        <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+          The new home is the default when you open CheckinHUB. You can switch back to the classic
+          dashboard anytime.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={dashboardPref === "new" ? "primary" : "secondary"}
+            onClick={() => chooseDashboard("new")}
+          >
+            {dashboardPref === "new" ? "Using new dashboard" : "Use new dashboard"}
+          </Button>
+          <Button
+            type="button"
+            variant={dashboardPref === "classic" ? "primary" : "secondary"}
+            onClick={() => chooseDashboard("classic")}
+          >
+            {dashboardPref === "classic" ? "Using classic dashboard" : "Use classic dashboard"}
+          </Button>
+        </div>
+      </Card>
+
       <Card className="p-6" id="body-weight">
         <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Body weight</h2>
         <p className="text-sm text-[var(--color-text-secondary)] mb-4">
