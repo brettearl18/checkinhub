@@ -10,37 +10,70 @@ import { useApiClient } from "@/lib/api-client";
 import { formatDateDdMmYyyy, toLocalDateString } from "@/lib/format-date";
 import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 
-const WEEK_RANGE = { past: 2, future: 1 }; // include next week as pending (opens Friday 9am)
+/** Shift a Monday YYYY-MM-DD by N weeks (negative = past). */
+function addWeeksToMonday(mondayYyyyMmDd: string, weeks: number): string {
+  const [y, m, d] = mondayYyyyMmDd.split("-").map(Number);
+  const date = new Date(y!, m! - 1, d!);
+  date.setDate(date.getDate() + weeks * 7);
+  return toLocalDateString(date);
+}
 
-// Week is always Monday (inclusive) to Sunday (inclusive). reflectionWeekStart = Monday YYYY-MM-DD.
-function getWeekOptions(): WeekOption[] {
-  const options: WeekOption[] = [];
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  for (let i = -WEEK_RANGE.past; i <= WEEK_RANGE.future; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i * 7);
-    const day = d.getDay();
-    const diffToMonday = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + diffToMonday);
-    const monday = toLocalDateString(d);
-    const sunday = new Date(d);
-    sunday.setDate(sunday.getDate() + 6);
-    const sundayStr = toLocalDateString(sunday);
-    const label =
-      i === 0
-        ? `This week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
-        : i === 1
-          ? `Next week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
-          : `${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)}`;
-    options.push({
-      label,
-      reflectionWeekStart: monday,
-      isThisWeek: i === 0,
-      isNextWeek: i === 1,
-    });
+function sundayOfWeek(mondayYyyyMmDd: string): string {
+  const [y, m, d] = mondayYyyyMmDd.split("-").map(Number);
+  const sun = new Date(y!, m! - 1, d!);
+  sun.setDate(sun.getDate() + 6);
+  return toLocalDateString(sun);
+}
+
+function weekOptionFor(
+  monday: string,
+  thisMonday: string,
+  extras?: Partial<WeekOption>
+): WeekOption {
+  const isThisWeek = monday === thisMonday;
+  const isNextWeek = monday === addWeeksToMonday(thisMonday, 1);
+  const sundayStr = sundayOfWeek(monday);
+  const label = isThisWeek
+    ? `This week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
+    : isNextWeek
+      ? `Next week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
+      : `Week of ${formatDateDdMmYyyy(monday)} (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`;
+  return {
+    label,
+    reflectionWeekStart: monday,
+    isThisWeek,
+    isNextWeek,
+    ...extras,
+  };
+}
+
+/**
+ * - last 2 reflection weeks (catch-up)
+ * - this week if already open
+ * - exactly one upcoming week in grey (this week if not open yet, else next week)
+ */
+function getActionableWeekOptions(thisMonday: string): WeekOption[] {
+  const options: WeekOption[] = [
+    weekOptionFor(addWeeksToMonday(thisMonday, -2), thisMonday),
+    weekOptionFor(addWeeksToMonday(thisMonday, -1), thisMonday),
+  ];
+
+  if (isWeekOpenPerth(thisMonday)) {
+    options.push(weekOptionFor(thisMonday, thisMonday));
+    // One week ahead, grey preview
+    options.push(
+      weekOptionFor(addWeeksToMonday(thisMonday, 1), thisMonday, {
+        isUpcomingPreview: true,
+      })
+    );
+  } else {
+    // This week not open yet — show it grey as the single upcoming preview
+    options.push(
+      weekOptionFor(thisMonday, thisMonday, { isUpcomingPreview: true })
+    );
   }
-  return options;
+
+  return options.sort((a, b) => b.reflectionWeekStart.localeCompare(a.reflectionWeekStart));
 }
 
 interface FormItem {
@@ -71,59 +104,19 @@ export default function NewCheckInPage() {
   const [loadingWeeks, setLoadingWeeks] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [markingMissed, setMarkingMissed] = useState(false);
+  const [markingMissedWeek, setMarkingMissedWeek] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [promptMissed, setPromptMissed] = useState<{ week: string; assignmentId: string; previousCount: number } | null>(null);
   const [startWeek, setStartWeek] = useState<string | null>(null);
 
-  const weekOptions = getWeekOptions();
   const thisMonday = thisMondayPerth();
-  const nextMonday = (() => {
-    const d = new Date(thisMonday + "T12:00:00Z");
-    d.setUTCDate(d.getUTCDate() + 7);
-    return d.toISOString().slice(0, 10);
-  })();
-  const previousMonday = (() => {
-    const d = new Date(thisMonday + "T12:00:00Z");
-    d.setUTCDate(d.getUTCDate() - 7);
-    return d.toISOString().slice(0, 10);
-  })();
-  // Only show 1 week before, this week, and 1 week ahead (no long list of past weeks)
-  const threeWeekWindow = useMemo(() => [nextMonday, thisMonday, previousMonday] as const, [nextMonday, thisMonday, previousMonday]);
-  const weeksWithAssignments = useMemo(() => {
-    const sorted = [...threeWeekWindow].sort().reverse();
-    const cutoff = startWeek ?? "2000-01-01";
-    return sorted
-      .filter((monday) => monday >= cutoff)
-      .map((monday) => {
-        const [y, m, d] = monday.split("-").map(Number);
-        const mon = new Date(y, m - 1, d);
-        const sun = new Date(mon);
-        sun.setDate(sun.getDate() + 6);
-        const sundayStr = toLocalDateString(sun);
-        const isThisWeek = monday === thisMonday;
-        const isNextWeek = monday === nextMonday;
-        const label = isThisWeek
-          ? `This week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
-          : isNextWeek
-            ? `Next week (${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)})`
-            : `${formatDateDdMmYyyy(monday)} – ${formatDateDdMmYyyy(sundayStr)}`;
-        return {
-          label,
-          reflectionWeekStart: monday,
-          isThisWeek,
-          isNextWeek,
-        };
-      });
-  }, [threeWeekWindow, thisMonday, nextMonday, startWeek]);
-
   const cutoff = startWeek ?? "2000-01-01";
-  const weekOptionsFiltered = useMemo(
-    () => weekOptions.filter((w) => w.reflectionWeekStart >= cutoff),
-    [weekOptions, cutoff]
-  );
-  const openWeeks = weekOptionsFiltered.filter(
-    (w) => w.reflectionWeekStart <= thisMondayPerth() || isWeekOpenPerth(w.reflectionWeekStart)
-  );
+  const weekOptionsFiltered = useMemo(() => {
+    return getActionableWeekOptions(thisMonday).filter(
+      (w) => w.reflectionWeekStart >= cutoff
+    );
+  }, [thisMonday, cutoff]);
+  const openWeeks = weekOptionsFiltered.filter((w) => !w.isUpcomingPreview);
   const allOpenWeeksDone =
     openWeeks.length > 0 && openWeeks.every((w) => completedWeeks.includes(w.reflectionWeekStart));
 
@@ -282,6 +275,89 @@ export default function NewCheckInPage() {
     setPromptMissed(null);
   };
 
+  const refreshWeekStatuses = async () => {
+    if (!selectedForm) return;
+    const res = await fetchWithAuth(
+      `/api/check-in/completed-weeks?formId=${encodeURIComponent(selectedForm.id)}`
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    setCompletedWeeks(Array.isArray(data?.completed) ? data.completed : []);
+    setInProgressWeeks(Array.isArray(data?.inProgress) ? data.inProgress : []);
+  };
+
+  /** Mark a past week as missed from the week picker. */
+  const handleMarkMissedWeek = async (reflectionWeekStart: string) => {
+    if (reflectionWeekStart >= thisMonday) return;
+    if (!selectedForm) return;
+
+    const inProgress = inProgressWeeks.includes(reflectionWeekStart);
+    const weekLabel = formatDateDdMmYyyy(reflectionWeekStart);
+    const msg = inProgress
+      ? `Mark as missed? Your saved progress for the week of ${weekLabel} will be discarded and it will be removed from your to-do list.`
+      : `Mark the check-in for the week of ${weekLabel} as missed? It will be removed from your to-do list.`;
+    if (!window.confirm(msg)) return;
+
+    setMarkingMissedWeek(reflectionWeekStart);
+    setError(null);
+    try {
+      let assignmentId = getAssignmentIdForWeek(reflectionWeekStart);
+      if (!assignmentId) {
+        const resolveRes = await fetchWithAuth("/api/check-in/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            formId: selectedForm.id,
+            reflectionWeekStart,
+          }),
+        });
+        if (!resolveRes.ok) {
+          const text = await resolveRes.text();
+          setError(text || "Could not open that week to mark as missed.");
+          return;
+        }
+        const resolved = await resolveRes.json();
+        assignmentId = typeof resolved.assignmentId === "string" ? resolved.assignmentId : null;
+        if (assignmentId) {
+          setAssignments((prev) => {
+            if (prev.some((a) => a.id === assignmentId)) return prev;
+            return [
+              ...prev,
+              {
+                id: assignmentId!,
+                formId: selectedForm.id,
+                formTitle: selectedForm.title,
+                reflectionWeekStart,
+                status: "pending",
+              },
+            ];
+          });
+        }
+      }
+      if (!assignmentId) {
+        setError("Could not find that check-in to mark as missed.");
+        return;
+      }
+
+      const res = await fetchWithAuth(`/api/check-in/${assignmentId}/mark-missed`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(typeof body?.error === "string" ? body.error : "Could not mark as missed.");
+        return;
+      }
+
+      setAssignments((prev) => prev.filter((a) => a.id !== assignmentId));
+      setInProgressWeeks((prev) => prev.filter((w) => w !== reflectionWeekStart));
+      await refreshWeekStatuses();
+    } catch {
+      setError("Could not mark as missed.");
+    } finally {
+      setMarkingMissedWeek(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -359,7 +435,8 @@ export default function NewCheckInPage() {
               Which week are you filling in?
             </h2>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-              Select the week you&apos;re checking in for. Only weeks from when you started are shown. This week and next week open Friday 9am Perth so you review the week that&apos;s just passed.
+              Choose a week to check in for. You&apos;ll see the last two weeks (to catch up if needed),
+              plus one upcoming week in grey until it opens Friday 9am Perth.
             </p>
             {loadingWeeks && (
               <p className="mt-4 text-sm text-[var(--color-text-muted)]">
@@ -371,14 +448,21 @@ export default function NewCheckInPage() {
                 You are up to date — well done!
               </p>
             )}
-            {!loadingWeeks && (
+            {!loadingWeeks && weekOptionsFiltered.length === 0 && (
+              <p className="mt-4 text-sm text-[var(--color-text-muted)]">
+                No weeks available yet. Check-ins open Friday 9am Perth.
+              </p>
+            )}
+            {!loadingWeeks && weekOptionsFiltered.length > 0 && (
               <div className="mt-4">
                 <WeekCalendar
-                  weeks={weeksWithAssignments.length > 0 ? weeksWithAssignments : weekOptionsFiltered}
+                  weeks={weekOptionsFiltered}
                   completedWeekStarts={completedWeeks}
                   inProgressWeekStarts={inProgressWeeks}
                   onSelectWeek={handleSelectWeek}
-                  resolving={resolving || markingMissed}
+                  onMarkMissed={handleMarkMissedWeek}
+                  markingMissedWeek={markingMissedWeek}
+                  resolving={resolving || markingMissed || markingMissedWeek != null}
                 />
               </div>
             )}

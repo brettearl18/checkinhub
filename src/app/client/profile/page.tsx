@@ -362,8 +362,8 @@ export default function ClientProfilePage() {
       <Card className="p-6" id="dashboard">
         <h2 className="text-lg font-medium text-[var(--color-text)] mb-1">Home dashboard</h2>
         <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-          The new home is the default when you open CheckinHUB. You can switch back to the classic
-          dashboard anytime.
+          The redesigned home is the default when you open CheckinHUB. You can switch back to the
+          classic dashboard anytime.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -371,7 +371,7 @@ export default function ClientProfilePage() {
             variant={dashboardPref === "new" ? "primary" : "secondary"}
             onClick={() => chooseDashboard("new")}
           >
-            {dashboardPref === "new" ? "Using new dashboard" : "Use new dashboard"}
+            {dashboardPref === "new" ? "Using redesigned home" : "Use redesigned home"}
           </Button>
           <Button
             type="button"

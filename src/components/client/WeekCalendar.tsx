@@ -1,13 +1,15 @@
 "use client";
 
 import { formatDateDdMmYyyy, toLocalDateString } from "@/lib/format-date";
-import { isWeekOpenPerth } from "@/lib/perth-date";
+import { isWeekOpenPerth, thisMondayPerth } from "@/lib/perth-date";
 
 export interface WeekOption {
   reflectionWeekStart: string; // Monday YYYY-MM-DD
   label: string;
   isThisWeek: boolean;
   isNextWeek?: boolean; // +1 week, not yet open (opens Friday 9am)
+  /** Not open yet — shown grey, not tappable */
+  isUpcomingPreview?: boolean;
 }
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -44,6 +46,9 @@ interface WeekCalendarProps {
   completedWeekStarts: string[];
   inProgressWeekStarts: string[];
   onSelectWeek: (reflectionWeekStart: string) => void;
+  /** Past weeks only — mark that week's assignment as missed */
+  onMarkMissed?: (reflectionWeekStart: string) => void;
+  markingMissedWeek?: string | null;
   disabled?: boolean;
   resolving?: boolean;
 }
@@ -54,15 +59,31 @@ function getTodayLocal(): string {
   return toLocalDateString(d);
 }
 
+/**
+ * The reflection week a client should be filling now:
+ * this calendar week once it has opened (Fri 9am), otherwise the previous week.
+ */
+function currentCheckInWeekStart(thisMonday: string): string {
+  if (isWeekOpenPerth(thisMonday)) return thisMonday;
+  const [y, m, d] = thisMonday.split("-").map(Number);
+  const prev = new Date(y!, m! - 1, d!);
+  prev.setDate(prev.getDate() - 7);
+  return toLocalDateString(prev);
+}
+
 export function WeekCalendar({
   weeks,
   completedWeekStarts,
   inProgressWeekStarts,
   onSelectWeek,
+  onMarkMissed,
+  markingMissedWeek = null,
   disabled = false,
   resolving = false,
 }: WeekCalendarProps) {
   const todayLocal = getTodayLocal();
+  const thisMonday = thisMondayPerth();
+  const activeCheckInWeek = currentCheckInWeekStart(thisMonday);
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
@@ -72,85 +93,150 @@ export function WeekCalendar({
         {weeks.map((w) => {
           const done = completedWeekStarts.includes(w.reflectionWeekStart);
           const inProgress = inProgressWeekStarts.includes(w.reflectionWeekStart);
-          const thisWeekNotYetOpen = w.isThisWeek === true && !isWeekOpenPerth(w.reflectionWeekStart);
-          const pending = w.isNextWeek === true || thisWeekNotYetOpen;
-          const isDisabled = done || pending || disabled || resolving;
+          const upcoming =
+            w.isUpcomingPreview === true ||
+            ((w.isThisWeek || w.isNextWeek) && !isWeekOpenPerth(w.reflectionWeekStart));
+          const isPast = w.reflectionWeekStart < thisMonday;
+          const isDisabled = done || upcoming || disabled || resolving;
           const days = getWeekDays(w.reflectionWeekStart);
           const sunday = days[6];
           const weekRangeLabel = `${formatDateDdMmYyyy(w.reflectionWeekStart)} – ${formatDateDdMmYyyy(sunday.date)}`;
-          const fridayDate = pending ? getFridayOfWeek(w.reflectionWeekStart) : null; // Friday of that week for "opens Fri 9am"
-          const outstanding = !done && !pending;
+          const fridayDate = upcoming ? getFridayOfWeek(w.reflectionWeekStart) : null;
+          const outstanding = !done && !upcoming;
+          const showMarkMissed =
+            Boolean(onMarkMissed) && outstanding && isPast && !disabled && !resolving;
+          const isActiveCheckInWeek = w.reflectionWeekStart === activeCheckInWeek;
 
-          const rowBg =
-            done
-              ? "bg-green-200 border-green-400 dark:bg-green-800/40 dark:border-green-600"
-              : pending
-                ? "bg-violet-200 border-violet-400 dark:bg-violet-800/40 dark:border-violet-600"
+          // Active check-in week (the one to fill now) = pastel green; other past = amber; upcoming = grey; done = stronger green
+          const rowBg = done
+            ? "bg-green-200 border-green-400 dark:bg-green-800/40 dark:border-green-600"
+            : isActiveCheckInWeek && outstanding
+              ? "bg-[#e8f3ec] border-[#b7d7c2] dark:bg-emerald-900/30 dark:border-emerald-700/50"
+              : upcoming
+                ? "bg-stone-100 border-stone-300 dark:bg-stone-800/50 dark:border-stone-600"
                 : "bg-amber-200 border-amber-400 dark:bg-amber-800/40 dark:border-amber-600";
 
           return (
-            <button
+            <div
               key={w.reflectionWeekStart}
-              type="button"
-              onClick={() => !isDisabled && onSelectWeek(w.reflectionWeekStart)}
-              disabled={isDisabled}
               className={`w-full rounded-xl border text-left transition-colors ${rowBg} ${
-                isDisabled
-                  ? "cursor-not-allowed opacity-90"
-                  : outstanding
-                    ? "hover:border-amber-500 hover:bg-amber-300 dark:hover:bg-amber-700/50"
-                    : ""
+                upcoming ? "opacity-80" : ""
               }`}
             >
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-inherit px-3 py-2">
-                <span className="font-medium text-[var(--color-text)]">
-                  {w.isThisWeek ? "This week" : w.isNextWeek ? "Next week" : "Week of " + formatDateDdMmYyyy(w.reflectionWeekStart)}
-                </span>
-                <span className="text-sm text-[var(--color-text-muted)]">{weekRangeLabel}</span>
-                {done && (
-                  <span className="rounded bg-green-400/90 px-1.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-600 dark:text-green-100">
-                    ✓ Done
+              <button
+                type="button"
+                onClick={() => !isDisabled && onSelectWeek(w.reflectionWeekStart)}
+                disabled={isDisabled}
+                className={`w-full text-left ${
+                  isDisabled
+                    ? "cursor-not-allowed"
+                    : outstanding
+                      ? "hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                      : ""
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-inherit px-3 py-2">
+                  <span
+                    className={`font-medium ${upcoming ? "text-stone-500 dark:text-stone-400" : "text-[var(--color-text)]"}`}
+                  >
+                    {w.isThisWeek
+                      ? "This week"
+                      : w.isNextWeek
+                        ? "Next week"
+                        : "Week of " + formatDateDdMmYyyy(w.reflectionWeekStart)}
                   </span>
-                )}
-                {pending && (
-                  <span className="rounded bg-violet-400/90 px-1.5 py-0.5 text-xs font-medium text-violet-900 dark:bg-violet-600 dark:text-violet-100">
-                    Pending — opens Friday 9am Perth{fridayDate ? ` (${formatDateDdMmYyyy(fridayDate)})` : ""}
-                  </span>
-                )}
-                {outstanding && inProgress && (
-                  <span className="rounded bg-amber-400/90 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-600 dark:text-amber-100">
-                    In progress — tap to resume
-                  </span>
-                )}
-                {outstanding && !inProgress && (
-                  <span className="text-xs font-medium text-amber-900 dark:text-amber-100">Tap to start check-in</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1 px-3 py-2">
-                {days.map((day) => {
-                  const isToday = day.date === todayLocal;
-                  return (
-                    <span
-                      key={day.date}
-                      className={`inline-flex min-w-[2.25rem] flex-col items-center rounded px-1.5 py-1 text-center ${
-                        isToday
-                          ? "bg-[var(--color-primary)]/25 ring-2 ring-[var(--color-primary)] dark:bg-[var(--color-primary)]/30"
-                          : "bg-black/5 dark:bg-white/10"
-                      }`}
-                      aria-hidden={!isToday}
-                      aria-current={isToday ? "date" : undefined}
-                    >
-                      <span className={`text-[10px] font-medium ${isToday ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}`}>
-                        {day.dayLabel}
-                      </span>
-                      <span className={`text-sm font-semibold tabular-nums ${isToday ? "text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
-                        {day.display.split(" ")[1]}
-                      </span>
+                  <span className="text-sm text-[var(--color-text-muted)]">{weekRangeLabel}</span>
+                  {done && (
+                    <span className="rounded bg-green-400/90 px-1.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-600 dark:text-green-100">
+                      ✓ Done
                     </span>
-                  );
-                })}
-              </div>
-            </button>
+                  )}
+                  {upcoming && (
+                    <span className="rounded bg-stone-300/90 px-1.5 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-600 dark:text-stone-100">
+                      Opens Friday 9am Perth
+                      {fridayDate ? ` (${formatDateDdMmYyyy(fridayDate)})` : ""}
+                    </span>
+                  )}
+                  {outstanding && inProgress && (
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                        isActiveCheckInWeek
+                          ? "bg-[#cfe6d6] text-[#2f5d42] dark:bg-emerald-800/60 dark:text-emerald-100"
+                          : "bg-amber-400/90 text-amber-900 dark:bg-amber-600 dark:text-amber-100"
+                      }`}
+                    >
+                      {isActiveCheckInWeek
+                        ? "This check-in — tap to resume"
+                        : "In progress — tap to resume"}
+                    </span>
+                  )}
+                  {outstanding && !inProgress && (
+                    <span
+                      className={`text-xs font-medium ${
+                        isActiveCheckInWeek
+                          ? "text-[#2f5d42] dark:text-emerald-200"
+                          : "text-amber-900 dark:text-amber-100"
+                      }`}
+                    >
+                      {isActiveCheckInWeek ? "This check-in — tap to start" : "Tap to start check-in"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1 px-3 py-2">
+                  {days.map((day) => {
+                    const isToday = day.date === todayLocal;
+                    return (
+                      <span
+                        key={day.date}
+                        className={`inline-flex min-w-[2.25rem] flex-col items-center rounded px-1.5 py-1 text-center ${
+                          isToday && !upcoming
+                            ? "bg-[var(--color-primary)]/25 ring-2 ring-[var(--color-primary)] dark:bg-[var(--color-primary)]/30"
+                            : upcoming
+                              ? "bg-stone-200/60 dark:bg-white/5"
+                              : "bg-black/5 dark:bg-white/10"
+                        }`}
+                        aria-hidden={!isToday}
+                        aria-current={isToday ? "date" : undefined}
+                      >
+                        <span
+                          className={`text-[10px] font-medium ${
+                            isToday && !upcoming
+                              ? "text-[var(--color-primary)]"
+                              : "text-[var(--color-text-muted)]"
+                          }`}
+                        >
+                          {day.dayLabel}
+                        </span>
+                        <span
+                          className={`text-sm font-semibold tabular-nums ${
+                            upcoming ? "text-stone-500" : "text-[var(--color-text)]"
+                          }`}
+                        >
+                          {day.display.split(" ")[1]}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </button>
+              {showMarkMissed ? (
+                <div className="flex justify-end border-t border-inherit px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkMissed?.(w.reflectionWeekStart);
+                    }}
+                    disabled={markingMissedWeek === w.reflectionWeekStart}
+                    className="min-h-[40px] rounded-lg px-3 text-sm font-medium text-stone-600 underline-offset-2 hover:bg-black/5 hover:underline disabled:opacity-60 dark:text-stone-300 dark:hover:bg-white/5"
+                  >
+                    {markingMissedWeek === w.reflectionWeekStart
+                      ? "Marking…"
+                      : "Mark as missed"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           );
         })}
       </div>

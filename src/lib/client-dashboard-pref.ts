@@ -1,4 +1,4 @@
-/** Client home preference: new dashboard is default; classic is opt-in via Profile. */
+/** Client home preference: redesigned home is default; classic is opt-in via Profile. */
 
 export type ClientDashboardPref = "new" | "classic";
 

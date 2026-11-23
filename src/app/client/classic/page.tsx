@@ -521,7 +521,7 @@ export default function ClientPortalPage() {
           }}
           className="inline-flex items-center rounded-full border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary)] transition hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
         >
-          Switch to new dashboard →
+          Switch to redesigned home →
         </button>
       </div>
 

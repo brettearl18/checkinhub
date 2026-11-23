@@ -12,6 +12,7 @@ import { VanaBrandBar } from "@/components/client/VanaBrandBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApiClient } from "@/lib/api-client";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
+import { WORKOUTS_HUB_URL } from "@/lib/workouts-hub";
 
 /** Vana theme trial — entire client portal; dashboard is the primary preview surface */
 const VANA_THEME_TRIAL = true;
@@ -24,10 +25,6 @@ const NAV_SECTIONS: { label: string; links: NavLinkItem[] }[] = [
   {
     label: "Overview",
     links: [{ href: "/client", label: "Dashboard", icon: HomeIcon }],
-  },
-  {
-    label: "Training",
-    links: [{ href: "/client/program", label: "Program", icon: ProgramIcon }],
   },
   {
     label: "Check-ins",
@@ -61,8 +58,6 @@ const NAV_SECTIONS: { label: string; links: NavLinkItem[] }[] = [
   },
 ];
 
-const NAV_LINKS = NAV_SECTIONS.flatMap((section) => [...section.links]);
-
 function navSectionsForClient(cycleTrackingEnabled: boolean) {
   return NAV_SECTIONS.map((section) => ({
     ...section,
@@ -70,9 +65,23 @@ function navSectionsForClient(cycleTrackingEnabled: boolean) {
   })).filter((section) => section.links.length > 0);
 }
 
-const BOTTOM_NAV: { href: string; label: string; short: string; icon: NavIcon }[] = [
+type BottomNavItem = {
+  href: string;
+  label: string;
+  short: string;
+  icon: NavIcon;
+  external?: boolean;
+};
+
+const BOTTOM_NAV: BottomNavItem[] = [
   { href: "/client", label: "Home", short: "Home", icon: HomeIcon },
-  { href: "/client/program", label: "Program", short: "Workouts", icon: ProgramIcon },
+  {
+    href: WORKOUTS_HUB_URL,
+    label: "Program",
+    short: "Workouts",
+    icon: ProgramIcon,
+    external: true,
+  },
   { href: "/client/check-in/new", label: "New check-in", short: "Check-in", icon: CheckInIcon },
   { href: "/client/progress", label: "Progress", short: "Progress", icon: ProgressIcon },
 ];
@@ -146,6 +155,27 @@ function RecipeHubNavLink({ onClick, className = "" }: { onClick?: () => void; c
       <span className="flex items-center gap-2.5 min-w-0">
         <RecipeHubIcon className="h-[18px] w-[18px] shrink-0" />
         <span className="truncate">RecipeHUB</span>
+      </span>
+      <span className="text-[10px] font-medium uppercase tracking-wide opacity-80" aria-hidden>
+        Open ↗
+      </span>
+    </a>
+  );
+}
+
+/** Cross-app link to Vana workouts / programming */
+function WorkoutsHubNavLink({ onClick, className = "" }: { onClick?: () => void; className?: string }) {
+  return (
+    <a
+      href={WORKOUTS_HUB_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onClick}
+      className={`rounded-xl border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] px-3 py-2.5 text-sm font-semibold text-[var(--color-primary)] min-h-[44px] flex items-center justify-between gap-2 transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/15 ${className}`}
+    >
+      <span className="flex items-center gap-2.5 min-w-0">
+        <ProgramIcon className="h-[18px] w-[18px] shrink-0" />
+        <span className="truncate">Program</span>
       </span>
       <span className="text-[10px] font-medium uppercase tracking-wide opacity-80" aria-hidden>
         Open ↗
@@ -283,6 +313,9 @@ export default function ClientLayout({
         </p>
         <nav className="flex-1 space-y-4 p-3 overflow-y-auto">
           <RecipeHubNavLink />
+          <NavSection label="Training">
+            <WorkoutsHubNavLink />
+          </NavSection>
           {navSections.map((section) => (
             <NavSection key={section.label} label={section.label}>
               {section.links.map(({ href, label, icon }) => (
@@ -337,21 +370,36 @@ export default function ClientLayout({
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around border-t border-stone-200/80 bg-[#fffdf9]/95 backdrop-blur-sm safe-area-inset-bottom"
         aria-label="Primary"
       >
-        {BOTTOM_NAV.map(({ href, label, short, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 px-1 text-[10px] font-medium transition-colors ${
-              isActive(href)
-                ? "text-[var(--color-primary)]"
-                : "text-[var(--color-text-muted)] active:bg-[var(--color-bg)]"
-            }`}
-          >
-            <Icon className="h-5 w-5 shrink-0" aria-hidden />
-            <span className="hidden">{label}</span>
-            {short}
-          </Link>
-        ))}
+        {BOTTOM_NAV.map(({ href, label, short, icon: Icon, external }) => {
+          const className = `flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] py-1.5 px-1 text-[10px] font-medium transition-colors ${
+            !external && isActive(href)
+              ? "text-[var(--color-primary)]"
+              : "text-[var(--color-text-muted)] active:bg-[var(--color-bg)]"
+          }`;
+          if (external) {
+            return (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={className}
+                aria-label={label}
+              >
+                <Icon className="h-5 w-5 shrink-0" aria-hidden />
+                <span className="hidden">{label}</span>
+                {short}
+              </a>
+            );
+          }
+          return (
+            <Link key={href} href={href} className={className}>
+              <Icon className="h-5 w-5 shrink-0" aria-hidden />
+              <span className="hidden">{label}</span>
+              {short}
+            </Link>
+          );
+        })}
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -390,6 +438,9 @@ export default function ClientLayout({
               </div>
               <div className="space-y-4">
                 <RecipeHubNavLink onClick={() => setDrawerOpen(false)} />
+                <NavSection label="Training">
+                  <WorkoutsHubNavLink onClick={() => setDrawerOpen(false)} />
+                </NavSection>
                 {navSections.map((section) => (
                   <NavSection key={section.label} label={section.label}>
                     {section.links.map(({ href, label, icon }) => (
