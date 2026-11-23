@@ -96,6 +96,16 @@ interface RecentResponse {
   responseId: string | null;
   score: number | null;
   readByClient?: boolean;
+  reflectionWeekStart?: string | null;
+}
+
+interface ThisWeekSubmitted {
+  assignmentId: string;
+  formTitle: string;
+  completedAt: string | null;
+  responseId: string | null;
+  score: number | null;
+  reflectionWeekStart: string;
 }
 
 interface SetupStatus {
@@ -136,6 +146,7 @@ export default function ClientPortalPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [recentResponses, setRecentResponses] = useState<RecentResponse[]>([]);
+  const [thisWeekSubmitted, setThisWeekSubmitted] = useState<ThisWeekSubmitted | null>(null);
   const [progressImages, setProgressImages] = useState<ProgressImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(false);
@@ -263,19 +274,47 @@ export default function ClientPortalPage() {
       if (historyRes.ok) {
         const history = await historyRes.json();
         const list = Array.isArray(history) ? history : [];
+        const thisMonday = thisMondayPerth();
+        const thisWeek = list.find(
+          (item: { reflectionWeekStart?: string | null; responseId?: string | null }) =>
+            item.reflectionWeekStart === thisMonday && !!item.responseId
+        ) as
+          | {
+              id: string;
+              formTitle?: string;
+              completedAt?: string | null;
+              responseId?: string | null;
+              score?: number | null;
+              reflectionWeekStart?: string;
+            }
+          | undefined;
+        setThisWeekSubmitted(
+          thisWeek?.reflectionWeekStart
+            ? {
+                assignmentId: thisWeek.id,
+                formTitle: thisWeek.formTitle ?? "Check-in",
+                completedAt: thisWeek.completedAt ?? null,
+                responseId: thisWeek.responseId ?? null,
+                score: typeof thisWeek.score === "number" ? thisWeek.score : null,
+                reflectionWeekStart: thisWeek.reflectionWeekStart,
+              }
+            : null
+        );
         const unread = list.filter((item: { readByClient?: boolean }) => item.readByClient !== true);
         setRecentResponses(
-          unread.slice(0, 2).map((item: { id: string; formTitle?: string; completedAt?: string | null; responseId?: string | null; score?: number | null; readByClient?: boolean }) => ({
+          unread.slice(0, 2).map((item: { id: string; formTitle?: string; completedAt?: string | null; responseId?: string | null; score?: number | null; readByClient?: boolean; reflectionWeekStart?: string | null }) => ({
             id: item.id,
             formTitle: item.formTitle ?? "Check-in",
             completedAt: item.completedAt ?? null,
             responseId: item.responseId ?? null,
             score: item.score ?? null,
             readByClient: item.readByClient === true,
+            reflectionWeekStart: item.reflectionWeekStart ?? null,
           }))
         );
       } else {
         setRecentResponses([]);
+        setThisWeekSubmitted(null);
       }
       if (imagesRes.ok) {
         const list = await imagesRes.json();
@@ -608,16 +647,59 @@ export default function ClientPortalPage() {
         </section>
       )}
 
+      {/* This week already submitted – make it unmistakable so clients don't fill it again */}
+      {!authError && !loading && thisWeekSubmitted && (
+        <section className="mt-4">
+          <Card className="vana-card overflow-hidden border-2 border-emerald-300 bg-emerald-50/80">
+            <div className="p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                    Submitted ✓
+                  </p>
+                  <h2 className="mt-2 font-display text-lg font-medium text-stone-800">
+                    This week’s check-in is in
+                  </h2>
+                  <p className="mt-0.5 text-sm text-stone-600">
+                    Week of {formatDateDdMmYyyy(thisWeekSubmitted.reflectionWeekStart)}
+                    {thisWeekSubmitted.completedAt
+                      ? ` · saved ${formatDateTimeDisplay(thisWeekSubmitted.completedAt)}`
+                      : ""}
+                    {typeof thisWeekSubmitted.score === "number" ? ` · score ${thisWeekSubmitted.score}%` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-stone-500">
+                    You don’t need to fill this week again. Your coach will review it soon.
+                  </p>
+                </div>
+                {thisWeekSubmitted.responseId && (
+                  <Button asChild variant="secondary" className="!py-1.5 !min-h-0 text-sm shrink-0">
+                    <Link href={`/client/response/${thisWeekSubmitted.responseId}`}>View response →</Link>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Card>
+        </section>
+      )}
+
       {/* Check-in to complete – always at top when there is one (started or open) */}
       {!authError && !loading && topPriorityAssignments.length > 0 && (
         <section className="mt-4">
           <Card className="vana-card overflow-hidden border-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)]/60">
             <div className="p-5">
               <h2 className="font-display text-lg font-medium text-stone-800">
-                {resumeAssignments.length > 0 ? "Finish your check-in" : "You have a check-in to complete"}
+                {resumeAssignments.length > 0
+                  ? "Finish your check-in"
+                  : thisWeekSubmitted
+                    ? "You still have another check-in to complete"
+                    : "You have a check-in to complete"}
               </h2>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                {resumeAssignments.length > 0 ? "Complete it when you're ready." : "Complete your check-in when you're ready."}
+                {resumeAssignments.length > 0
+                  ? "Complete it when you're ready."
+                  : thisWeekSubmitted
+                    ? "This is a different week from the one you already submitted."
+                    : "Complete your check-in when you're ready."}
               </p>
               <ul className="mt-3 space-y-2">
                 {topPriorityAssignments.slice(0, 3).map((a) => (
@@ -713,15 +795,39 @@ export default function ClientPortalPage() {
             <Card className="vana-card flex-1 flex flex-col overflow-hidden">
               <div className="p-3 flex flex-col flex-1">
                 <p className="text-base font-semibold text-[var(--color-text)]">
-                  {openAssignments.length > 0 ? "You have a check-in to complete" : "Start your check-in"}
+                  {thisWeekSubmitted && openAssignments.length === 0
+                    ? "This week’s check-in: Submitted ✓"
+                    : openAssignments.length > 0
+                      ? "You have a check-in to complete"
+                      : "Start your check-in"}
                 </p>
                 <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                  {openAssignments.length > 0 ? "Choose which week you're filling in—catch up or do this week." : "A quick reflection to keep your momentum going."}
+                  {thisWeekSubmitted && openAssignments.length === 0
+                    ? "You're done for this week. View your response or history anytime."
+                    : openAssignments.length > 0
+                      ? thisWeekSubmitted
+                        ? "This week is done — any open items below are other weeks."
+                        : "Choose which week you're filling in—catch up or do this week."
+                      : "A quick reflection to keep your momentum going."}
                 </p>
                 <div className="mt-2.5">
-                  <Button asChild variant="primary" className="!py-1.5 !min-h-0 text-sm">
-                    <Link href="/client/check-in/new">Fill in a check-in</Link>
-                  </Button>
+                  {thisWeekSubmitted && openAssignments.length === 0 ? (
+                    <Button asChild variant="secondary" className="!py-1.5 !min-h-0 text-sm">
+                      <Link
+                        href={
+                          thisWeekSubmitted.responseId
+                            ? `/client/response/${thisWeekSubmitted.responseId}`
+                            : "/client/history"
+                        }
+                      >
+                        {thisWeekSubmitted.responseId ? "View this week’s response" : "View history"}
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button asChild variant="primary" className="!py-1.5 !min-h-0 text-sm">
+                      <Link href="/client/check-in/new">Fill in a check-in</Link>
+                    </Button>
+                  )}
                 </div>
               </div>
             </Card>

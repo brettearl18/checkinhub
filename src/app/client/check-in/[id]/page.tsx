@@ -356,8 +356,10 @@ export default function CheckInFormPage() {
       <div className="space-y-6">
         <Card className="overflow-hidden border-[var(--color-border)] p-0">
           <div className={`p-6 text-center border-b-4 ${band === "red" ? "border-red-500" : band === "orange" ? "border-amber-500" : "border-green-500"}`}>
-            <h2 className="text-xl font-semibold text-[var(--color-text)]">Check-in submitted</h2>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Here’s your summary</p>
+            <h2 className="text-xl font-semibold text-[var(--color-text)]">Thanks — your check-in is in</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              We’ve saved it. You’ll also get a confirmation in Notifications. Here’s your summary.
+            </p>
           </div>
           <div className="p-6 space-y-4">
             <div className="flex flex-col items-center gap-2">

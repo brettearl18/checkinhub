@@ -8,6 +8,8 @@ import { thisMondayPerth, isWeekOpenPerth } from "@/lib/perth-date";
 import { computeScore, getScoreBand } from "@/lib/check-in-score";
 import { resolveThresholds, BAND_LABELS } from "@/lib/scoring-utils";
 import { evaluateAndAwardAchievements } from "@/lib/award-achievements";
+import { sendPushToUser } from "@/lib/push-server";
+import { formatDateDdMmYyyy } from "@/lib/format-date";
 
 export async function POST(request: Request) {
   const authResult = await requireClient(request);
@@ -125,6 +127,57 @@ export async function POST(request: Request) {
   });
 
   const newlyEarned = await evaluateAndAwardAchievements(db, clientId);
+
+  // Confirm receipt so clients aren't left wondering if submit worked (no email/push before).
+  try {
+    const clientSnap = await db.collection("clients").doc(clientId).get();
+    const clientData = clientSnap.exists
+      ? (clientSnap.data() as { authUid?: string; email?: string })
+      : null;
+    let userId: string | null = clientData?.authUid ?? null;
+    if (!userId && clientData?.email) {
+      const usersSnap = await db.collection("users").where("email", "==", clientData.email).limit(1).get();
+      if (!usersSnap.empty) userId = usersSnap.docs[0].id;
+    }
+    if (!userId) userId = identity.uid || clientId;
+
+    const weekLabel = reflectionWeekStart
+      ? ` for the week of ${formatDateDdMmYyyy(reflectionWeekStart)}`
+      : "";
+    const title = "Thanks — your check-in is in";
+    const notifMessage = `We've saved your check-in${weekLabel}. Your coach will review it soon.`;
+    const actionUrl = `/client/response/${responseRef.id}`;
+
+    await db.collection("notifications").add({
+      userId,
+      type: "check_in_submitted",
+      title,
+      message: notifMessage,
+      actionUrl,
+      metadata: {
+        responseId: responseRef.id,
+        assignmentId,
+        clientId,
+        reflectionWeekStart: reflectionWeekStart ?? null,
+      },
+      isRead: false,
+      createdAt: now,
+    });
+
+    try {
+      await sendPushToUser({
+        userId,
+        title,
+        body: notifMessage,
+        actionPath: actionUrl,
+        tag: `check_in_submitted_${responseRef.id}`,
+      });
+    } catch {
+      // in-app notification already saved
+    }
+  } catch (err) {
+    console.error("[check-in/submit] confirmation notification failed (non-fatal):", err);
+  }
 
   return NextResponse.json({
     responseId: responseRef.id,

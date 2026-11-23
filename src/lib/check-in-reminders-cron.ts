@@ -4,8 +4,10 @@ import { sendEmail } from "@/lib/email-service";
 import { sendPushToUser } from "@/lib/push-server";
 import { nextMondayPerth, thisMondayPerth } from "@/lib/perth-date";
 import { isClosedClientStatus } from "@/lib/client-status";
+import { formatDateDdMmYyyy } from "@/lib/format-date";
 
 const RESUMABLE_STATUSES = ["pending", "active", "overdue", "started"];
+const RESUMABLE_STATUS_SET = new Set(RESUMABLE_STATUSES);
 
 export function requireCronSecret(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -45,16 +47,16 @@ export function buildReminderEmailContent(
   const subject =
     type === "open"
       ? "Your check-in is open"
-      : "Your check-in is closing today at 5pm";
+      : "Open check-in closes today at 5pm";
   const bodyCopy =
     type === "open"
       ? "Your check-in for this week is now open. Log in to complete it and stay on track with your coach."
-      : "Your weekly check-in closes today at 5pm Perth time. Complete it now if you haven't already.";
+      : "You still have an open check-in. If you've already submitted it, you're all set — you can ignore this. Otherwise complete it before 5pm Perth time.";
   const buttonLabel = type === "open" ? "Complete your check-in" : "Complete check-in";
   const message =
     type === "open"
       ? "Your check-in for this week is now open. Log in to complete it."
-      : "Your weekly check-in closes today at 5pm Perth time. Complete it now if you haven't already.";
+      : "You still have an open check-in. If you've already submitted it, you're all set. Otherwise complete it before 5pm Perth time.";
   const html = `
     <p>Hi ${firstName},</p>
     <p>${bodyCopy}</p>
@@ -105,10 +107,14 @@ export async function runReminders(type: ReminderType): Promise<RunRemindersResu
     .where("status", "in", RESUMABLE_STATUSES)
     .get();
 
-  const clientIds = new Set<string>();
+  /** clientId → assignment ids still open for this week (re-checked before send). */
+  const openByClient = new Map<string, string[]>();
   for (const d of assignSnap.docs) {
     const clientId = (d.data() as { clientId?: string }).clientId;
-    if (clientId) clientIds.add(clientId);
+    if (!clientId) continue;
+    const list = openByClient.get(clientId) ?? [];
+    list.push(d.id);
+    openByClient.set(clientId, list);
   }
 
   let sent = 0;
@@ -117,21 +123,36 @@ export async function runReminders(type: ReminderType): Promise<RunRemindersResu
   const now = new Date();
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
   const appUrl = baseUrl.replace(/\/$/, "");
+  const weekLabel = formatDateDdMmYyyy(weekStart);
   const title =
     type === "open"
       ? "Check In is now Open"
-      : "Your check-in is closing today at 5pm";
+      : "Open check-in closes today at 5pm";
   const message =
     type === "open"
-      ? "Your check-in for this week is now open. Log in to complete it."
-      : "Your weekly check-in closes today at 5pm Perth time. Complete it now if you haven't already.";
+      ? `Your check-in for the week of ${weekLabel} is now open. Log in to complete it.`
+      : `You still have an open check-in for the week of ${weekLabel}. If you've already submitted it, you're all set — ignore this. Otherwise complete it before 5pm Perth time.`;
   const actionUrl = ACTION_URL;
 
-  for (const clientId of clientIds) {
+  for (const [clientId, assignmentIds] of openByClient) {
     const clientSnap = await db.collection("clients").doc(clientId).get();
     const clientData = clientSnap.exists
       ? (clientSnap.data() as { authUid?: string; email?: string; firstName?: string; status?: string })
       : null;
+
+    // Don't remind closed accounts (in-app / push / email).
+    if (isClosedClientStatus(clientData?.status)) continue;
+
+    // Skip if every assignment for this week was completed since the query ran.
+    const stillOpen: string[] = [];
+    for (const assignmentId of assignmentIds) {
+      const fresh = await db.collection("check_in_assignments").doc(assignmentId).get();
+      if (!fresh.exists) continue;
+      const status = (fresh.data() as { status?: string }).status;
+      if (status && RESUMABLE_STATUS_SET.has(status)) stillOpen.push(assignmentId);
+    }
+    if (stillOpen.length === 0) continue;
+
     const userId = clientData?.authUid ?? (await getClientAuthUid(db, clientId));
     if (!userId) continue;
     await db.collection("notifications").add({
@@ -157,7 +178,7 @@ export async function runReminders(type: ReminderType): Promise<RunRemindersResu
     } catch {
       // continue; in-app notification already saved
     }
-    if (!isClosedClientStatus(clientData?.status) && clientData?.email?.trim() && appUrl) {
+    if (clientData?.email?.trim() && appUrl) {
       const firstName = clientData.firstName?.trim() || "there";
       const { subject, html, text } = buildReminderEmailContent(type, firstName, appUrl);
       const emailResult = await sendEmail({
