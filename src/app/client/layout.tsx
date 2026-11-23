@@ -8,7 +8,6 @@ import { TimelineAnnouncementModal } from "@/components/client/TimelineAnnouncem
 import { ClientHeightPromptModal } from "@/components/client/ClientHeightPromptModal";
 import { ClientPushPromptModal } from "@/components/client/ClientPushPromptModal";
 import { ClientPushForegroundListener } from "@/components/client/ClientPushForegroundListener";
-import { VanaBrandBar } from "@/components/client/VanaBrandBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApiClient } from "@/lib/api-client";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
@@ -22,17 +21,13 @@ type NavLinkItem = { href: string; label: string; icon: NavIcon };
 
 const NAV_SECTIONS: { label: string; links: NavLinkItem[] }[] = [
   {
-    label: "Overview",
-    links: [{ href: "/client", label: "Dashboard", icon: HomeIcon }],
+    label: "Today",
+    links: [{ href: "/client", label: "Today", icon: HomeIcon }],
   },
   {
-    label: "Training",
-    links: [{ href: "/client/program", label: "Program", icon: ProgramIcon }],
-  },
-  {
-    label: "Check-ins",
+    label: "Check-in",
     links: [
-      { href: "/client/check-in/new", label: "New check-in", icon: CheckInIcon },
+      { href: "/client/check-in/new", label: "Check-in", icon: CheckInIcon },
       { href: "/client/habits", label: "Habits", icon: HabitsIcon },
       { href: "/client/history", label: "History", icon: HistoryIcon },
     ],
@@ -46,18 +41,16 @@ const NAV_SECTIONS: { label: string; links: NavLinkItem[] }[] = [
       { href: "/client/goals", label: "Goals", icon: GoalsIcon },
       { href: "/client/cycle", label: "Cycle", icon: CycleIcon },
       { href: "/client/progress-photos", label: "Photos", icon: PhotosIcon },
+      { href: "/client/program", label: "Program", icon: ProgramIcon },
     ],
   },
   {
-    label: "Connect",
+    label: "More",
     links: [
       { href: "/client/notifications", label: "Notifications", icon: NotificationsIcon },
       { href: "/client/messages", label: "Messages", icon: MessagesIcon },
+      { href: "/client/profile", label: "Profile", icon: ProfileIcon },
     ],
-  },
-  {
-    label: "Account",
-    links: [{ href: "/client/profile", label: "Profile", icon: ProfileIcon }],
   },
 ];
 
@@ -70,10 +63,10 @@ function navSectionsForClient(cycleTrackingEnabled: boolean) {
   })).filter((section) => section.links.length > 0);
 }
 
+/** Primary tabs — design brief: Today · Check-in · Progress · More */
 const BOTTOM_NAV: { href: string; label: string; short: string; icon: NavIcon }[] = [
-  { href: "/client", label: "Home", short: "Home", icon: HomeIcon },
-  { href: "/client/program", label: "Program", short: "Workouts", icon: ProgramIcon },
-  { href: "/client/check-in/new", label: "New check-in", short: "Check-in", icon: CheckInIcon },
+  { href: "/client", label: "Today", short: "Today", icon: HomeIcon },
+  { href: "/client/check-in/new", label: "Check-in", short: "Check-in", icon: CheckInIcon },
   { href: "/client/progress", label: "Progress", short: "Progress", icon: ProgressIcon },
 ];
 
@@ -115,16 +108,16 @@ function NavLink({
     <Link
       href={href}
       onClick={onClick}
-      className={`rounded-xl px-3 py-2 text-sm font-medium min-h-[44px] flex items-center gap-2.5 transition-colors ${
+      className={`rounded-[12px] px-3 py-2 text-[15px] font-medium min-h-[44px] flex items-center gap-2.5 transition-colors ${
         active
-          ? "border-l-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)] pl-[10px]"
-          : "text-stone-600 hover:bg-stone-100/80 hover:text-stone-800"
+          ? "bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
+          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-elevated)] hover:text-[var(--color-text)]"
       } ${className}`}
     >
       {Icon ? (
         <Icon
           className={`h-[18px] w-[18px] shrink-0 ${
-            active ? "text-[var(--color-primary)]" : "text-stone-400"
+            active ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"
           }`}
         />
       ) : null}
@@ -275,12 +268,15 @@ export default function ClientLayout({
       <ClientHeightPromptModal enabled={Boolean(user) && !portalAccessLimited} />
       <ClientPushPromptModal enabled={Boolean(user) && !portalAccessLimited} />
       <ClientPushForegroundListener enabled={Boolean(user) && !portalAccessLimited} />
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-stone-200/80 bg-[#faf7f2]">
-        <VanaBrandBar />
-        <p className="px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">
-          Check-in portal
-        </p>
+      {/* Desktop sidebar — quiet wordmark, no gold strip */}
+      <aside className="hidden md:flex w-60 flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)]">
+        <div className="px-5 pt-6 pb-2">
+          <Link href="/client" className="inline-flex items-center">
+            <span className="text-[13px] font-semibold tracking-[0.18em] text-[var(--color-text)]">
+              VANA
+            </span>
+          </Link>
+        </div>
         <nav className="flex-1 space-y-4 p-3 overflow-y-auto">
           <RecipeHubNavLink />
           {navSections.map((section) => (
@@ -303,38 +299,23 @@ export default function ClientLayout({
         </div>
       </aside>
 
-      {/* Mobile header */}
-      <header className="md:hidden sticky top-0 z-30 safe-area-inset-top">
-        <VanaBrandBar />
-        <div className="flex items-center justify-between border-b border-stone-200/80 bg-[#fffdf9] px-4 py-2">
-          <span className="text-sm font-medium text-stone-600">Your portal</span>
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="rounded-full p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800"
-            aria-label="Open menu"
-          >
-            <MenuIcon />
-          </button>
-        </div>
-      </header>
+      {/* Mobile: no sticky chrome — titles live on the page; safe-area spacer only */}
+      <div className="md:hidden safe-area-inset-top" aria-hidden />
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 overflow-auto p-4 md:p-8 pb-20 md:pb-8 flex flex-col">
-        <div className="flex-1 min-h-0">
+      <main className="min-w-0 flex-1 overflow-auto px-4 pt-3 pb-24 md:p-8 md:pb-8 flex flex-col">
+        <div className="flex-1 min-h-0 max-w-3xl mx-auto w-full md:max-w-none md:mx-0">
           {children}
         </div>
-        <footer className="mt-auto pt-12 pb-8 md:pt-16 md:pb-10 border-t border-[var(--color-border)] flex-shrink-0">
-          <div className="text-center text-xs text-[var(--color-text-muted)]">
-            CheckinHUB
-          </div>
+        <footer className="mt-auto pt-10 pb-4 md:pt-16 md:pb-10 flex-shrink-0">
+          <div className="text-center text-xs text-[var(--color-text-muted)]">Vana</div>
         </footer>
       </main>
 
       {/* Mobile bottom nav */}
       {!portalAccessLimited && (
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around border-t border-stone-200/80 bg-[#fffdf9]/95 backdrop-blur-sm safe-area-inset-bottom"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around border-t border-[var(--color-border)] vana-tab-bar safe-area-inset-bottom"
         aria-label="Primary"
       >
         {BOTTOM_NAV.map(({ href, label, short, icon: Icon }) => (
@@ -371,18 +352,19 @@ export default function ClientLayout({
       {drawerOpen && (
         <>
           <div
-            className="md:hidden fixed inset-0 z-50 bg-black/50"
+            className="md:hidden fixed inset-0 z-50 bg-black/40"
             aria-hidden
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="md:hidden fixed inset-x-0 bottom-0 top-[108px] z-50 rounded-t-2xl bg-[#fffdf9] shadow-lg overflow-y-auto safe-area-inset-bottom">
+          <div className="md:hidden fixed inset-x-0 bottom-0 top-12 z-50 rounded-t-[20px] bg-[var(--color-bg-elevated)] shadow-[0_-4px_24px_rgba(0,0,0,0.08)] overflow-y-auto safe-area-inset-bottom">
             <div className="p-4 pb-8">
+              <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--color-border)]" aria-hidden />
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-display text-lg font-medium text-stone-800">Menu</h2>
+                <h2 className="text-[22px] font-semibold text-[var(--color-text)]">More</h2>
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(false)}
-                  className="rounded-lg p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-bg)]"
+                  className="rounded-full p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-bg)]"
                   aria-label="Close menu"
                 >
                   <CloseIcon />

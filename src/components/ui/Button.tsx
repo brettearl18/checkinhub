@@ -10,9 +10,9 @@ export interface ButtonProps
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-active)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2",
+    "bg-[var(--color-primary)] text-[var(--color-on-primary,#1c1a17)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-active)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2",
   secondary:
-    "bg-[var(--color-primary-subtle)] text-[var(--color-text)] border border-[var(--color-primary-muted)] hover:bg-[var(--color-primary-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2",
+    "bg-transparent text-[var(--color-primary)] hover:bg-[var(--color-primary-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2",
   ghost:
     "text-[var(--color-text)] hover:bg-[var(--color-primary-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2",
 };
@@ -25,7 +25,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const base =
-    "inline-flex items-center justify-center rounded-[var(--radius-button,var(--radius-md))] px-4 py-2.5 min-h-[44px] sm:min-h-0 sm:py-2 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+    "inline-flex items-center justify-center rounded-[var(--radius-button,9999px)] px-5 py-2.5 min-h-[50px] sm:min-h-[40px] sm:py-2 text-[17px] sm:text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50";
   const styles = `${base} ${variantStyles[variant]} ${className}`;
 
   if (asChild && React.isValidElement(children)) {

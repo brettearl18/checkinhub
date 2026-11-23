@@ -133,12 +133,20 @@ const MOTIVATIONAL_LINES = [
   "Your progress matters.",
 ];
 
-function getGreeting(firstName: string | null): string {
-  if (!firstName) return "Welcome back.";
-  const hour = new Date().getHours();
-  if (hour < 12) return `Good morning, ${firstName}`;
-  if (hour < 17) return `Good afternoon, ${firstName}`;
-  return `Good evening, ${firstName}`;
+function formatTodayLong(): string {
+  return new Intl.DateTimeFormat("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "Australia/Perth",
+  }).format(new Date());
+}
+
+function getInitials(firstName: string | null, lastName: string | null): string {
+  const a = (firstName ?? "").trim().charAt(0);
+  const b = (lastName ?? "").trim().charAt(0);
+  const s = `${a}${b}`.toUpperCase();
+  return s || "V";
 }
 
 export default function ClientPortalPage() {
@@ -506,93 +514,45 @@ export default function ClientPortalPage() {
     });
   }, [questionProgress]);
 
+  const lastName = profile?.lastName?.trim() || null;
+  const todayLabel = formatTodayLong();
+
   return (
     <div className="min-h-[60vh]">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="vana-section-label">Dashboard</p>
-        <Link
-          href="/client2"
-          className="inline-flex items-center rounded-full border border-[var(--color-primary-muted)] bg-[var(--color-primary-subtle)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary)] transition hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
-        >
-          Try the new dashboard →
-        </Link>
-      </div>
-
-      {/* Hero: welcoming, motivational + check-in % highlight */}
-      <header className="vana-hero p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-5">
-          <div className="min-w-0 flex-1">
-            <h1 className="vana-page-title">
-              {getGreeting(firstName)}
-            </h1>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-stone-600">
-              {motivationalLine}
-            </p>
+      {/* Apple-style large title — design brief C1 */}
+      <header className="vana-hero mb-5 pt-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[15px] text-[var(--color-text-secondary)]">{todayLabel}</p>
+            <h1 className="vana-page-title mt-0.5">Today</h1>
+            {firstName && (
+              <p className="mt-1 text-[15px] text-[var(--color-text-secondary)]">
+                {motivationalLine}
+              </p>
+            )}
             {showQuote && (
-              <p className="mt-3 text-sm italic text-stone-500">
+              <p className="mt-2 text-[15px] italic text-[var(--color-text-muted)]">
                 &ldquo;{profile?.profilePersonalization?.quote ?? ""}&rdquo;
               </p>
             )}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link
-                href="/client/profile#body-weight"
-                className="inline-flex items-center rounded-full border border-stone-200/80 bg-[#faf7f2] px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-              >
-                Log body weight
-              </Link>
-              <Link
-                href="/client/cycle"
-                className="inline-flex items-center rounded-full border border-stone-200/80 bg-[#faf7f2] px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-              >
-                Track cycle
-              </Link>
-            </div>
           </div>
-          {!loading && questionProgressSummary && (
-            <div
-              className={`flex-shrink-0 rounded-2xl border px-5 py-4 text-center shadow-sm ${
-                questionProgressSummary.band === "green"
-                  ? "border-emerald-200/80 bg-emerald-50"
-                  : questionProgressSummary.band === "orange"
-                    ? "border-amber-200/80 bg-amber-50"
-                    : "border-rose-200/80 bg-rose-50"
-              }`}
-            >
-              <span
-                className={`font-display block text-3xl font-medium tabular-nums sm:text-4xl ${
-                  questionProgressSummary.band === "green"
-                    ? "text-emerald-700"
-                    : questionProgressSummary.band === "orange"
-                      ? "text-amber-700"
-                      : "text-rose-700"
-                }`}
-              >
-                {questionProgressSummary.pct}%
-              </span>
-              <span className="vana-section-label mt-1 block normal-case tracking-normal text-stone-500">
-                Check-in score · last 3 weeks
-              </span>
-            </div>
-          )}
+          <Link
+            href="/client/profile"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-subtle)] text-sm font-semibold text-[var(--color-on-primary)]"
+            aria-label="Profile"
+          >
+            {getInitials(firstName, lastName)}
+          </Link>
         </div>
       </header>
 
-      {!authError && !loading && (
-        <TodayWeightCard
-          className="mt-4"
-          measurements={measurementList}
-          onSaved={() => void reloadMeasurements()}
-          focusOnMount={focusWeight}
-        />
-      )}
-
       {!authError && <CycleTrackerDashboardBanner />}
 
-      {!authError && <ClientDashboardBadges className="mt-5" />}
+      {!authError && <ClientDashboardBadges className="mt-4" />}
 
       {!authError && !loading && markMissedError && (
         <div
-          className="mt-4 rounded-lg border border-[var(--color-error)]/40 bg-[var(--color-error)]/10 px-3 py-2 text-sm text-[var(--color-error)]"
+          className="mt-4 rounded-[12px] bg-[var(--color-band-red-tint)] px-3 py-2 text-sm text-[var(--color-error)]"
           role="alert"
         >
           {markMissedError}
@@ -602,9 +562,10 @@ export default function ClientPortalPage() {
       {/* First-time setup: baseline measurements, photos, notifications */}
       {!authError && !loading && setupIncomplete && (
         <section className="mt-4">
-          <Card className="vana-card overflow-hidden border-2 border-[var(--color-primary-muted)]">
+          <Card className="vana-card overflow-hidden">
             <div className="p-5">
-              <h2 className="font-display text-lg font-medium text-stone-800">Complete your setup</h2>
+              <p className="vana-section-label">Getting started</p>
+              <h2 className="vana-title-2 mt-1">Complete your setup</h2>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                 Add your height, baseline, a photo, and turn on notifications so you don’t miss habits and check-ins.
               </p>
@@ -614,31 +575,31 @@ export default function ClientPortalPage() {
                   {setupStatus!.hasHeight ? (
                     <span className="text-xs text-[var(--color-success)]">✓ Done</span>
                   ) : (
-                    <Link href="/client/profile" className="rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90">Add</Link>
+                    <Link href="/client/profile" className="rounded-full bg-[var(--color-primary)] px-3 py-1 text-xs font-semibold text-[var(--color-on-primary)]">Add</Link>
                   )}
                 </li>
-                <li className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                <li className="flex items-center justify-between gap-2 rounded-lg bg-[var(--color-bg)] px-3 py-2">
                   <span className="text-sm font-medium text-[var(--color-text)]">Baseline measurements</span>
                   {setupStatus!.hasBaselineMeasurement ? (
                     <span className="text-xs text-[var(--color-success)]">✓ Done</span>
                   ) : (
-                    <Link href="/client/measurements" className="rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90">Add</Link>
+                    <Link href="/client/measurements" className="rounded-full bg-[var(--color-primary)] px-3 py-1 text-xs font-semibold text-[var(--color-on-primary)]">Add</Link>
                   )}
                 </li>
-                <li className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                <li className="flex items-center justify-between gap-2 rounded-lg bg-[var(--color-bg)] px-3 py-2">
                   <span className="text-sm font-medium text-[var(--color-text)]">Progress photo</span>
                   {setupStatus!.hasProgressPhoto ? (
                     <span className="text-xs text-[var(--color-success)]">✓ Done</span>
                   ) : (
-                    <Link href="/client/progress-photos" className="rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90">Add photo</Link>
+                    <Link href="/client/progress-photos" className="rounded-full bg-[var(--color-primary)] px-3 py-1 text-xs font-semibold text-[var(--color-on-primary)]">Add photo</Link>
                   )}
                 </li>
-                <li className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                <li className="flex items-center justify-between gap-2 rounded-lg bg-[var(--color-bg)] px-3 py-2">
                   <span className="text-sm font-medium text-[var(--color-text)]">Notifications for habits & check-ins</span>
                   {setupStatus!.hasPushEnabled ? (
                     <span className="text-xs text-[var(--color-success)]">✓ Enabled</span>
                   ) : (
-                    <Link href="/client/notifications" className="rounded-md bg-[var(--color-primary)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--color-primary)]/90">Enable</Link>
+                    <Link href="/client/notifications" className="rounded-full bg-[var(--color-primary)] px-3 py-1 text-xs font-semibold text-[var(--color-on-primary)]">Enable</Link>
                   )}
                 </li>
               </ul>
@@ -647,33 +608,33 @@ export default function ClientPortalPage() {
         </section>
       )}
 
-      {/* This week already submitted – make it unmistakable so clients don't fill it again */}
+      {/* This week’s check-in — top priority card (brief C1) */}
       {!authError && !loading && thisWeekSubmitted && (
         <section className="mt-4">
-          <Card className="vana-card overflow-hidden border-2 border-emerald-300 bg-emerald-50/80">
+          <Card className="vana-card overflow-hidden">
             <div className="p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <p className="vana-section-label">This week’s check-in</p>
+              <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">
-                    Submitted ✓
-                  </p>
-                  <h2 className="mt-2 font-display text-lg font-medium text-stone-800">
-                    This week’s check-in is in
-                  </h2>
-                  <p className="mt-0.5 text-sm text-stone-600">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-band-green-tint)] text-[var(--color-band-green)] text-sm font-bold">
+                      ✓
+                    </span>
+                    <h2 className="vana-title-2">Submitted</h2>
+                  </div>
+                  <p className="mt-2 text-[15px] text-[var(--color-text-secondary)]">
                     Week of {formatDateDdMmYyyy(thisWeekSubmitted.reflectionWeekStart)}
                     {thisWeekSubmitted.completedAt
-                      ? ` · saved ${formatDateTimeDisplay(thisWeekSubmitted.completedAt)}`
+                      ? ` · ${formatDateTimeDisplay(thisWeekSubmitted.completedAt)}`
                       : ""}
-                    {typeof thisWeekSubmitted.score === "number" ? ` · score ${thisWeekSubmitted.score}%` : ""}
                   </p>
-                  <p className="mt-1 text-xs text-stone-500">
-                    You don’t need to fill this week again. Your coach will review it soon.
+                  <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+                    Silvi will review it soon. You don’t need to fill this week again.
                   </p>
                 </div>
                 {thisWeekSubmitted.responseId && (
-                  <Button asChild variant="secondary" className="!py-1.5 !min-h-0 text-sm shrink-0">
-                    <Link href={`/client/response/${thisWeekSubmitted.responseId}`}>View response →</Link>
+                  <Button asChild variant="secondary" className="!min-h-[40px] !py-2 !text-sm shrink-0">
+                    <Link href={`/client/response/${thisWeekSubmitted.responseId}`}>View feedback</Link>
                   </Button>
                 )}
               </div>
@@ -682,52 +643,49 @@ export default function ClientPortalPage() {
         </section>
       )}
 
-      {/* Check-in to complete – always at top when there is one (started or open) */}
       {!authError && !loading && topPriorityAssignments.length > 0 && (
         <section className="mt-4">
-          <Card className="vana-card overflow-hidden border-2 border-[var(--color-primary)] bg-[var(--color-primary-subtle)]/60">
+          <Card className="vana-card overflow-hidden">
             <div className="p-5">
-              <h2 className="font-display text-lg font-medium text-stone-800">
+              <p className="vana-section-label">This week’s check-in</p>
+              <h2 className="vana-title-2 mt-1">
                 {resumeAssignments.length > 0
                   ? "Finish your check-in"
                   : thisWeekSubmitted
-                    ? "You still have another check-in to complete"
-                    : "You have a check-in to complete"}
+                    ? "Another check-in to complete"
+                    : "Ready when you are"}
               </h2>
-              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+              <p className="mt-1 text-[15px] text-[var(--color-text-secondary)]">
                 {resumeAssignments.length > 0
-                  ? "Complete it when you're ready."
+                  ? "Pick up where you left off."
                   : thisWeekSubmitted
                     ? "This is a different week from the one you already submitted."
-                    : "Complete your check-in when you're ready."}
+                    : "About 3 minutes · keep your momentum going."}
               </p>
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-4 space-y-2">
                 {topPriorityAssignments.slice(0, 3).map((a) => (
                   <li key={a.id}>
-                    <div className="flex flex-wrap items-stretch gap-2 rounded-lg border border-[var(--color-primary-muted)] bg-[var(--color-bg)] px-3 py-2.5 transition-all hover:border-[var(--color-primary)]">
-                      <Link
-                        href={`/client/check-in/${a.id}`}
-                        className="min-w-0 flex-1 text-left transition-colors hover:bg-[var(--color-primary-subtle)]/30 rounded-md -m-1 p-1"
-                      >
-                        <span className="text-sm font-semibold text-[var(--color-text)]">{a.formTitle}</span>
+                    <div className="flex flex-wrap items-center gap-2 rounded-[12px] bg-[var(--color-bg)] px-3 py-3">
+                      <Link href={`/client/check-in/${a.id}`} className="min-w-0 flex-1 text-left">
+                        <span className="text-[17px] font-semibold text-[var(--color-text)]">{a.formTitle}</span>
                         {a.reflectionWeekStart && (
-                          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                          <p className="mt-0.5 text-[13px] text-[var(--color-text-muted)]">
                             Week of {formatDateDdMmYyyy(a.reflectionWeekStart)}
                           </p>
                         )}
                       </Link>
-                      <div className="flex flex-shrink-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-end">
+                      <div className="flex flex-shrink-0 flex-col gap-1.5 sm:flex-row sm:items-center">
                         <Link
                           href={`/client/check-in/${a.id}`}
-                          className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-primary-hover)] whitespace-nowrap"
+                          className="inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-4 py-2 text-[13px] font-semibold text-[var(--color-on-primary)] whitespace-nowrap"
                         >
-                          {a.status === "started" ? "Resume →" : "Start →"}
+                          {a.status === "started" ? "Resume" : "Start check-in"}
                         </Link>
                         <button
                           type="button"
                           disabled={markingMissedId === a.id}
                           onClick={() => markAssignmentMissed(a.id)}
-                          className="inline-flex items-center justify-center rounded-full border border-stone-200/80 bg-transparent px-3 py-1.5 text-xs font-medium text-stone-500 hover:border-stone-400 hover:text-stone-700 disabled:opacity-60 whitespace-nowrap"
+                          className="inline-flex items-center justify-center rounded-full px-3 py-2 text-[13px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] disabled:opacity-60 whitespace-nowrap"
                         >
                           {markingMissedId === a.id ? "…" : "Mark as missed"}
                         </button>
@@ -737,9 +695,47 @@ export default function ClientPortalPage() {
                 ))}
               </ul>
               {topPriorityAssignments.length > 3 && (
-                <p className="mt-2 text-xs text-[var(--color-text-muted)]">+{topPriorityAssignments.length - 3} more below</p>
+                <p className="mt-2 text-[13px] text-[var(--color-text-muted)]">+{topPriorityAssignments.length - 3} more below</p>
               )}
             </div>
+          </Card>
+        </section>
+      )}
+
+      {/* Weight — second on Today after check-in */}
+      {!authError && !loading && (
+        <TodayWeightCard
+          className="mt-4"
+          measurements={measurementList}
+          onSaved={() => void reloadMeasurements()}
+          focusOnMount={focusWeight}
+        />
+      )}
+
+      {/* Score glance */}
+      {!authError && !loading && questionProgressSummary && (
+        <section className="mt-4">
+          <Card className="vana-card p-5">
+            <p className="vana-section-label">Check-in score</p>
+            <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+              <p className="vana-big-number text-4xl">{questionProgressSummary.pct}%</p>
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-medium ${
+                  questionProgressSummary.band === "green"
+                    ? "bg-[var(--color-band-green-tint)] text-[var(--color-band-green)]"
+                    : questionProgressSummary.band === "orange"
+                      ? "bg-[var(--color-band-orange-tint)] text-[var(--color-band-orange)]"
+                      : "bg-[var(--color-band-red-tint)] text-[var(--color-band-red)]"
+                }`}
+              >
+                {questionProgressSummary.band === "green"
+                  ? "Excellent"
+                  : questionProgressSummary.band === "orange"
+                    ? "On track"
+                    : "Needs attention"}
+              </span>
+            </div>
+            <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Average of your last 3 weeks</p>
           </Card>
         </section>
       )}
@@ -843,15 +839,15 @@ export default function ClientPortalPage() {
                   Steps, hydration, sleep. Log today and keep your streak.
                 </p>
                 {habitStreakSummary && (
-                  <p className="mt-1.5 text-xs font-medium text-[var(--color-primary)]">
+                  <p className="mt-1.5 text-[13px] font-medium text-[var(--color-primary)]">
                     {habitStreakSummary.current > 0
-                      ? `🔥 ${habitStreakSummary.current}-day streak — log today to keep it!`
-                      : `Your best: ${habitStreakSummary.longest} days. Log today to start a new streak!`}
+                      ? `${habitStreakSummary.current}-day streak — log today to keep it`
+                      : `Best: ${habitStreakSummary.longest} days. Log today to start again`}
                   </p>
                 )}
                 <div className="mt-2.5">
-                  <Button asChild variant="primary" className="!py-1.5 !min-h-0 text-sm">
-                    <Link href="/client/habits">Open Habit Tracker</Link>
+                  <Button asChild variant="primary" className="!min-h-[40px] !py-2 !text-sm">
+                    <Link href="/client/habits">Log habits</Link>
                   </Button>
                 </div>
               </div>

@@ -96,17 +96,20 @@ export function TodayWeightCard({ measurements, onSaved, className = "", focusOn
   if (todayWeight != null && !editing) {
     return (
       <div ref={cardRef}>
-      <Card className={`vana-card flex flex-wrap items-center justify-between gap-3 p-4 ${className}`}>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">Today’s weight</p>
-          <p className="mt-1 font-display text-2xl font-medium tabular-nums text-stone-800">
-            {todayWeight} kg <span className="text-base text-emerald-600">✓</span>
-          </p>
-          <p className="mt-0.5 text-xs text-stone-500">{weekLine}</p>
+      <Card className={`vana-card p-5 ${className}`}>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="vana-section-label">Weight</p>
+            <p className="vana-big-number mt-1 text-4xl">
+              {todayWeight} <span className="text-2xl font-medium text-[var(--color-text-secondary)]">kg</span>
+            </p>
+            <p className="mt-1 text-[15px] text-[var(--color-success)]">Logged today ✓</p>
+            <p className="mt-0.5 text-[13px] text-[var(--color-text-muted)]">{weekLine}</p>
+          </div>
+          <Button type="button" variant="secondary" className="!min-h-[40px] !text-sm" onClick={() => setEditing(true)}>
+            Update
+          </Button>
         </div>
-        <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
-          Update
-        </Button>
       </Card>
       </div>
     );
@@ -114,19 +117,18 @@ export function TodayWeightCard({ measurements, onSaved, className = "", focusOn
 
   return (
     <div ref={cardRef}>
-    <Card className={`vana-card border-2 border-[var(--color-primary-muted)] p-4 sm:p-5 ${className}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-primary)]">Daily weigh-in</p>
-      <h2 className="mt-1 text-lg font-semibold text-stone-800">
+    <Card className={`vana-card p-5 ${className}`}>
+      <p className="vana-section-label">Weight</p>
+      <h2 className="vana-title-2 mt-1">
         {todayWeight != null ? "Update today’s weight" : "Log today’s weight"}
       </h2>
-      <p className="mt-1 text-sm text-stone-600">
-        Weigh in each morning, same time and conditions — daily entries give your coach a much clearer trend
-        than the odd one-off.
+      <p className="mt-1 text-[15px] text-[var(--color-text-secondary)]">
+        Same time each morning gives your coach a clearer trend.
       </p>
       <form onSubmit={save} className="mt-4 flex flex-wrap items-end gap-2">
         <label className="flex-1 min-w-[140px]">
           <span className="sr-only">Weight in kg</span>
-          <div className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 focus-within:border-[var(--color-primary)]">
+          <div className="flex items-center rounded-[12px] bg-[var(--color-bg)] px-3 focus-within:ring-2 focus-within:ring-[var(--color-primary)]">
             <input
               ref={inputRef}
               type="number"
@@ -137,16 +139,16 @@ export function TodayWeightCard({ measurements, onSaved, className = "", focusOn
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder={lastEntry ? String(lastEntry.bodyWeight) : "e.g. 68.5"}
-              className="min-h-[44px] w-full bg-transparent text-base text-[var(--color-text)] outline-none"
+              className="min-h-[50px] w-full bg-transparent text-[17px] tabular-nums text-[var(--color-text)] outline-none"
             />
-            <span className="text-sm text-stone-500">kg</span>
+            <span className="text-[15px] text-[var(--color-text-muted)]">kg</span>
           </div>
         </label>
-        <Button type="submit" variant="primary" disabled={saving} className="min-h-[44px]">
+        <Button type="submit" variant="primary" disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </Button>
         {editing && (
-          <Button type="button" variant="secondary" onClick={() => setEditing(false)} className="min-h-[44px]">
+          <Button type="button" variant="secondary" onClick={() => setEditing(false)}>
             Cancel
           </Button>
         )}
@@ -156,7 +158,7 @@ export function TodayWeightCard({ measurements, onSaved, className = "", focusOn
           {error}
         </p>
       )}
-      <p className="mt-3 text-xs text-stone-500">
+      <p className="mt-3 text-[13px] text-[var(--color-text-muted)]">
         {weekLine}
         {lastEntry && ` · Last: ${lastEntry.bodyWeight} kg on ${formatDateDisplay(lastEntry.date)}`}
       </p>

@@ -1,28 +1,35 @@
 @import "tailwindcss";
 
-/* CheckinHUB design tokens – primary #daa450 */
+/*
+  Vana redesign tokens (ux-redesign branch)
+  Direction: Apple Health × calm wellness studio — docs/design/vana-app-design-brief.md
+*/
 @theme {
-  /* Primary */
   --color-primary: #daa450;
-  --color-primary-hover: #c8933d;
-  --color-primary-active: #b68235;
-  --color-primary-subtle: #faf4eb;
-  --color-primary-muted: #e8d4b8;
+  --color-primary-hover: #c48e3a;
+  --color-primary-active: #b07d32;
+  --color-primary-subtle: #fbf3e6;
+  --color-primary-muted: #ecd9b5;
+  --color-on-primary: #1c1a17;
 
-  /* Neutrals (warm) */
-  --color-text: #1a1a1a;
-  --color-text-secondary: #5c5c5c;
-  --color-text-muted: #8c8c8c;
-  --color-border: #e8e4df;
-  --color-bg: #f8f7f5;
+  --color-text: #1c1a17;
+  --color-text-secondary: #6e6a65;
+  --color-text-muted: #a39e98;
+  --color-border: #ece8e3;
+  --color-bg: #f7f5f2;
   --color-bg-elevated: #ffffff;
 
-  /* Semantic */
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
+  --color-success: #34c759;
+  --color-warning: #ff9f0a;
+  --color-error: #ff3b30;
 
-  /* Spacing (8px base) */
+  --color-band-red: #ff453a;
+  --color-band-red-tint: #ffeceb;
+  --color-band-orange: #ff9f0a;
+  --color-band-orange-tint: #fff4e5;
+  --color-band-green: #30d158;
+  --color-band-green-tint: #e8f9ed;
+
   --spacing-1: 0.25rem;
   --spacing-2: 0.5rem;
   --spacing-3: 0.75rem;
@@ -33,35 +40,36 @@
   --spacing-10: 2.5rem;
   --spacing-12: 3rem;
 
-  /* Radius */
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
   --radius-pill: 9999px;
-  --radius-card: 1rem;
+  --radius-card: 1.25rem;
+  --radius-button: 9999px;
 }
 
-/* Vana Health theme trial (client portal) — see docs/THEME_DESIGN.md */
 [data-theme="vana"] {
   --color-primary: #daa450;
-  --color-primary-hover: #c8933d;
-  --color-primary-active: #b68235;
-  --color-primary-subtle: #faf4eb;
-  --color-primary-muted: #e8d4b8;
+  --color-primary-hover: #c48e3a;
+  --color-primary-active: #b07d32;
+  --color-primary-subtle: #fbf3e6;
+  --color-primary-muted: #ecd9b5;
+  --color-on-primary: #1c1a17;
 
-  --color-text: #2c2825;
-  --color-text-secondary: #57534e;
-  --color-text-muted: #78716c;
-  --color-border: rgb(231 229 228 / 0.8);
-  --color-bg: #faf7f2;
-  --color-bg-elevated: #fffdf9;
+  --color-text: #1c1a17;
+  --color-text-secondary: #6e6a65;
+  --color-text-muted: #a39e98;
+  --color-border: #ece8e3;
+  --color-bg: #f7f5f2;
+  --color-bg-elevated: #ffffff;
 
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-error: #e11d48;
+  --color-success: #34c759;
+  --color-warning: #ff9f0a;
+  --color-error: #ff3b30;
 
   --radius-md: 0.75rem;
-  --radius-lg: 1rem;
+  --radius-lg: 1.25rem;
   --radius-button: 9999px;
+  --radius-card: 1.25rem;
 }
 
 @layer base {
@@ -70,34 +78,58 @@
   }
   body {
     @apply bg-[var(--color-bg)] text-[var(--color-text)];
-    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "tnum" 1;
   }
 }
 
 @layer components {
   [data-theme="vana"] .font-display {
-    font-family: var(--font-display), ui-serif, Georgia, serif;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   }
 
   [data-theme="vana"] .vana-section-label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400;
+    @apply text-[12px] font-medium uppercase tracking-[0.05em] text-[var(--color-text-muted)];
   }
 
   [data-theme="vana"] .vana-page-title {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    @apply text-[34px] font-bold leading-tight tracking-tight text-[var(--color-text)];
+  }
+
+  [data-theme="vana"] .vana-title-2 {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    @apply text-[22px] font-semibold tracking-tight text-[var(--color-text)];
+  }
+
+  [data-theme="vana"] .vana-big-number {
     font-family: var(--font-display), ui-serif, Georgia, serif;
-    @apply text-3xl font-medium text-stone-800 tracking-tight;
+    @apply text-5xl font-semibold tabular-nums tracking-tight text-[var(--color-text)];
   }
 
   [data-theme="vana"] .vana-card {
-    @apply rounded-2xl border border-stone-200/80 bg-[#fffdf9] shadow-sm;
+    @apply rounded-[20px] border-0 bg-[var(--color-bg-elevated)] shadow-[0_1px_2px_rgba(0,0,0,0.04)];
   }
 
   [data-theme="vana"] .vana-hero {
-    @apply rounded-2xl border border-stone-200/80 bg-[#fffdf9] shadow-sm;
+    @apply rounded-[20px] border-0 bg-transparent shadow-none;
+  }
+
+  [data-theme="vana"] .vana-grouped {
+    @apply overflow-hidden rounded-[20px] bg-[var(--color-bg-elevated)] shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  }
+
+  [data-theme="vana"] .vana-grouped > * + * {
+    @apply border-t border-[var(--color-border)];
+  }
+
+  [data-theme="vana"] .vana-tab-bar {
+    background: color-mix(in srgb, var(--color-bg-elevated) 82%, transparent);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
   }
 }
 
-/* Mobile: safe area for notched devices */
 .safe-area-inset-top {
   padding-top: env(safe-area-inset-top, 0px);
 }
@@ -105,7 +137,6 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Smoother horizontal scroll on touch devices */
 .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
 }
