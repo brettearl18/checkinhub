@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { formatDateDisplay } from "@/lib/format-date";
+import { formatProgressPhotoDate } from "@/lib/progress-photo-dates";
 import {
   getProgressPhotoForMilestone,
-  progressPhotoMilestoneLabel,
+  listProgressPhotosForPose,
   progressPhotoPoseTabLabel,
-  PROGRESS_PHOTO_COMPARE_ROWS,
+  progressPhotoRoleTags,
   type ProgressPhotoMilestone,
   type ProgressPhotoPose,
 } from "@/lib/progress-comparison-photos";
@@ -65,28 +65,51 @@ function defaultComparePair(clicked: ProgressPhotoMilestone): {
   return { a: "previous", b: "latest" };
 }
 
-function MilestoneSelect({
+function photoOptionLabel(
+  photo: ProgressPhotoCompareItem,
+  pose: ProgressPhotoPose,
+  images: ProgressPhotoCompareItem[],
+  legacyAssignment: Map<string, ProgressPhotoPose>
+): string {
+  const dateLabel = formatProgressPhotoDate(photo.uploadedAt) || "No date";
+  const tags = progressPhotoRoleTags(images, pose, photo.id, legacyAssignment);
+  return tags.length > 0 ? `${dateLabel} · ${tags.join(" · ")}` : dateLabel;
+}
+
+function PhotoDateSelect({
   label,
   value,
+  options,
+  pose,
+  images,
+  legacyAssignment,
   onChange,
 }: {
   label: string;
-  value: ProgressPhotoMilestone;
-  onChange: (m: ProgressPhotoMilestone) => void;
+  value: string;
+  options: ProgressPhotoCompareItem[];
+  pose: ProgressPhotoPose;
+  images: ProgressPhotoCompareItem[];
+  legacyAssignment: Map<string, ProgressPhotoPose>;
+  onChange: (photoId: string) => void;
 }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block font-medium text-[var(--color-text-muted)]">{label}</span>
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value as ProgressPhotoMilestone)}
+        onChange={(e) => onChange(e.target.value)}
         className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm text-[var(--color-text)]"
       >
-        {PROGRESS_PHOTO_COMPARE_ROWS.map((m) => (
-          <option key={m} value={m}>
-            {progressPhotoMilestoneLabel(m)}
-          </option>
-        ))}
+        {options.length === 0 ? (
+          <option value="">No photos for this angle</option>
+        ) : (
+          options.map((photo) => (
+            <option key={photo.id} value={photo.id}>
+              {photoOptionLabel(photo, pose, images, legacyAssignment)}
+            </option>
+          ))
+        )}
       </select>
     </label>
   );
@@ -150,8 +173,8 @@ export function ProgressPhotoCompareModal({
   onCreateShare,
 }: Props) {
   const [phase, setPhase] = useState<Phase>("align");
-  const [milestoneA, setMilestoneA] = useState<ProgressPhotoMilestone>(initialMilestoneA);
-  const [milestoneB, setMilestoneB] = useState<ProgressPhotoMilestone>(initialMilestoneB);
+  const [photoIdA, setPhotoIdA] = useState("");
+  const [photoIdB, setPhotoIdB] = useState("");
   const [overlayOpacity, setOverlayOpacity] = useState(0.45);
   const [layerA, setLayerA] = useState(DEFAULT_LAYER);
   const [layerB, setLayerB] = useState(DEFAULT_LAYER);
@@ -163,17 +186,30 @@ export function ProgressPhotoCompareModal({
   const dragStart = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const posePhotos = listProgressPhotosForPose(images, pose, legacyAssignment);
+
   useEffect(() => {
     if (!open) return;
+    const forPose = listProgressPhotosForPose(images, pose, legacyAssignment);
+    const a =
+      getProgressPhotoForMilestone(images, pose, initialMilestoneA, legacyAssignment) ??
+      forPose[forPose.length - 1] ??
+      null;
+    const b =
+      getProgressPhotoForMilestone(images, pose, initialMilestoneB, legacyAssignment) ??
+      forPose[0] ??
+      null;
     setPhase("align");
-    setMilestoneA(initialMilestoneA);
-    setMilestoneB(initialMilestoneB);
+    setPhotoIdA(a?.id ?? "");
+    setPhotoIdB(b?.id ?? "");
     setLayerA(DEFAULT_LAYER);
     setLayerB(DEFAULT_LAYER);
     setLockedA(DEFAULT_LAYER);
     setLockedB(DEFAULT_LAYER);
     setSliderPct(50);
     setOverlayOpacity(0.45);
+    // Seed once when the dialog opens or the pose changes — not on every images reference churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional seed
   }, [open, initialMilestoneA, initialMilestoneB, pose]);
 
   useEffect(() => {
@@ -189,8 +225,8 @@ export function ProgressPhotoCompareModal({
     };
   }, [open, onClose]);
 
-  const photoA = getProgressPhotoForMilestone(images, pose, milestoneA, legacyAssignment);
-  const photoB = getProgressPhotoForMilestone(images, pose, milestoneB, legacyAssignment);
+  const photoA = posePhotos.find((p) => p.id === photoIdA) ?? null;
+  const photoB = posePhotos.find((p) => p.id === photoIdB) ?? null;
 
   const resetAlignment = useCallback(() => {
     setLayerA(DEFAULT_LAYER);
@@ -201,13 +237,13 @@ export function ProgressPhotoCompareModal({
     setSliderPct(50);
   }, []);
 
-  const handleMilestoneA = (m: ProgressPhotoMilestone) => {
-    setMilestoneA(m);
+  const handlePhotoA = (id: string) => {
+    setPhotoIdA(id);
     resetAlignment();
   };
 
-  const handleMilestoneB = (m: ProgressPhotoMilestone) => {
-    setMilestoneB(m);
+  const handlePhotoB = (id: string) => {
+    setPhotoIdB(id);
     resetAlignment();
   };
 
@@ -365,9 +401,31 @@ export function ProgressPhotoCompareModal({
 
         <div className="overflow-y-auto px-4 py-4 sm:px-5">
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <MilestoneSelect label="Photo A (under)" value={milestoneA} onChange={handleMilestoneA} />
-            <MilestoneSelect label="Photo B (over)" value={milestoneB} onChange={handleMilestoneB} />
+            <PhotoDateSelect
+              label="Photo A (under)"
+              value={photoIdA}
+              options={posePhotos}
+              pose={pose}
+              images={images}
+              legacyAssignment={legacyAssignment}
+              onChange={handlePhotoA}
+            />
+            <PhotoDateSelect
+              label="Photo B (over)"
+              value={photoIdB}
+              options={posePhotos}
+              pose={pose}
+              images={images}
+              legacyAssignment={legacyAssignment}
+              onChange={handlePhotoB}
+            />
           </div>
+          {posePhotos.length > 0 ? (
+            <p className="mb-3 text-xs text-[var(--color-text-muted)]">
+              Choose any date for this angle — every {progressPhotoPoseTabLabel(pose).toLowerCase()}{" "}
+              photo is listed.
+            </p>
+          ) : null}
 
           {!canCompare ? (
             <div className="flex aspect-[3/4] items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] px-6 text-center text-sm text-[var(--color-text-muted)]">
@@ -386,7 +444,7 @@ export function ProgressPhotoCompareModal({
               >
                 <img
                   src={photoA!.imageUrl}
-                  alt={progressPhotoMilestoneLabel(milestoneA)}
+                  alt={`Photo A · ${formatProgressPhotoDate(photoA!.uploadedAt) || "no date"}`}
                   className="absolute inset-0 h-full w-full origin-center cursor-move object-contain"
                   style={{ transform: layerTransform(activeA.zoom, activeA.pan) }}
                   draggable={false}
@@ -397,7 +455,7 @@ export function ProgressPhotoCompareModal({
                 {phase === "align" ? (
                   <img
                     src={photoB!.imageUrl}
-                    alt={progressPhotoMilestoneLabel(milestoneB)}
+                    alt={`Photo B · ${formatProgressPhotoDate(photoB!.uploadedAt) || "no date"}`}
                     className="absolute inset-0 h-full w-full origin-center cursor-move object-contain"
                     style={{
                       opacity: overlayOpacity,
@@ -415,7 +473,7 @@ export function ProgressPhotoCompareModal({
                     >
                       <img
                         src={photoB!.imageUrl}
-                        alt={progressPhotoMilestoneLabel(milestoneB)}
+                        alt={`Photo B · ${formatProgressPhotoDate(photoB!.uploadedAt) || "no date"}`}
                         className="absolute inset-0 h-full w-full origin-center object-contain"
                         style={{ transform: layerTransform(activeB.zoom, activeB.pan) }}
                         draggable={false}
@@ -442,12 +500,10 @@ export function ProgressPhotoCompareModal({
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-text-muted)]">
                 <span>
-                  {progressPhotoMilestoneLabel(milestoneA)}
-                  {photoA!.uploadedAt && ` · ${formatDateDisplay(photoA!.uploadedAt.slice(0, 10))}`}
+                  A · {photoOptionLabel(photoA!, pose, images, legacyAssignment)}
                 </span>
                 <span>
-                  {progressPhotoMilestoneLabel(milestoneB)}
-                  {photoB!.uploadedAt && ` · ${formatDateDisplay(photoB!.uploadedAt.slice(0, 10))}`}
+                  B · {photoOptionLabel(photoB!, pose, images, legacyAssignment)}
                 </span>
               </div>
             </>

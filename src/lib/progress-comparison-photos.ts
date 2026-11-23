@@ -282,6 +282,37 @@ function getPhotosForPose<T extends ProgressImageLike>(
   );
 }
 
+/** All photos for a pose, newest first — for date pickers in compare UI. */
+export function listProgressPhotosForPose<T extends ProgressImageLike>(
+  images: T[],
+  pose: ProgressPhotoPose,
+  legacyAssignment?: Map<string, ProgressPhotoPose>
+): T[] {
+  const assignment = legacyAssignment ?? buildLegacyPoseAssignment(images);
+  return [...getPhotosForPose(images, pose, assignment)].reverse();
+}
+
+/** Role tags when a photo is also Latest / Previous / Baseline for that pose. */
+export function progressPhotoRoleTags<T extends ProgressImageLike>(
+  images: T[],
+  pose: ProgressPhotoPose,
+  photoId: string,
+  legacyAssignment?: Map<string, ProgressPhotoPose>
+): string[] {
+  const assignment = legacyAssignment ?? buildLegacyPoseAssignment(images);
+  const tags: string[] = [];
+  if (getProgressPhotoForMilestone(images, pose, "latest", assignment)?.id === photoId) {
+    tags.push("Latest");
+  }
+  if (getProgressPhotoForMilestone(images, pose, "previous", assignment)?.id === photoId) {
+    tags.push("Previous");
+  }
+  if (getProgressPhotoForMilestone(images, pose, "first_baseline", assignment)?.id === photoId) {
+    tags.push("Baseline");
+  }
+  return tags;
+}
+
 export function progressPhotoMilestoneLabel(milestone: ProgressPhotoMilestone): string {
   const map: Record<ProgressPhotoMilestone, string> = {
     latest: "Latest",
