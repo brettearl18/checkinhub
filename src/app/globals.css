@@ -3,13 +3,16 @@
 /*
   Vana redesign tokens (ux-redesign branch)
   Direction: Apple Health × calm wellness studio — docs/design/vana-app-design-brief.md
+
+  PREVIEW MARKER: accent is pastel green (not brand gold) so this branch is
+  visually obvious vs production. Revert to #daa450 before merging to main.
 */
 @theme {
-  --color-primary: #daa450;
-  --color-primary-hover: #c48e3a;
-  --color-primary-active: #b07d32;
-  --color-primary-subtle: #fbf3e6;
-  --color-primary-muted: #ecd9b5;
+  --color-primary: #8fbf9f;
+  --color-primary-hover: #74a987;
+  --color-primary-active: #5f9272;
+  --color-primary-subtle: #eef7f1;
+  --color-primary-muted: #c5dfce;
   --color-on-primary: #1c1a17;
 
   --color-text: #1c1a17;
@@ -48,11 +51,11 @@
 }
 
 [data-theme="vana"] {
-  --color-primary: #daa450;
-  --color-primary-hover: #c48e3a;
-  --color-primary-active: #b07d32;
-  --color-primary-subtle: #fbf3e6;
-  --color-primary-muted: #ecd9b5;
+  --color-primary: #8fbf9f;
+  --color-primary-hover: #74a987;
+  --color-primary-active: #5f9272;
+  --color-primary-subtle: #eef7f1;
+  --color-primary-muted: #c5dfce;
   --color-on-primary: #1c1a17;
 
   --color-text: #1c1a17;
