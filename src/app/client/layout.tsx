@@ -268,12 +268,15 @@ export default function ClientLayout({
       <ClientHeightPromptModal enabled={Boolean(user) && !portalAccessLimited} />
       <ClientPushPromptModal enabled={Boolean(user) && !portalAccessLimited} />
       <ClientPushForegroundListener enabled={Boolean(user) && !portalAccessLimited} />
-      {/* Desktop sidebar — quiet wordmark, no gold strip */}
-      <aside className="hidden md:flex w-60 flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)]">
-        <div className="px-5 pt-6 pb-2">
-          <Link href="/client" className="inline-flex items-center">
-            <span className="text-[13px] font-semibold tracking-[0.18em] text-[var(--color-text)]">
+      {/* Desktop sidebar — quiet wordmark, accent-tint active (design brief) */}
+      <aside className="hidden md:flex w-[220px] lg:w-[240px] flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[#f9f7f4]">
+        <div className="px-5 pt-8 pb-6">
+          <Link href="/client" className="inline-flex flex-col">
+            <span className="text-[15px] font-semibold tracking-[0.2em] text-[var(--color-text)]">
               VANA
+            </span>
+            <span className="mt-1 text-[11px] tracking-wide text-[var(--color-text-muted)]">
+              YOUR PORTAL
             </span>
           </Link>
         </div>
@@ -302,13 +305,13 @@ export default function ClientLayout({
       {/* Mobile: no sticky chrome — titles live on the page; safe-area spacer only */}
       <div className="md:hidden safe-area-inset-top" aria-hidden />
 
-      {/* Main content */}
-      <main className="min-w-0 flex-1 overflow-auto px-4 pt-3 pb-24 md:p-8 md:pb-8 flex flex-col">
-        <div className="flex-1 min-h-0 max-w-3xl mx-auto w-full md:max-w-none md:mx-0">
+      {/* Main content — wide desktop canvas for Today redesign */}
+      <main className="min-w-0 flex-1 overflow-auto px-4 pt-3 pb-24 md:px-8 md:py-8 md:pb-8 flex flex-col">
+        <div className="flex-1 min-h-0 w-full max-w-lg mx-auto md:max-w-none lg:max-w-[1080px] lg:mx-0">
           {children}
         </div>
-        <footer className="mt-auto pt-10 pb-4 md:pt-16 md:pb-10 flex-shrink-0">
-          <div className="text-center text-xs text-[var(--color-text-muted)]">Vana</div>
+        <footer className="mt-auto pt-10 pb-4 md:pt-12 md:pb-6 flex-shrink-0 lg:max-w-[1080px]">
+          <div className="text-center text-xs text-[var(--color-text-muted)] md:text-left">Vana</div>
         </footer>
       </main>
 
