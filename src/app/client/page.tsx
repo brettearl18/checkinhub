@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { AuthErrorRetry } from "@/components/client/AuthErrorRetry";
 import { getClientDashboardPref } from "@/lib/client-dashboard-pref";
 import { ClientDashboardBadges } from "@/components/client/ClientDashboardBadges";
+import { TodayWeightCard } from "@/components/client/TodayWeightCard";
 import { VanaIcon, type VanaIconName } from "@/components/client/VanaIcon";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -27,7 +28,7 @@ import { MEASUREMENT_SLOT_COUNT } from "@/components/ui/MeasurementSlotTrendChar
 import { useApiClient } from "@/lib/api-client";
 import { formatDateDisplay } from "@/lib/format-date";
 import { getHabitById } from "@/lib/habits";
-import { isWeekOpenPerth, thisMondayPerth } from "@/lib/perth-date";
+import { isWeekOpenPerth, thisMondayPerth, todayPerth } from "@/lib/perth-date";
 import { BAND_LABELS } from "@/lib/scoring-utils";
 import { WORKOUTS_HUB_URL } from "@/lib/workouts-hub";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
@@ -273,7 +274,8 @@ export default function ClientHomePage() {
   );
   const [trafficLightRedMax, setTrafficLightRedMax] = useState(40);
   const [trafficLightOrangeMax, setTrafficLightOrangeMax] = useState(70);
-  const [chartTab, setChartTab] = useState<"checkin" | "weight" | "habits">("checkin");
+  const [chartTab, setChartTab] = useState<"checkin" | "weight" | "habits">("weight");
+  const [focusWeight, setFocusWeight] = useState(false);
   const [weatherCityId, setWeatherCityId] = useState<WeatherCityId>(DEFAULT_WEATHER_CITY_ID);
   const [perthWeather, setPerthWeather] = useState<PerthWeather | null>(null);
   const [localTimeLabel, setLocalTimeLabel] = useState("");
@@ -281,7 +283,20 @@ export default function ClientHomePage() {
 
   useEffect(() => {
     setWeatherCityId(getStoredWeatherCityId());
+    setFocusWeight(new URLSearchParams(window.location.search).get("log") === "weight");
   }, []);
+
+  const reloadMeasurements = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/client/measurements");
+      if (res.ok) {
+        const data = await res.json();
+        setMeasurements(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      /* keep previous list */
+    }
+  }, [fetchWithAuth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -802,7 +817,7 @@ export default function ClientHomePage() {
                 </div>
               </div>
 
-              <div className="flex flex-col items-center justify-center gap-2 border-t border-[#ECE8E3] px-4 py-6 lg:border-l lg:border-t-0">
+              <div className="flex flex-col items-center justify-center gap-2 border-t border-[#ECE8E3] px-4 py-5 lg:border-l lg:border-t-0">
                 <ScoreRing
                   pct={checkInScore?.pct ?? null}
                   band={checkInScore?.band ?? null}
@@ -816,6 +831,14 @@ export default function ClientHomePage() {
                       : "Recent check-in score"
                     : "No recent score yet"}
                 </p>
+                <div className="mt-2 w-full border-t border-[#ECE8E3] pt-3">
+                  <TodayWeightCard
+                    compact
+                    measurements={measurements}
+                    onSaved={() => void reloadMeasurements()}
+                    focusOnMount={focusWeight}
+                  />
+                </div>
               </div>
 
               <div className="border-t border-[#ECE8E3] px-4 py-4 sm:px-5 lg:border-l lg:border-t-0">
@@ -825,12 +848,23 @@ export default function ClientHomePage() {
                 <HabitRow
                   icon="scale"
                   label="Weight"
-                  value={
-                    weightStats?.latest.bodyWeight != null
+                  value={(() => {
+                    const today = todayPerth();
+                    const todayEntry = measurements.find(
+                      (m) => m.date === today && m.bodyWeight != null
+                    );
+                    if (todayEntry?.bodyWeight != null) {
+                      return `${formatNum(todayEntry.bodyWeight)} kg · today`;
+                    }
+                    return weightStats?.latest.bodyWeight != null
                       ? `${formatNum(weightStats.latest.bodyWeight)} kg`
-                      : "Not logged"
+                      : "Not logged";
+                  })()}
+                  met={
+                    measurements.some((m) => m.date === todayPerth() && m.bodyWeight != null)
+                      ? true
+                      : null
                   }
-                  met={weightStats?.latest.bodyWeight != null ? true : null}
                 />
                 <HabitRow
                   icon="footprints"
@@ -863,7 +897,7 @@ export default function ClientHomePage() {
           {/* KPI row */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <KpiCard
-              href="/client/measurements"
+              href="#today-weight"
               icon="scale"
               label="Weight"
               value={

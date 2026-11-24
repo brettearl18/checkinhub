@@ -18,6 +18,8 @@ interface Props {
   className?: string;
   /** Scroll to the card and focus the input (e.g. opened from the 7am reminder). */
   focusOnMount?: boolean;
+  /** Compact layout for hero / score-ring column */
+  compact?: boolean;
 }
 
 const MIN_KG = 20;
@@ -30,7 +32,13 @@ function addDays(yyyyMmDd: string, delta: number): string {
 }
 
 /** Quick daily body-weight entry on the client dashboard. */
-export function TodayWeightCard({ measurements, onSaved, className = "", focusOnMount = false }: Props) {
+export function TodayWeightCard({
+  measurements,
+  onSaved,
+  className = "",
+  focusOnMount = false,
+  compact = false,
+}: Props) {
   const { fetchWithAuth } = useApiClient();
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -92,6 +100,71 @@ export function TodayWeightCard({ measurements, onSaved, className = "", focusOn
   };
 
   const weekLine = `Logged ${daysLoggedThisWeek} of the last 7 days`;
+
+  if (compact) {
+    if (todayWeight != null && !editing) {
+      return (
+        <div ref={cardRef} id="today-weight" className={`w-full max-w-[14rem] text-center ${className}`}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-400">Today’s weight</p>
+          <p className="mt-1 font-display text-xl font-medium tabular-nums text-stone-800">
+            {todayWeight} kg <span className="text-sm text-emerald-600">✓</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="mt-2 text-xs font-medium text-[var(--color-primary)] hover:underline"
+          >
+            Update weight
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div ref={cardRef} id="today-weight" className={`w-full max-w-[14rem] ${className}`}>
+        <p className="text-center text-[10px] font-semibold uppercase tracking-wide text-[var(--color-primary)]">
+          Daily weigh-in
+        </p>
+        <form onSubmit={save} className="mt-2 space-y-2">
+          <label className="block">
+            <span className="sr-only">Weight in kg</span>
+            <div className="flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 focus-within:border-[var(--color-primary)]">
+              <input
+                ref={inputRef}
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min={MIN_KG}
+                max={MAX_KG}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={lastEntry ? String(lastEntry.bodyWeight) : "kg"}
+                className="min-h-[40px] w-full bg-transparent text-center text-sm text-[var(--color-text)] outline-none"
+              />
+              <span className="text-xs text-stone-500">kg</span>
+            </div>
+          </label>
+          <Button type="submit" variant="primary" disabled={saving} className="min-h-[40px] w-full rounded-full text-sm">
+            {saving ? "Saving…" : todayWeight != null ? "Update weight" : "Log weight"}
+          </Button>
+          {editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="w-full text-xs text-stone-500 hover:underline"
+            >
+              Cancel
+            </button>
+          )}
+        </form>
+        {error && (
+          <p className="mt-1.5 text-center text-xs text-[var(--color-error)]" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   if (todayWeight != null && !editing) {
     return (
