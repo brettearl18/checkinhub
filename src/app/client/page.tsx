@@ -32,9 +32,17 @@ import { BAND_LABELS } from "@/lib/scoring-utils";
 import { WORKOUTS_HUB_URL } from "@/lib/workouts-hub";
 import { RECIPE_HUB_URL } from "@/lib/recipe-hub";
 import {
-  fetchPerthWeather,
+  DEFAULT_WEATHER_CITY_ID,
+  WEATHER_CITIES,
+  fetchCityWeather,
+  formatLocalTimeLabel,
+  getStoredWeatherCityId,
+  getWeatherCity,
+  isWeatherCityId,
   perthWeatherBackdrop,
+  setStoredWeatherCityId,
   type PerthWeather,
+  type WeatherCityId,
 } from "@/lib/perth-weather";
 
 interface Assignment {
@@ -266,22 +274,56 @@ export default function ClientHomePage() {
   const [trafficLightRedMax, setTrafficLightRedMax] = useState(40);
   const [trafficLightOrangeMax, setTrafficLightOrangeMax] = useState(70);
   const [chartTab, setChartTab] = useState<"checkin" | "weight" | "habits">("checkin");
+  const [weatherCityId, setWeatherCityId] = useState<WeatherCityId>(DEFAULT_WEATHER_CITY_ID);
   const [perthWeather, setPerthWeather] = useState<PerthWeather | null>(null);
+  const [localTimeLabel, setLocalTimeLabel] = useState("");
+  const [savingWeatherCity, setSavingWeatherCity] = useState(false);
+
+  useEffect(() => {
+    setWeatherCityId(getStoredWeatherCityId());
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchPerthWeather().then((w) => {
+    setPerthWeather(null);
+    void fetchCityWeather(weatherCityId).then((w) => {
       if (!cancelled) setPerthWeather(w);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [weatherCityId]);
+
+  useEffect(() => {
+    const tz = getWeatherCity(weatherCityId).timezone;
+    const tick = () => setLocalTimeLabel(formatLocalTimeLabel(new Date(), tz));
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [weatherCityId]);
 
   const weatherBackdrop = useMemo(
     () => perthWeatherBackdrop(perthWeather?.scene ?? "unknown"),
     [perthWeather]
   );
+
+  const saveWeatherCity = async (nextId: WeatherCityId) => {
+    setWeatherCityId(nextId);
+    setStoredWeatherCityId(nextId);
+    setSavingWeatherCity(true);
+    try {
+      const city = getWeatherCity(nextId);
+      await fetchWithAuth("/api/client/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weatherCity: nextId, timezone: city.timezone }),
+      });
+    } catch {
+      // local preference still applied
+    } finally {
+      setSavingWeatherCity(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -308,6 +350,10 @@ export default function ClientHomePage() {
       if (profileRes.ok) {
         const p = await profileRes.json();
         setFirstName(p.firstName?.trim() || null);
+        if (isWeatherCityId(p.weatherCity)) {
+          setWeatherCityId(p.weatherCity);
+          setStoredWeatherCityId(p.weatherCity);
+        }
       }
       if (assignmentsRes.ok) {
         const data = await assignmentsRes.json();
@@ -641,15 +687,58 @@ export default function ClientHomePage() {
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
                       This week&apos;s check-in
                     </p>
-                    {perthWeather ? (
-                      <p className="rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-medium tracking-wide text-white/90 backdrop-blur-sm">
-                        Perth · {perthWeather.temperatureC}° · {perthWeather.label}
-                      </p>
-                    ) : (
-                      <p className="rounded-full bg-black/20 px-2.5 py-1 text-[10px] font-medium text-white/70">
-                        Perth weather…
-                      </p>
-                    )}
+                    <div className="flex max-w-full flex-col items-end gap-1.5">
+                      <label className="sr-only" htmlFor="weather-city">
+                        Nearest capital city for weather
+                      </label>
+                      <select
+                        id="weather-city"
+                        value={weatherCityId}
+                        disabled={savingWeatherCity}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          if (isWeatherCityId(next)) void saveWeatherCity(next);
+                        }}
+                        className="max-w-[11rem] rounded-full border-0 bg-black/30 py-1 pl-2.5 pr-7 text-[10px] font-medium tracking-wide text-white backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-[#DAA450]/70"
+                      >
+                        {WEATHER_CITIES.map((c) => (
+                          <option key={c.id} value={c.id} className="text-[#1C1A17]">
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                      {perthWeather ? (
+                        <p className="rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-medium tracking-wide text-white/90 backdrop-blur-sm">
+                          {perthWeather.temperatureC}° · {perthWeather.label}
+                          {localTimeLabel ? ` · ${localTimeLabel}` : ""}
+                        </p>
+                      ) : (
+                        <p className="rounded-full bg-black/20 px-2.5 py-1 text-[10px] font-medium text-white/70">
+                          Loading weather…
+                        </p>
+                      )}
+                      {perthWeather && (perthWeather.sunriseLabel || perthWeather.sunsetLabel) ? (
+                        <p className="inline-flex items-center gap-2 rounded-full bg-black/20 px-2.5 py-1 text-[10px] font-medium text-white/80 backdrop-blur-sm">
+                          {perthWeather.sunriseLabel ? (
+                            <span className="inline-flex items-center gap-1">
+                              <VanaIcon name="sunrise" size={12} className="opacity-100 brightness-0 invert" label="Sunrise" />
+                              {perthWeather.sunriseLabel}
+                            </span>
+                          ) : null}
+                          {perthWeather.sunriseLabel && perthWeather.sunsetLabel ? (
+                            <span className="opacity-50" aria-hidden>
+                              ·
+                            </span>
+                          ) : null}
+                          {perthWeather.sunsetLabel ? (
+                            <span className="inline-flex items-center gap-1">
+                              <VanaIcon name="sunset" size={12} className="opacity-100 brightness-0 invert" label="Sunset" />
+                              {perthWeather.sunsetLabel}
+                            </span>
+                          ) : null}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                   <h2 className="mt-2 font-display text-2xl font-semibold leading-tight drop-shadow-sm">
                     {weekLabel}
@@ -660,7 +749,7 @@ export default function ClientHomePage() {
                 {perthWeather && perthWeather.week.length > 0 ? (
                   <div className="relative z-10 mt-4">
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/60">
-                      Perth forecast
+                      {perthWeather.cityLabel} forecast
                     </p>
                     <div className="-mx-1 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {perthWeather.week.map((day) => (

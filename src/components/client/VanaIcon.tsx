@@ -32,6 +32,8 @@ const KNOWN = [
   "arrow-right",
   "chevron-right",
   "heart-pulse",
+  "sunrise",
+  "sunset",
 ] as const;
 
 export type VanaIconName = (typeof KNOWN)[number];

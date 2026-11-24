@@ -15,6 +15,14 @@ import {
   setClientDashboardPref,
   type ClientDashboardPref,
 } from "@/lib/client-dashboard-pref";
+import {
+  DEFAULT_WEATHER_CITY_ID,
+  WEATHER_CITIES,
+  getWeatherCity,
+  isWeatherCityId,
+  setStoredWeatherCityId,
+  type WeatherCityId,
+} from "@/lib/perth-weather";
 
 interface Measurement {
   id: string;
@@ -31,6 +39,7 @@ interface Profile {
   email: string;
   phone: string;
   timezone: string;
+  weatherCity?: string;
   heightCm: number | null;
   profile: Record<string, unknown>;
   profilePersonalization: { quote: string | null; showQuote: boolean; colorTheme: string; icon: string | null };
@@ -67,6 +76,7 @@ export default function ClientProfilePage() {
     email: "",
     phone: "",
     timezone: "",
+    weatherCity: DEFAULT_WEATHER_CITY_ID as WeatherCityId,
     heightCm: "",
   });
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -112,6 +122,9 @@ export default function ClientProfilePage() {
         email: data.email ?? "",
         phone: data.phone ?? "",
         timezone: data.timezone ?? "",
+        weatherCity: isWeatherCityId(data.weatherCity)
+          ? data.weatherCity
+          : DEFAULT_WEATHER_CITY_ID,
         heightCm: data.heightCm != null ? String(data.heightCm) : "",
       });
     } catch {
@@ -227,11 +240,13 @@ export default function ClientProfilePage() {
     setError(null);
     try {
       const heightTrimmed = form.heightCm.trim();
+      const city = getWeatherCity(form.weatherCity);
       const payload: Record<string, unknown> = {
         firstName: form.firstName,
         lastName: form.lastName,
         phone: form.phone,
-        timezone: form.timezone,
+        timezone: form.timezone.trim() || city.timezone,
+        weatherCity: form.weatherCity,
       };
       if (heightTrimmed === "") {
         payload.heightCm = null;
@@ -258,6 +273,7 @@ export default function ClientProfilePage() {
         setError(typeof data.error === "string" ? data.error : "Could not save profile.");
         return;
       }
+      setStoredWeatherCityId(form.weatherCity);
       await loadProfile();
     } catch {
       setError("Could not save profile.");
@@ -584,7 +600,44 @@ export default function ClientProfilePage() {
             onChange={(e) => setForm((p) => ({ ...p, heightCm: e.target.value }))}
             placeholder="e.g. 165"
           />
-          <Input label="Timezone" value={form.timezone} onChange={(e) => setForm((p) => ({ ...p, timezone: e.target.value }))} placeholder="e.g. Australia/Perth" />
+          <div>
+            <label
+              htmlFor="weather-city-profile"
+              className="mb-1 block text-sm font-medium text-[var(--color-text)]"
+            >
+              Nearest capital city (weather)
+            </label>
+            <select
+              id="weather-city-profile"
+              value={form.weatherCity}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (!isWeatherCityId(next)) return;
+                const city = getWeatherCity(next);
+                setForm((p) => ({
+                  ...p,
+                  weatherCity: next,
+                  timezone: city.timezone,
+                }));
+              }}
+              className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)]"
+            >
+              {WEATHER_CITIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+              Used for dashboard weather, local time, and sunrise/sunset.
+            </p>
+          </div>
+          <Input
+            label="Timezone"
+            value={form.timezone}
+            onChange={(e) => setForm((p) => ({ ...p, timezone: e.target.value }))}
+            placeholder="e.g. Australia/Perth"
+          />
           {error && <p className="text-sm text-[var(--color-error)]">{error}</p>}
           <Button type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
         </form>

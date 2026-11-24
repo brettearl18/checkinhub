@@ -10,6 +10,10 @@ import {
 } from "@/lib/client-account-closure";
 import { fetchCycleProfile } from "@/lib/cycle-tracking-server";
 import { isValidHeightCm, normalizeHeightCmInput, parseHeightCm } from "@/lib/client-height";
+import {
+  DEFAULT_WEATHER_CITY_ID,
+  isWeatherCityId,
+} from "@/lib/perth-weather";
 
 export async function GET(request: Request) {
   const authResult = await requireClient(request, { allowLimitedPortalAccess: true });
@@ -24,6 +28,7 @@ export async function GET(request: Request) {
       email: "",
       phone: "",
       timezone: "Australia/Perth",
+      weatherCity: DEFAULT_WEATHER_CITY_ID,
       heightCm: null,
       profile: {},
       profilePersonalization: { quote: null, showQuote: false, colorTheme: "#daa450", icon: null },
@@ -69,6 +74,7 @@ export async function GET(request: Request) {
     email: data.email ?? "",
     phone: data.phone ?? "",
     timezone: data.timezone ?? "",
+    weatherCity: isWeatherCityId(data.weatherCity) ? data.weatherCity : DEFAULT_WEATHER_CITY_ID,
     heightCm: isValidHeightCm(heightCm) ? heightCm : null,
     profile: data.profile ?? {},
     profilePersonalization: data.profilePersonalization ?? {
@@ -99,6 +105,7 @@ const ALLOWED_PROFILE_FIELDS = [
   "lastName",
   "phone",
   "timezone",
+  "weatherCity",
   "profile",
   "profilePersonalization",
   "emailNotifications",
@@ -119,6 +126,16 @@ export async function PATCH(request: Request) {
   const update: Record<string, unknown> = { updatedAt: new Date() };
   for (const key of ALLOWED_PROFILE_FIELDS) {
     if (body[key] !== undefined) update[key] = body[key];
+  }
+
+  if (body.weatherCity !== undefined) {
+    if (!isWeatherCityId(body.weatherCity)) {
+      return NextResponse.json(
+        { error: "weatherCity must be an Australian capital city id." },
+        { status: 400 }
+      );
+    }
+    update.weatherCity = body.weatherCity;
   }
 
   if (body.heightCm !== undefined) {

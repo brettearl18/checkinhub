@@ -1,7 +1,52 @@
-/** Live Perth weather for dashboard atmosphere (Open-Meteo, no API key). */
+/**
+ * Live weather for Australian capital cities (Open-Meteo, no API key).
+ * Default city is Perth; clients can pick their nearest capital.
+ */
 
+export type WeatherCityId =
+  | "perth"
+  | "adelaide"
+  | "brisbane"
+  | "canberra"
+  | "darwin"
+  | "hobart"
+  | "melbourne"
+  | "sydney";
+
+export type WeatherCity = {
+  id: WeatherCityId;
+  label: string;
+  lat: number;
+  lon: number;
+  timezone: string;
+};
+
+export const WEATHER_CITIES: WeatherCity[] = [
+  { id: "perth", label: "Perth", lat: -31.9523, lon: 115.8613, timezone: "Australia/Perth" },
+  { id: "adelaide", label: "Adelaide", lat: -34.9285, lon: 138.6007, timezone: "Australia/Adelaide" },
+  { id: "brisbane", label: "Brisbane", lat: -27.4698, lon: 153.0251, timezone: "Australia/Brisbane" },
+  { id: "canberra", label: "Canberra", lat: -35.2809, lon: 149.13, timezone: "Australia/Sydney" },
+  { id: "darwin", label: "Darwin", lat: -12.4634, lon: 130.8456, timezone: "Australia/Darwin" },
+  { id: "hobart", label: "Hobart", lat: -42.8821, lon: 147.3272, timezone: "Australia/Hobart" },
+  { id: "melbourne", label: "Melbourne", lat: -37.8136, lon: 144.9631, timezone: "Australia/Melbourne" },
+  { id: "sydney", label: "Sydney", lat: -33.8688, lon: 151.2093, timezone: "Australia/Sydney" },
+];
+
+export const DEFAULT_WEATHER_CITY_ID: WeatherCityId = "perth";
+
+/** @deprecated use DEFAULT_WEATHER_CITY_ID / getWeatherCity("perth") */
 export const PERTH_LAT = -31.9523;
+/** @deprecated */
 export const PERTH_LON = 115.8613;
+
+export function isWeatherCityId(value: unknown): value is WeatherCityId {
+  return typeof value === "string" && WEATHER_CITIES.some((c) => c.id === value);
+}
+
+export function getWeatherCity(id: WeatherCityId | string | null | undefined): WeatherCity {
+  const found = WEATHER_CITIES.find((c) => c.id === id);
+  return found ?? WEATHER_CITIES.find((c) => c.id === DEFAULT_WEATHER_CITY_ID)!;
+}
 
 export type PerthWeatherScene =
   | "clear-day"
@@ -15,7 +60,7 @@ export type PerthWeatherScene =
   | "unknown";
 
 export type PerthDayForecast = {
-  date: string; // YYYY-MM-DD Perth
+  date: string; // YYYY-MM-DD in city timezone
   weekdayShort: string;
   weatherCode: number;
   label: string;
@@ -27,13 +72,21 @@ export type PerthDayForecast = {
 };
 
 export type PerthWeather = {
+  cityId: WeatherCityId;
+  cityLabel: string;
+  timezone: string;
   temperatureC: number;
   weatherCode: number;
   isDay: boolean;
   label: string;
   scene: PerthWeatherScene;
   fetchedAt: string;
-  /** Rest of the week (and today), Perth daily forecast */
+  /** Local clock time when fetched, e.g. 9:31 pm */
+  localTimeLabel: string;
+  /** Today's sunrise in city local time, e.g. 5:12 am */
+  sunriseLabel: string | null;
+  /** Today's sunset in city local time */
+  sunsetLabel: string | null;
   week: PerthDayForecast[];
 };
 
@@ -48,10 +101,9 @@ export function wmoLabel(code: number): string {
   if (code >= 71 && code <= 77) return "Showers";
   if (code >= 80 && code <= 82) return "Rain showers";
   if (code >= 95 && code <= 99) return "Thunderstorm";
-  return "Perth";
+  return "Fair";
 }
 
-/** Compact label for 7-day strip */
 export function wmoShortLabel(code: number): string {
   if (code === 0 || code === 1) return "Clear";
   if (code === 2) return "Partly";
@@ -81,21 +133,31 @@ export function sceneFor(code: number, isDay: boolean): PerthWeatherScene {
   return "unknown";
 }
 
-function weekdayShortPerth(dateKey: string): string {
-  const d = new Date(`${dateKey}T12:00:00+08:00`);
+function todayKeyInZone(timeZone: string): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone });
+}
+
+function weekdayShortInZone(dateKey: string, timeZone: string): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  return new Intl.DateTimeFormat("en-AU", { timeZone, weekday: "short" }).format(d);
+}
+
+/** Format a Date or ISO string as compact local time in a zone (e.g. 5:12 am). */
+export function formatLocalTimeLabel(
+  value: Date | string | number,
+  timeZone: string
+): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Perth",
-    weekday: "short",
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   }).format(d);
 }
 
-function todayPerthKey(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Perth" });
-}
-
-/** Local coastal photos mapped to live Perth weather (shown under the brown overlay). */
 const SCENE_IMAGES: Record<PerthWeatherScene, string> = {
-  /** Golden coastal — matches redesign mockup under the brown wash */
   "clear-day": "/weather/perth-sunset.jpg",
   "clear-night": "/weather/ocean-night.jpg",
   "partly-day": "/weather/ocean-partly.jpg",
@@ -107,7 +169,6 @@ const SCENE_IMAGES: Record<PerthWeatherScene, string> = {
   unknown: "/weather/perth-sunset.jpg",
 };
 
-/** CSS + photo for the hero weather plate (photo sits behind the brown overlay). */
 export function perthWeatherBackdrop(scene: PerthWeatherScene): {
   imageSrc: string;
   sky: string;
@@ -182,18 +243,21 @@ export function perthWeatherBackdrop(scene: PerthWeatherScene): {
   }
 }
 
-export async function fetchPerthWeather(): Promise<PerthWeather | null> {
+export async function fetchCityWeather(
+  cityId: WeatherCityId | string = DEFAULT_WEATHER_CITY_ID
+): Promise<PerthWeather | null> {
+  const city = getWeatherCity(cityId);
   try {
     const url = new URL("https://api.open-meteo.com/v1/forecast");
-    url.searchParams.set("latitude", String(PERTH_LAT));
-    url.searchParams.set("longitude", String(PERTH_LON));
+    url.searchParams.set("latitude", String(city.lat));
+    url.searchParams.set("longitude", String(city.lon));
     url.searchParams.set("current", "temperature_2m,weather_code,is_day");
     url.searchParams.set(
       "daily",
-      "weather_code,temperature_2m_max,temperature_2m_min"
+      "weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset"
     );
     url.searchParams.set("forecast_days", "7");
-    url.searchParams.set("timezone", "Australia/Perth");
+    url.searchParams.set("timezone", city.timezone);
 
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) return null;
@@ -204,19 +268,26 @@ export async function fetchPerthWeather(): Promise<PerthWeather | null> {
         weather_code?: number[];
         temperature_2m_max?: number[];
         temperature_2m_min?: number[];
+        sunrise?: string[];
+        sunset?: string[];
       };
     };
     const temp = json.current?.temperature_2m;
     const code = json.current?.weather_code;
     if (typeof temp !== "number" || typeof code !== "number") return null;
     const isDay = json.current?.is_day === 1;
-    const today = todayPerthKey();
+    const today = todayKeyInZone(city.timezone);
 
     const times = json.daily?.time ?? [];
     const codes = json.daily?.weather_code ?? [];
     const maxes = json.daily?.temperature_2m_max ?? [];
     const mins = json.daily?.temperature_2m_min ?? [];
+    const sunrises = json.daily?.sunrise ?? [];
+    const sunsets = json.daily?.sunset ?? [];
     const week: PerthDayForecast[] = [];
+    let sunriseLabel: string | null = null;
+    let sunsetLabel: string | null = null;
+
     for (let i = 0; i < times.length; i++) {
       const date = times[i];
       const dayCode = codes[i];
@@ -225,9 +296,13 @@ export async function fetchPerthWeather(): Promise<PerthWeather | null> {
       if (!date || typeof dayCode !== "number" || typeof max !== "number" || typeof min !== "number") {
         continue;
       }
+      if (date === today) {
+        if (sunrises[i]) sunriseLabel = formatLocalTimeLabel(sunrises[i]!, city.timezone);
+        if (sunsets[i]) sunsetLabel = formatLocalTimeLabel(sunsets[i]!, city.timezone);
+      }
       week.push({
         date,
-        weekdayShort: weekdayShortPerth(date),
+        weekdayShort: weekdayShortInZone(date, city.timezone),
         weatherCode: dayCode,
         label: wmoLabel(dayCode),
         shortLabel: wmoShortLabel(dayCode),
@@ -239,15 +314,47 @@ export async function fetchPerthWeather(): Promise<PerthWeather | null> {
     }
 
     return {
+      cityId: city.id,
+      cityLabel: city.label,
+      timezone: city.timezone,
       temperatureC: Math.round(temp),
       weatherCode: code,
       isDay,
       label: wmoLabel(code),
       scene: sceneFor(code, isDay),
       fetchedAt: new Date().toISOString(),
+      localTimeLabel: formatLocalTimeLabel(new Date(), city.timezone),
+      sunriseLabel,
+      sunsetLabel,
       week,
     };
   } catch {
     return null;
+  }
+}
+
+/** @deprecated prefer fetchCityWeather */
+export async function fetchPerthWeather(): Promise<PerthWeather | null> {
+  return fetchCityWeather("perth");
+}
+
+export const WEATHER_CITY_PREF_KEY = "checkinhub.weatherCity";
+
+export function getStoredWeatherCityId(): WeatherCityId {
+  if (typeof window === "undefined") return DEFAULT_WEATHER_CITY_ID;
+  try {
+    const raw = window.localStorage.getItem(WEATHER_CITY_PREF_KEY);
+    return isWeatherCityId(raw) ? raw : DEFAULT_WEATHER_CITY_ID;
+  } catch {
+    return DEFAULT_WEATHER_CITY_ID;
+  }
+}
+
+export function setStoredWeatherCityId(id: WeatherCityId): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(WEATHER_CITY_PREF_KEY, id);
+  } catch {
+    // ignore
   }
 }
