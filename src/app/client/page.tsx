@@ -462,29 +462,30 @@ export default function ClientHomePage() {
   }, [assignments, thisMonday]);
 
   const checkInCta = useMemo(() => {
-    const thisWeekOpen =
-      openAssignments.find((a) => a.reflectionWeekStart === thisMonday) ?? null;
-    if (!thisWeekOpen) {
-      return {
-        label: "New check-in →",
-        href: "/client/check-in/new",
-        sub:
-          openAssignments.length > 0
-            ? `No check-in for this week yet · ${openAssignments.length} older open`
-            : "No open check-in this week",
-      };
-    }
-    if (thisWeekOpen.status === "started") {
+    // Always go to the week picker — deep-linking a calendar-week assignment
+    // before Friday hits the "opens Friday 9am" lock screen.
+    const startedOpen = openAssignments.find(
+      (a) =>
+        a.status === "started" &&
+        a.reflectionWeekStart &&
+        (a.reflectionWeekStart < thisMonday || isWeekOpenPerth(a.reflectionWeekStart))
+    );
+    if (startedOpen) {
       return {
         label: "Continue check-in →",
-        href: `/client/check-in/${thisWeekOpen.id}`,
-        sub: thisWeekOpen.formTitle,
+        href: "/client/check-in/new",
+        sub: startedOpen.formTitle,
       };
     }
+    const actionable = openAssignments.find(
+      (a) =>
+        a.reflectionWeekStart &&
+        (a.reflectionWeekStart < thisMonday || isWeekOpenPerth(a.reflectionWeekStart))
+    );
     return {
       label: "Start check-in →",
-      href: `/client/check-in/${thisWeekOpen.id}`,
-      sub: thisWeekOpen.formTitle,
+      href: "/client/check-in/new",
+      sub: actionable?.formTitle ?? "Choose a week to check in",
     };
   }, [openAssignments, thisMonday]);
 
